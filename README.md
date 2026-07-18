@@ -73,9 +73,9 @@ values ('207', 'ifd.mto@gmail.com', 'mto', true);
 
 Do not add real personnel information to the repository.
 
-## Email OTP Authentication
+## Magic Link Authentication
 
-The login page uses badge number plus department email verification, followed by a six-digit email OTP from Supabase Auth.
+The login page uses badge number plus department email verification, followed by a Supabase magic-link email.
 
 ### Enable email authentication
 
@@ -85,19 +85,36 @@ In the Supabase dashboard:
 2. Open **Providers**.
 3. Ensure **Email** is enabled.
 
-### Configure the email template for numeric OTP codes
+### Use the default Supabase magic-link template
+
+For current development and testing, you can use Supabase's default **Magic Link** email template. The application does not require a custom `{{ .Token }}` template.
+
+The login flow works like this:
+
+1. The user enters badge number and department email.
+2. The app calls `personnel_login_allowed`.
+3. The app stores a short-lived HTTP-only badge cookie.
+4. Supabase sends a magic-link email.
+5. The user clicks the link and returns to `/auth/callback`.
+6. The callback exchanges the auth code, validates badge + email against `public.personnel`, and creates a secure session.
+
+### Configure redirect URLs
+
+In the Supabase dashboard:
 
 1. Open **Authentication**.
-2. Open **Email Templates**.
-3. Open **Magic Link**.
-4. Edit the template so the message includes the numeric token:
+2. Open **URL Configuration**.
+3. Add your callback URL to **Redirect URLs**, for example:
+   - `http://localhost:3000/auth/callback`
+   - your production URL when deployed
 
-```html
-<p>Your IFD Training Portal login code is:</p>
-<p><strong>{{ .Token }}</strong></p>
-```
+Keep **Site URL** aligned with the environment you are testing.
 
-Do not rely on the magic-link URL alone for this login flow. The application verifies the six-digit code with `verifyOtp`.
+### Email delivery notes
+
+Supabase can send magic-link emails without custom SMTP during development.
+
+Custom SMTP may still be needed later for production reliability and branding, but it is not required for current testing.
 
 Optional dashboard settings that help reduce abuse:
 
@@ -111,7 +128,7 @@ The application also enforces a 60-second resend cooldown in the login UI.
 - Login uses Supabase secure session cookies through `@supabase/ssr`
 - The app does not use `sessionStorage` or `localStorage` for authentication
 - Middleware refreshes Supabase sessions and protects authenticated routes
-- After OTP verification, the app confirms the signed-in email and badge number match an active personnel row
+- After the magic link callback, the app confirms the signed-in email and badge number match an active personnel row
 - Roles come only from `public.personnel`, never from browser input after login
 
 Protected routes:

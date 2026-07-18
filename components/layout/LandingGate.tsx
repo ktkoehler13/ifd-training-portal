@@ -1,13 +1,9 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
-import {
-  getClientAuthenticatedPersonnelForLogin,
-  signOutClientSession,
-} from "@/lib/auth/client";
 import {
   AUTH_MESSAGES,
   getSafeAuthErrorMessage,
@@ -20,15 +16,13 @@ import { createClient } from "@/lib/supabase/client";
 
 const RESEND_COOLDOWN_SECONDS = 60;
 
-type LoginStage = "credentials" | "otp";
+type LoginStage = "credentials" | "check-email";
 
 export function LandingGate() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const [stage, setStage] = useState<LoginStage>("credentials");
   const [badgeNumber, setBadgeNumber] = useState("");
   const [email, setEmail] = useState("");
-  const [otp, setOtp] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -61,14 +55,13 @@ export function LandingGate() {
 
   function resetToCredentials() {
     setStage("credentials");
-    setOtp("");
     setError(null);
     setStatusMessage(null);
     setResendAvailableAt(null);
     setResendSecondsRemaining(0);
   }
 
-  async function sendLoginCode() {
+  async function sendMagicLink() {
     setError(null);
     setStatusMessage(null);
 
@@ -116,22 +109,33 @@ export function LandingGate() {
         return;
       }
 
-      const { error: otpError } = await supabase.auth.signInWithOtp({
+      const pendingLoginResponse = await fetch("/api/auth/pending-login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ badgeNumber: trimmedBadge }),
+      });
+
+      if (!pendingLoginResponse.ok) {
+        throw new Error(AUTH_MESSAGES.magicLinkSendFailed);
+      }
+
+      const emailRedirectTo = `${window.location.origin}/auth/callback`;
+      const { error: magicLinkError } = await supabase.auth.signInWithOtp({
         email: normalizedEmail,
         options: {
           shouldCreateUser: true,
+          emailRedirectTo,
         },
       });
 
-      if (otpError) {
-        throw otpError;
+      if (magicLinkError) {
+        throw magicLinkError;
       }
 
-      setStage("otp");
-      setOtp("");
-      setStatusMessage(
-        `A six-digit login code was sent to ${normalizedEmail}.`,
-      );
+      setStage("check-email");
+      setStatusMessage(AUTH_MESSAGES.magicLinkSent);
       setResendAvailableAt(Date.now() + RESEND_COOLDOWN_SECONDS * 1000);
       setResendSecondsRemaining(RESEND_COOLDOWN_SECONDS);
     } catch (sendError) {
@@ -141,58 +145,9 @@ export function LandingGate() {
     }
   }
 
-  async function handleSendCode(event: FormEvent<HTMLFormElement>) {
+  async function handleSendLink(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    await sendLoginCode();
-  }
-
-  async function handleVerifyCode(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setError(null);
-    setStatusMessage(null);
-
-    const trimmedBadge = badgeNumber.trim();
-    const normalizedEmail = normalizePersonnelEmail(email);
-    const trimmedOtp = otp.trim();
-
-    if (!/^\d{6}$/.test(trimmedOtp)) {
-      setError(AUTH_MESSAGES.otpInvalid);
-      return;
-    }
-
-    setIsSubmitting(true);
-
-    try {
-      const supabase = createClient();
-      const { error: verifyError } = await supabase.auth.verifyOtp({
-        email: normalizedEmail,
-        token: trimmedOtp,
-        type: "email",
-      });
-
-      if (verifyError) {
-        throw verifyError;
-      }
-
-      const personnel = await getClientAuthenticatedPersonnelForLogin({
-        badgeNumber: trimmedBadge,
-        email: normalizedEmail,
-      });
-
-      if (!personnel) {
-        await signOutClientSession();
-        setError(AUTH_MESSAGES.accessDenied);
-        resetToCredentials();
-        return;
-      }
-
-      router.replace("/dashboard");
-      router.refresh();
-    } catch (verifyError) {
-      setError(getSafeAuthErrorMessage(verifyError));
-    } finally {
-      setIsSubmitting(false);
-    }
+    await sendMagicLink();
   }
 
   return (
@@ -212,7 +167,7 @@ export function LandingGate() {
         </div>
 
         {stage === "credentials" ? (
-          <form onSubmit={handleSendCode} className="space-y-4" noValidate>
+          <form onSubmit={handleSendLink} className="space-y-4" noValidate>
             <div className="space-y-2">
               <label
                 htmlFor="badge-number"
@@ -273,56 +228,28 @@ export function LandingGate() {
             ) : null}
 
             <Button type="submit" className="w-full" disabled={isSubmitting}>
-              {isSubmitting ? "Sending…" : "Send Login Code"}
+              {isSubmitting ? "Sending…" : "Email Sign-In Link"}
             </Button>
           </form>
         ) : (
-          <form onSubmit={handleVerifyCode} className="space-y-4" noValidate>
+          <div className="space-y-4">
             <p className="text-sm text-zinc-600" role="status">
               Signing in as badge {badgeNumber.trim()} with{" "}
               {normalizePersonnelEmail(email)}.
             </p>
 
-            <div className="space-y-2">
-              <label
-                htmlFor="login-code"
-                className="block text-sm font-medium text-zinc-700"
-              >
-                Six-Digit Login Code
-              </label>
-              <Input
-                id="login-code"
-                name="otp"
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                value={otp}
-                onChange={(event) => {
-                  setOtp(event.target.value.replace(/\D/g, "").slice(0, 6));
-                  if (error) {
-                    setError(null);
-                  }
-                }}
-                placeholder="000000"
-                disabled={isSubmitting}
-                aria-invalid={error ? true : undefined}
-              />
+            <div
+              className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-900"
+              role="status"
+            >
+              {statusMessage || AUTH_MESSAGES.magicLinkSent}
             </div>
-
-            {statusMessage ? (
-              <p className="text-sm text-zinc-600" role="status">
-                {statusMessage}
-              </p>
-            ) : null}
 
             {error ? (
               <p role="alert" className="text-sm text-red-700">
                 {error}
               </p>
             ) : null}
-
-            <Button type="submit" className="w-full" disabled={isSubmitting}>
-              {isSubmitting ? "Verifying…" : "Verify Code"}
-            </Button>
 
             <div className="flex flex-col gap-3 sm:flex-row">
               <Button
@@ -331,12 +258,12 @@ export function LandingGate() {
                 className="w-full"
                 disabled={isSubmitting || resendSecondsRemaining > 0}
                 onClick={() => {
-                  void sendLoginCode();
+                  void sendMagicLink();
                 }}
               >
                 {resendSecondsRemaining > 0
-                  ? `Send New Code (${resendSecondsRemaining}s)`
-                  : "Send New Code"}
+                  ? `Resend Link (${resendSecondsRemaining}s)`
+                  : "Resend Link"}
               </Button>
               <Button
                 type="button"
@@ -348,7 +275,7 @@ export function LandingGate() {
                 Use Different Account
               </Button>
             </div>
-          </form>
+          </div>
         )}
       </div>
     </div>
