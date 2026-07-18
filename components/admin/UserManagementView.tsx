@@ -1,0 +1,186 @@
+"use client";
+
+import Link from "next/link";
+import { startTransition, useCallback, useEffect, useState } from "react";
+import { AddUserForm } from "@/components/admin/AddUserForm";
+import { UsersTable } from "@/components/admin/UsersTable";
+import { PrototypeGate } from "@/components/layout/PrototypeGate";
+import {
+  getPersonnelErrorMessage,
+  mapPersonnelRow,
+} from "@/lib/personnel";
+import { createClient } from "@/lib/supabase/client";
+import type { PersonnelInsertInput, PersonnelRecord, PersonnelRow } from "@/types/personnel";
+
+function getSupabaseConfigError(): string | null {
+  if (
+    !process.env.NEXT_PUBLIC_SUPABASE_URL ||
+    !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  ) {
+    return "Supabase is not configured. Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY to .env.local.";
+  }
+
+  return null;
+}
+
+export function UserManagementView() {
+  const [users, setUsers] = useState<PersonnelRecord[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const configError = getSupabaseConfigError();
+
+  const loadUsers = useCallback(async () => {
+    if (configError) {
+      setLoadError(configError);
+      setIsLoading(false);
+      return;
+    }
+
+    setIsLoading(true);
+    setLoadError(null);
+
+    try {
+      const supabase = createClient();
+      const { data, error } = await supabase
+        .from("personnel")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        throw error;
+      }
+
+      const mapped = (data as PersonnelRow[]).map(mapPersonnelRow);
+      startTransition(() => {
+        setUsers(mapped);
+        setIsLoading(false);
+      });
+    } catch (error) {
+      startTransition(() => {
+        setUsers([]);
+        setLoadError(getPersonnelErrorMessage(error));
+        setIsLoading(false);
+      });
+    }
+  }, [configError]);
+
+  useEffect(() => {
+    void loadUsers();
+  }, [loadUsers]);
+
+  async function handleAddUser(input: PersonnelInsertInput) {
+    if (configError) {
+      throw new Error(configError);
+    }
+
+    const supabase = createClient();
+    const { data, error } = await supabase
+      .from("personnel")
+      .insert({
+        badge_number: input.badgeNumber,
+        email: input.email,
+        role: input.role,
+        active: input.active,
+      })
+      .select("*")
+      .single();
+
+    if (error) {
+      throw new Error(getPersonnelErrorMessage(error));
+    }
+
+    const created = mapPersonnelRow(data as PersonnelRow);
+    setUsers((current) => [created, ...current]);
+    setLoadError(null);
+  }
+
+  const dataUnavailable = Boolean(configError || loadError);
+
+  return (
+    <PrototypeGate>
+      <div className="flex flex-1 flex-col bg-zinc-100">
+        <header className="border-b border-zinc-200 bg-white">
+          <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 px-4 py-5 sm:flex-row sm:items-start sm:justify-between sm:px-6">
+            <div>
+              <h1 className="text-xl font-semibold tracking-tight text-zinc-900 sm:text-2xl">
+                User Management
+              </h1>
+              <p className="mt-1 text-sm text-zinc-600">
+                Manage personnel records keyed by badge number and department
+                email.
+              </p>
+            </div>
+            <Link
+              href="/dashboard"
+              className="inline-flex h-11 shrink-0 items-center justify-center rounded-xl border border-zinc-200 bg-white px-5 text-sm font-semibold text-zinc-800 shadow-sm transition-colors hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 focus-visible:ring-offset-2"
+            >
+              Back to Dashboard
+            </Link>
+          </div>
+        </header>
+
+        <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 px-4 py-8 sm:px-6">
+          <div
+            className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
+            role="status"
+          >
+            Prototype only. Real personnel access will require Microsoft 365
+            authentication before production use.
+          </div>
+
+          <div
+            className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"
+            role="status"
+          >
+            The department access code only unlocks prototype navigation. It does
+            not provide production security. Supabase Row Level Security remains
+            enabled and will block anonymous reads and writes.
+          </div>
+
+          {loadError ? (
+            <div
+              className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"
+              role="alert"
+            >
+              {loadError}
+            </div>
+          ) : null}
+
+          <AddUserForm
+            existingUsers={users}
+            onSubmit={handleAddUser}
+            disabled={dataUnavailable}
+          />
+
+          <section aria-labelledby="existing-users-heading">
+            <h2
+              id="existing-users-heading"
+              className="mb-4 text-sm font-semibold tracking-wide text-zinc-500 uppercase"
+            >
+              Existing users
+            </h2>
+
+            {isLoading ? (
+              <p className="text-sm text-zinc-500" role="status">
+                Loading users...
+              </p>
+            ) : users.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-zinc-300 bg-white px-6 py-12 text-center shadow-sm shadow-zinc-200/60">
+                <h3 className="text-lg font-semibold text-zinc-900">
+                  No users found
+                </h3>
+                <p className="mt-2 text-sm leading-6 text-zinc-600">
+                  Personnel records will appear here after Microsoft 365
+                  authentication is connected or after test users are inserted
+                  through the Supabase SQL editor.
+                </p>
+              </div>
+            ) : (
+              <UsersTable users={users} />
+            )}
+          </section>
+        </div>
+      </div>
+    </PrototypeGate>
+  );
+}

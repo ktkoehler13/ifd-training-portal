@@ -1,0 +1,42 @@
+export type PersonnelRole = "firefighter" | "mto" | "deputy_chief" | "admin";
+
+export interface PersonnelRecord {
+  id: string;
+  badgeNumber: string;
+  email: string;
+  role: PersonnelRole;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PersonnelInsertInput {
+  badgeNumber: string;
+  email: string;
+  role: PersonnelRole;
+  active: boolean;
+}
+
+export interface PersonnelRow {
+  id: string;
+  badge_number: string;
+  email: string;
+  role: PersonnelRole;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export const PERSONNEL_ROLES: PersonnelRole[] = [
+  "firefighter",
+  "mto",
+  "deputy_chief",
+  "admin",
+];
+
+export const PERSONNEL_ROLE_LABELS: Record<PersonnelRole, string> = {
+  firefighter: "Firefighter",
+  mto: "MTO",
+  deputy_chief: "Deputy Chief",
+  admin: "Admin",
+};
