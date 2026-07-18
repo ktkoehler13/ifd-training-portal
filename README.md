@@ -215,6 +215,8 @@ Drafts remain editable by the requester only. Submitted requests are no longer e
 
 Authorization uses the authenticated personnel record from Supabase Auth. The browser cannot assign another user's personnel ID or role for authorization.
 
+On insert, a database trigger assigns `requester_personnel_id`, `requester_badge_number`, and `requester_email` from the authenticated personnel row. `requester_personnel_id` is the stable ownership key. Email and badge values stored on the request are historical snapshots and may differ from current personnel values after administrative edits.
+
 ### localStorage removal
 
 Older prototype requests saved in browser `localStorage` are not migrated automatically. The app now reads and writes requests only through Supabase.

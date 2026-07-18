@@ -127,6 +127,35 @@ create index if not exists training_requests_status_idx
 create index if not exists training_requests_submitted_at_idx
   on public.training_requests (submitted_at desc nulls last);
 
+create or replace function public.set_training_request_requester_identity()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  personnel_id uuid;
+begin
+  personnel_id := public.current_personnel_id();
+
+  if personnel_id is null then
+    raise exception 'Active authenticated personnel record required to create training request';
+  end if;
+
+  select p.id, p.badge_number, p.email
+  into new.requester_personnel_id, new.requester_badge_number, new.requester_email
+  from public.personnel as p
+  where p.id = personnel_id
+    and p.active = true;
+
+  if new.requester_personnel_id is null then
+    raise exception 'Active authenticated personnel record required to create training request';
+  end if;
+
+  return new;
+end;
+$$;
+
 create or replace function public.set_training_request_number()
 returns trigger
 language plpgsql
@@ -144,11 +173,42 @@ begin
 end;
 $$;
 
-drop trigger if exists training_requests_set_request_number on public.training_requests;
-create trigger training_requests_set_request_number
+create or replace function public.protect_training_request_immutable_fields()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+begin
+  new.requester_personnel_id := old.requester_personnel_id;
+  new.requester_badge_number := old.requester_badge_number;
+  new.requester_email := old.requester_email;
+  new.request_number := old.request_number;
+  new.created_at := old.created_at;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists training_requests_before_insert_set_requester on public.training_requests;
+create trigger training_requests_before_insert_set_requester
+before insert on public.training_requests
+for each row
+execute function public.set_training_request_requester_identity();
+
+drop trigger if exists training_requests_before_insert_set_request_number on public.training_requests;
+create trigger training_requests_before_insert_set_request_number
 before insert on public.training_requests
 for each row
 execute function public.set_training_request_number();
+
+drop trigger if exists training_requests_set_request_number on public.training_requests;
+drop trigger if exists training_requests_set_requester_identity on public.training_requests;
+
+drop trigger if exists training_requests_before_update_protect_immutable on public.training_requests;
+create trigger training_requests_before_update_protect_immutable
+before update on public.training_requests
+for each row
+execute function public.protect_training_request_immutable_fields();
 
 drop trigger if exists training_requests_set_updated_at on public.training_requests;
 create trigger training_requests_set_updated_at
@@ -158,9 +218,9 @@ execute function public.set_updated_at();
 
 revoke all on function public.current_personnel_id() from public;
 revoke all on function public.generate_training_request_number(timestamptz) from public;
+revoke all on function public.generate_training_request_number(timestamptz) from authenticated;
 
 grant execute on function public.current_personnel_id() to authenticated;
-grant execute on function public.generate_training_request_number(timestamptz) to authenticated;
 
 alter table public.training_requests enable row level security;
 
@@ -192,18 +252,10 @@ on public.training_requests
 for insert
 to authenticated
 with check (
-  requester_personnel_id = public.current_personnel_id()
+  public.current_personnel_id() is not null
   and status = 'draft'
   and submitted_at is null
   and current_action_role is null
-  and exists (
-    select 1
-    from public.personnel as p
-    where p.id = public.current_personnel_id()
-      and p.badge_number = requester_badge_number
-      and lower(p.email) = lower(requester_email)
-      and p.active = true
-  )
 );
 
 create policy "training_requests_update_own_draft"
@@ -219,14 +271,6 @@ with check (
   and status = 'draft'
   and submitted_at is null
   and current_action_role is null
-  and exists (
-    select 1
-    from public.personnel as p
-    where p.id = public.current_personnel_id()
-      and p.badge_number = requester_badge_number
-      and lower(p.email) = lower(requester_email)
-      and p.active = true
-  )
 );
 
 create policy "training_requests_submit_own_draft"
@@ -242,14 +286,6 @@ with check (
   and status = 'pending_mto'
   and current_action_role = 'mto'
   and submitted_at is not null
-  and exists (
-    select 1
-    from public.personnel as p
-    where p.id = public.current_personnel_id()
-      and p.badge_number = requester_badge_number
-      and lower(p.email) = lower(requester_email)
-      and p.active = true
-  )
 );
 
 create policy "training_requests_administrator_update"
@@ -264,13 +300,34 @@ with check (
 );
 
 comment on table public.training_requests is
-  'Shared training request records for authenticated IFD personnel. Request numbers are generated in the database.';
+  'Shared training request records for authenticated IFD personnel. requester_personnel_id is the stable ownership key; requester_email and requester_badge_number are historical snapshots captured at insert time.';
+
+comment on column public.training_requests.requester_personnel_id is
+  'Stable ownership key for the request. Authorization uses this value rather than historical email or badge snapshots.';
+
+comment on column public.training_requests.requester_email is
+  'Historical snapshot of the requester email at request creation time.';
+
+comment on column public.training_requests.requester_badge_number is
+  'Historical snapshot of the requester badge number at request creation time.';
+
+comment on column public.training_requests.request_number is
+  'Database-controlled immutable request identifier such as IFD-2026-0001.';
+
+comment on function public.set_training_request_requester_identity() is
+  'Assigns trusted requester ownership fields from the authenticated active personnel record on insert.';
+
+comment on function public.protect_training_request_immutable_fields() is
+  'Prevents changes to ownership snapshots, request numbers, and created_at after insert, including administrative workflow updates.';
 
 comment on function public.generate_training_request_number(timestamptz) is
-  'Generates sequential request numbers such as IFD-2026-0001 using a locked per-year counter.';
+  'Generates sequential request numbers such as IFD-2026-0001 using a locked per-year counter. Callable only from database triggers.';
 
 comment on policy "training_requests_insert_own" on public.training_requests is
-  'Authenticated personnel may create draft requests only for their own active personnel record.';
+  'Authenticated active personnel may create draft requests. Trusted requester identity fields are assigned by a BEFORE INSERT trigger.';
+
+comment on policy "training_requests_update_own_draft" on public.training_requests is
+  'Requesters may edit their own draft requests using requester_personnel_id ownership, without requiring historical email or badge snapshots to match current personnel values.';
 
 comment on policy "training_requests_submit_own_draft" on public.training_requests is
-  'Requesters may submit their own draft requests into pending MTO review.';
+  'Requesters may submit their own draft requests into pending MTO review using requester_personnel_id ownership.';
