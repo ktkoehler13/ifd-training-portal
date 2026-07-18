@@ -6,6 +6,7 @@ import { AuthGate } from "@/components/layout/AuthGate";
 import { formatCurrency } from "@/lib/currency";
 import type { AuthenticatedPersonnel } from "@/lib/auth/personnel";
 import {
+  formatTrainingRequestIdentifier,
   formatTrainingRequestStatus,
 } from "@/lib/training-requests";
 import { listPendingApprovalsForRole } from "@/lib/training-request-workflow";
@@ -164,7 +165,7 @@ function ApprovalsQueueContent({ personnel }: { personnel: AuthenticatedPersonne
                       className="border-b border-zinc-100 last:border-b-0"
                     >
                       <td className="px-4 py-4 align-top font-medium text-zinc-900">
-                        {request.requestNumber}
+                        {formatTrainingRequestIdentifier(request)}
                       </td>
                       <td className="px-4 py-4 align-top text-zinc-700">
                         {request.requesterName}

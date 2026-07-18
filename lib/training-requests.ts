@@ -46,10 +46,25 @@ export function formatTrainingRequestStatus(status: TrainingRequestStatus): stri
   return TRAINING_REQUEST_STATUS_LABELS[status];
 }
 
+export function formatTrainingRequestIdentifier(
+  request: Pick<TrainingRequestRecord, "status" | "requestNumber">,
+): string {
+  if (request.status === "draft") {
+    return "Draft";
+  }
+
+  const requestNumber = request.requestNumber?.trim();
+  if (!requestNumber) {
+    return "Draft";
+  }
+
+  return requestNumber;
+}
+
 export function mapTrainingRequestRow(row: TrainingRequestRow): TrainingRequestRecord {
   return {
     id: row.id,
-    requestNumber: row.request_number,
+    requestNumber: row.request_number?.trim() || null,
     requesterPersonnelId: row.requester_personnel_id,
     requesterBadgeNumber: row.requester_badge_number,
     requesterEmail: row.requester_email,
@@ -271,7 +286,7 @@ export async function createTrainingRequestDraft(
     .from("training_requests")
     .insert({
       ...toDatabasePayload(input),
-      request_number: "",
+      request_number: null,
       requester_name: "",
       status: "draft",
       current_action_role: null,

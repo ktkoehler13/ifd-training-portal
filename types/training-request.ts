@@ -28,11 +28,14 @@ export const TRAINING_REQUEST_STATUS_LABELS: Record<
   cancelled: "Cancelled",
 };
 
-export const TRAINING_REQUEST_NUMBER_PREVIEW = "IFD-2026-0001";
+export const TRAINING_REQUEST_NUMBER_PREVIEW =
+  "Koehler, K, Fire Officer I, 2026.1";
+
+export const TRAINING_REQUEST_DRAFT_LABEL = "Draft";
 
 export interface TrainingRequestRow {
   id: string;
-  request_number: string;
+  request_number: string | null;
   requester_personnel_id: string;
   requester_badge_number: string;
   requester_email: string;
@@ -66,7 +69,7 @@ export interface TrainingRequestRow {
 
 export interface TrainingRequestRecord {
   id: string;
-  requestNumber: string;
+  requestNumber: string | null;
   requesterPersonnelId: string;
   requesterBadgeNumber: string;
   requesterEmail: string;

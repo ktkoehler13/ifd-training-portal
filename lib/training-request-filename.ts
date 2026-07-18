@@ -1,53 +1,20 @@
 import type { TrainingRequestRecord } from "@/types/training-request";
+import { formatTrainingRequestIdentifier } from "@/lib/training-requests";
 
-function sanitizeFilenameSegment(value: string, fallback: string): string {
-  const cleaned = value
-    .trim()
-    .replace(/[/\\?%*:|"<>]/g, "")
-    .replace(/\s+/g, "_")
-    .replace(/_+/g, "_")
-    .replace(/^_|_$/g, "");
-
-  return cleaned || fallback;
-}
-
-function parseRequesterNameParts(requesterName: string): {
-  firstName: string;
-  lastName: string;
-} {
-  const parts = requesterName.trim().split(/\s+/).filter(Boolean);
-
-  if (parts.length === 0) {
-    return { firstName: "", lastName: "" };
-  }
-
-  if (parts.length === 1) {
-    return { firstName: parts[0] ?? "", lastName: "" };
-  }
-
-  return {
-    firstName: parts[0] ?? "",
-    lastName: parts[parts.length - 1] ?? "",
-  };
+function sanitizeOperatingSystemFilename(value: string): string {
+  return value.replace(/[/\\:*?"<>|]/g, "").trim();
 }
 
 export function buildTrainingRequestFilename(
-  request: Pick<
-    TrainingRequestRecord,
-    "requesterName" | "courseName" | "requestNumber"
-  >,
+  request: Pick<TrainingRequestRecord, "status" | "requestNumber">,
 ): string {
-  const { firstName, lastName } = parseRequesterNameParts(request.requesterName);
-  const firstInitial = (firstName.charAt(0) || "U").toUpperCase();
-  const lastNamePart = sanitizeFilenameSegment(lastName, "Unknown");
-  const trainingTitlePart = sanitizeFilenameSegment(
-    request.courseName,
-    "Training_Name",
-  );
-  const requestNumberPart = sanitizeFilenameSegment(
-    request.requestNumber,
-    "Request",
-  );
+  const identifier = formatTrainingRequestIdentifier(request);
 
-  return `${lastNamePart}_${firstInitial}_${trainingTitlePart}_${requestNumberPart}.pdf`;
+  if (identifier === "Draft") {
+    return "Draft.pdf";
+  }
+
+  const baseName = sanitizeOperatingSystemFilename(identifier);
+
+  return `${baseName || "Draft"}.pdf`;
 }

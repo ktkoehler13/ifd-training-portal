@@ -35,6 +35,7 @@ import {
   buildTrainingRequestInput,
   createAndSubmitTrainingRequest,
   createTrainingRequestDraft,
+  formatTrainingRequestIdentifier,
   getTrainingRequestById,
   resubmitTrainingRequest,
   submitTrainingRequest,
@@ -156,7 +157,7 @@ export function TrainingRequestWizard({
     otherExpenses,
   });
 
-  const requestNumberPreview = savedRequestNumber ?? TRAINING_REQUEST_NUMBER_PREVIEW;
+  const requestNumberPreview = savedRequestNumber ?? "Draft";
 
   useEffect(() => {
     if (!draftId) {
@@ -188,8 +189,8 @@ export function TrainingRequestWizard({
           setDraft(trainingRequestRecordToDraft(request));
           setStatusMessage(
             request.status === "returned_for_correction"
-              ? `Loaded returned request ${request.requestNumber} for correction.`
-              : `Loaded draft ${request.requestNumber}.`,
+              ? `Loaded returned request ${formatTrainingRequestIdentifier(request)} for correction.`
+              : "Loaded draft.",
           );
         }
       } catch (error) {
@@ -394,8 +395,8 @@ export function TrainingRequestWizard({
     setStatusMessage(null);
 
     try {
-      const saved = await persistDraft();
-      setStatusMessage(`Draft saved as ${saved.requestNumber}.`);
+      await persistDraft();
+      setStatusMessage("Draft saved.");
     } catch (error) {
       setErrors({
         submit:
@@ -466,7 +467,7 @@ export function TrainingRequestWizard({
         : await createAndSubmitTrainingRequest(input);
 
       router.push(
-        `/requests/${encodeURIComponent(submitted.requestNumber)}/confirmation`,
+        `/requests/${encodeURIComponent(submitted.id)}/confirmation`,
       );
     } catch (error) {
       setErrors({
@@ -982,14 +983,15 @@ export function TrainingRequestWizard({
 
             <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-4">
               <p className="text-xs font-medium tracking-wide text-zinc-500 uppercase">
-                Request number preview
+                Request identifier
               </p>
               <p className="mt-1 text-sm font-semibold text-zinc-900">
                 {requestNumberPreview}
               </p>
               <p className="mt-1 text-xs text-zinc-500">
-                Request numbers such as {TRAINING_REQUEST_NUMBER_PREVIEW} are
-                assigned automatically when a draft is saved or submitted.
+                Drafts display as Draft until submission. New requests receive a
+                human-readable identifier such as {TRAINING_REQUEST_NUMBER_PREVIEW}
+                when submitted.
               </p>
             </div>
 

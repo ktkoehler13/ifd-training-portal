@@ -18,15 +18,16 @@ import {
   listTrainingRequestNotifications,
 } from "@/lib/training-request-notifications";
 import {
+  formatTrainingRequestIdentifier,
   formatTrainingRequestStatus,
-  getTrainingRequestByNumber,
+  getTrainingRequestById,
 } from "@/lib/training-requests";
 import type { TrainingRequestActionRecord } from "@/types/training-request-action";
 import type { TrainingRequestNotificationRecord } from "@/types/training-request-action";
 import type { TrainingRequestRecord } from "@/types/training-request";
 
 interface ConfirmationViewProps {
-  requestNumber: string;
+  requestId: string;
 }
 
 function getPageHeading(request: TrainingRequestRecord) {
@@ -49,10 +50,10 @@ function getPageHeading(request: TrainingRequestRecord) {
 
 function ConfirmationContent({
   personnel,
-  requestNumber,
+  requestId,
 }: {
   personnel: AuthenticatedPersonnel;
-  requestNumber: string;
+  requestId: string;
 }) {
   const router = useRouter();
   const [request, setRequest] = useState<TrainingRequestRecord | null>(null);
@@ -71,7 +72,7 @@ function ConfirmationContent({
       setLoadError(null);
 
       try {
-        const found = await getTrainingRequestByNumber(requestNumber);
+        const found = await getTrainingRequestById(requestId);
         if (!found) {
           throw new Error("Training request not found.");
         }
@@ -110,7 +111,7 @@ function ConfirmationContent({
     return () => {
       cancelled = true;
     };
-  }, [personnel.role, requestNumber]);
+  }, [personnel.role, requestId]);
 
   const correctionComments = getLatestCorrectionComments(actions);
   const canEditAndResubmit =
@@ -141,7 +142,7 @@ function ConfirmationContent({
                   {getPageHeading(request)}
                 </h1>
                 <p className="mt-2 text-sm leading-6 text-zinc-600">
-                  Request {request.requestNumber} ·{" "}
+                  Request {formatTrainingRequestIdentifier(request)} ·{" "}
                   {formatTrainingRequestStatus(request.status)}
                   {request.currentActionRole
                     ? ` · Next action: ${formatCurrentActionRole(request.currentActionRole)}`
@@ -239,9 +240,7 @@ function ConfirmationContent({
                 Request not found
               </h1>
               <p className="mt-2 text-sm leading-6 text-zinc-600">
-                No training request was found for{" "}
-                <span className="font-medium text-zinc-900">{requestNumber}</span>
-                .
+                No training request was found.
               </p>
             </>
           )}
@@ -251,14 +250,11 @@ function ConfirmationContent({
   );
 }
 
-export function ConfirmationView({ requestNumber }: ConfirmationViewProps) {
+export function ConfirmationView({ requestId }: ConfirmationViewProps) {
   return (
     <AuthGate>
       {(personnel) => (
-        <ConfirmationContent
-          personnel={personnel}
-          requestNumber={requestNumber}
-        />
+        <ConfirmationContent personnel={personnel} requestId={requestId} />
       )}
     </AuthGate>
   );

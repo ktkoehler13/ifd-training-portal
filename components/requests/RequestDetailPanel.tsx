@@ -9,6 +9,7 @@ import {
   formatActionTimestamp,
 } from "@/lib/training-request-actions";
 import {
+  formatTrainingRequestIdentifier,
   formatTrainingRequestStatus,
 } from "@/lib/training-requests";
 import type { TrainingRequestRecord } from "@/types/training-request";
@@ -76,7 +77,7 @@ export function RequestDetailPanel({
       <dl className="grid gap-4 rounded-xl border border-zinc-200 bg-zinc-50 p-5 sm:grid-cols-2">
         <DetailItem
           label="Request number"
-          value={request.requestNumber}
+          value={formatTrainingRequestIdentifier(request)}
           emphasize
           className="sm:col-span-2"
         />

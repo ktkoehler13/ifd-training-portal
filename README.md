@@ -65,6 +65,7 @@ Apply these files in order using the Supabase SQL editor:
 4. `supabase/migrations/20260718170000_create_training_requests.sql`
 5. `supabase/migrations/20260718180000_add_personnel_names.sql`
 6. `supabase/migrations/20260718190000_training_request_approval_workflow.sql`
+7. `supabase/migrations/20260718200000_human_readable_request_numbers.sql`
 
 ### 5. Insert test personnel manually
 
@@ -197,11 +198,32 @@ Each request stores requester identity, course details, expense fields, workflow
 
 ### Request numbers
 
-Request numbers are generated in the database using a per-year counter, for example:
+Human-readable request numbers are assigned by the database at submission time, not when a draft is inserted.
 
-`IFD-2026-0001`
+Format:
 
-The browser does not assign final request numbers. A trigger assigns the number when a draft is first inserted.
+`LastName, FirstInitial, CourseName, Year.Sequence`
+
+Example:
+
+`Koehler, K, Fire Officer I, 2026.1`
+
+Rules:
+
+- the yearly sequence is department-wide and resets each calendar year
+- the sequence is not zero-padded
+- drafts use `request_number = null` and display as **Draft**
+- the final number is immutable after first assignment
+- resubmitted returned requests keep their original number
+- the browser never supplies the final request number
+
+Existing IFD-format test records created before this migration remain unchanged. Newly submitted requests use the human-readable format.
+
+Optional disposable cleanup before re-testing numbering:
+
+```sql
+delete from public.training_requests where request_number like 'IFD-%';
+```
 
 Drafts remain editable by the requester only. Submitted requests follow the approval workflow below.
 
@@ -355,7 +377,7 @@ Set `APP_BASE_URL` to the deployed application origin, for example:
 Email links use:
 
 - `APP_BASE_URL/approvals/[request-id]` for reviewer alerts
-- `APP_BASE_URL/requests/[request-number]/confirmation` for requester alerts
+- `APP_BASE_URL/requests/[request-id]/confirmation` for requester alerts
 
 ### Approval workflow test procedure
 
@@ -366,8 +388,9 @@ Email links use:
 5. Sign in as Deputy Chief, review the request from `/approvals`, and sign/approve.
 6. Confirm the requester sees the full approval timeline on the request detail page.
 7. Repeat a return-for-correction path and confirm the requester can edit/resubmit without changing the request number.
-8. Verify notification rows are created in `public.training_request_notifications`.
-9. Deploy the Edge Function, configure Resend secrets and `APP_BASE_URL`, then trigger the webhook or scheduled job and confirm rows move to `sent`.
+8. Confirm a newly submitted 2026 request receives `LastName, F, Course, 2026.1`, the next request receives `.2`, and resubmission does not consume another sequence.
+9. Verify notification rows are created in `public.training_request_notifications`.
+10. Deploy the Edge Function, configure Resend secrets and `APP_BASE_URL`, then trigger the webhook or scheduled job and confirm rows move to `sent`.
 
 ### Row Level Security
 
@@ -387,15 +410,15 @@ Personnel must have both a first and last name before creating a training reques
 
 ### Document filename standard
 
-PDF export is not implemented yet. The application generates a deterministic filename from the immutable request snapshot:
+PDF export is not implemented yet. The planned PDF filename uses the exact submitted request number as its base name:
 
-`LastName_FirstInitial_TrainingName_RequestNumber.pdf`
+`Koehler, K, Fire Officer I, 2026.1.pdf`
 
-Example:
+The confirmation and request detail pages display this planned filename. Only characters unsafe for the operating system are removed from the filename helper; the visible request number and filename base otherwise match exactly.
 
-`Koehler_K_Fire_Officer_I_IFD-2026-0001.pdf`
+Request detail and confirmation routes use the stable request UUID:
 
-The confirmation screen displays this planned filename. It will become the downloaded PDF filename when export is added.
+`/requests/[id]/confirmation`
 
 ### localStorage removal
 

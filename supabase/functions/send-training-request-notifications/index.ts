@@ -67,7 +67,6 @@ function getNextAttemptAt(attempts: number): string | null {
 function buildRequestLink(
   appBaseUrl: string,
   notification: NotificationRow,
-  requestNumber: string,
 ): string {
   const base = appBaseUrl.replace(/\/$/, "");
 
@@ -78,7 +77,7 @@ function buildRequestLink(
     return `${base}/approvals/${notification.training_request_id}`;
   }
 
-  return `${base}/requests/${encodeURIComponent(requestNumber)}/confirmation`;
+  return `${base}/requests/${notification.training_request_id}/confirmation`;
 }
 
 function buildEmailHtml(input: {
@@ -213,11 +212,7 @@ Deno.serve(async (request) => {
         throw new Error(requestError?.message ?? "Training request not found.");
       }
 
-      const requestLink = buildRequestLink(
-        appBaseUrl,
-        notification,
-        requestRow.request_number,
-      );
+      const requestLink = buildRequestLink(appBaseUrl, notification);
       const textBody = `${notification.message_text}\n\nRequest number: ${requestRow.request_number}\nRequester: ${requestRow.requester_name}\nTraining: ${requestRow.training_title}\nCurrent status: ${requestRow.status}\nOpen securely: ${requestLink}`;
       const htmlBody = buildEmailHtml({
         request: requestRow as TrainingRequestRow,

@@ -5,6 +5,7 @@ import { startTransition, useCallback, useEffect, useState } from "react";
 import { AdminGate } from "@/components/layout/AuthGate";
 import { formatCurrency } from "@/lib/currency";
 import {
+  formatTrainingRequestIdentifier,
   formatTrainingRequestStatus,
 } from "@/lib/training-requests";
 import { listAllTrainingRequestsForAdmin } from "@/lib/training-request-workflow";
@@ -99,7 +100,7 @@ function AdminRequestsContent() {
                       className="border-b border-zinc-100 last:border-b-0"
                     >
                       <td className="px-4 py-4 align-top font-medium text-zinc-900">
-                        {request.requestNumber}
+                        {formatTrainingRequestIdentifier(request)}
                       </td>
                       <td className="px-4 py-4 align-top text-zinc-700">
                         {request.requesterName}
@@ -116,7 +117,7 @@ function AdminRequestsContent() {
                       <td className="px-4 py-4 align-top">
                         <div className="flex flex-col gap-2">
                           <Link
-                            href={`/requests/${encodeURIComponent(request.requestNumber)}/confirmation`}
+                            href={`/requests/${encodeURIComponent(request.id)}/confirmation`}
                             className="inline-flex h-9 items-center rounded-xl border border-zinc-200 bg-white px-3 text-xs font-semibold text-zinc-800 shadow-sm hover:bg-zinc-50"
                           >
                             View

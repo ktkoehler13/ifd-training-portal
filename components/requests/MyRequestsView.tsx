@@ -13,6 +13,7 @@ import {
   formatActionTimestamp,
 } from "@/lib/training-request-actions";
 import {
+  formatTrainingRequestIdentifier,
   formatTrainingRequestStatus,
   LEGACY_LOCAL_STORAGE_NOTICE,
   listOwnTrainingRequests,
@@ -165,7 +166,7 @@ function MyRequestsContent({ personnel }: { personnel: AuthenticatedPersonnel })
                     >
                       <td className="px-4 py-4 align-top">
                         <div className="font-medium text-zinc-900">
-                          {request.requestNumber}
+                          {formatTrainingRequestIdentifier(request)}
                         </div>
                         <div className="mt-1 text-xs text-zinc-500">
                           {formatTransportationIndicator(
@@ -253,7 +254,7 @@ function MyRequestsContent({ personnel }: { personnel: AuthenticatedPersonnel })
                           ) : null}
                           {request.status !== "draft" ? (
                             <Link
-                              href={`/requests/${encodeURIComponent(request.requestNumber)}/confirmation`}
+                              href={`/requests/${encodeURIComponent(request.id)}/confirmation`}
                               className="inline-flex h-9 items-center rounded-xl border border-zinc-200 bg-white px-3 text-xs font-semibold text-zinc-800 shadow-sm hover:bg-zinc-50"
                             >
                               View
