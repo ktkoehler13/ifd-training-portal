@@ -2,8 +2,7 @@
 
 update public.training_requests
 set request_number = null
-where status = 'draft'
-  and (request_number is null or btrim(request_number) = '');
+where status = 'draft';
 
 alter table public.training_requests
   alter column request_number drop not null;
@@ -13,9 +12,13 @@ alter table public.training_requests
 
 alter table public.training_requests
   add constraint training_requests_request_number_presence_check check (
-    status = 'draft'
+    (
+      status = 'draft'
+      and request_number is null
+    )
     or (
-      request_number is not null
+      status <> 'draft'
+      and request_number is not null
       and btrim(request_number) <> ''
     )
   );
@@ -200,6 +203,10 @@ begin
     raise exception 'Only draft requests may be submitted';
   end if;
 
+  if request_row.request_number is not null then
+    raise exception 'Draft requests must not have a request number before submission';
+  end if;
+
   if request_row.requester_name is null or btrim(request_row.requester_name) = '' then
     raise exception 'Your personnel profile must include a first and last name before creating a training request';
   end if;
@@ -336,6 +343,37 @@ revoke all on function public.generate_training_request_number_for_request(publi
 revoke all on function public.generate_training_request_number_for_request(public.training_requests, timestamptz) from anon;
 revoke all on function public.generate_training_request_number_for_request(public.training_requests, timestamptz) from authenticated;
 
+create or replace function public.protect_training_request_immutable_fields()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  new.requester_personnel_id := old.requester_personnel_id;
+  new.requester_badge_number := old.requester_badge_number;
+  new.requester_email := old.requester_email;
+  new.requester_name := old.requester_name;
+  new.created_at := old.created_at;
+
+  if old.status = 'draft'
+    and old.request_number is null
+    and new.status = 'pending_mto'
+    and new.request_number is not null
+    and btrim(new.request_number) <> '' then
+    null;
+  else
+    new.request_number := old.request_number;
+  end if;
+
+  return new;
+end;
+$$;
+
+revoke all on function public.protect_training_request_immutable_fields() from public;
+revoke all on function public.protect_training_request_immutable_fields() from anon;
+revoke all on function public.protect_training_request_immutable_fields() from authenticated;
+
 comment on column public.training_requests.request_number is
   'Database-controlled immutable request identifier such as Koehler, K, Fire Officer I, 2026.1. Assigned at submission; drafts remain null until submitted.';
 
@@ -350,6 +388,9 @@ comment on function public.generate_training_request_number_for_request(public.t
 
 comment on function public.submit_training_request(uuid) is
   'Submits a draft request, assigns the final human-readable request number atomically, records submitted action history, and enqueues MTO notifications.';
+
+comment on function public.protect_training_request_immutable_fields() is
+  'Preserves ownership snapshots and created_at after insert. Allows request_number to change exactly once when a draft with a null number transitions to pending_mto; all later updates keep the assigned number immutable.';
 
 -- Existing IFD-format submitted records are preserved unchanged.
 -- Optional disposable test cleanup (run manually, not part of this migration):
