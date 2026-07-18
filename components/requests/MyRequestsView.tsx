@@ -9,6 +9,10 @@ import { formatCurrency } from "@/lib/currency";
 import { formatTransportationIndicator } from "@/lib/expenses";
 import type { AuthenticatedPersonnel } from "@/lib/auth/personnel";
 import {
+  formatCurrentActionRole,
+  formatActionTimestamp,
+} from "@/lib/training-request-actions";
+import {
   formatTrainingRequestStatus,
   LEGACY_LOCAL_STORAGE_NOTICE,
   listOwnTrainingRequests,
@@ -30,25 +34,6 @@ function formatDisplayDate(value: string) {
     month: "short",
     day: "numeric",
     year: "numeric",
-  });
-}
-
-function formatSubmittedAt(value: string | null) {
-  if (!value) {
-    return "—";
-  }
-
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
-
-  return date.toLocaleString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
   });
 }
 
@@ -164,6 +149,7 @@ function MyRequestsContent({ personnel }: { personnel: AuthenticatedPersonnel })
                     <th className="px-4 py-3 font-semibold">Days on Duty</th>
                     <th className="px-4 py-3 font-semibold">Total</th>
                     <th className="px-4 py-3 font-semibold">Status</th>
+                    <th className="px-4 py-3 font-semibold">Next Action</th>
                     <th className="px-4 py-3 font-semibold">Submitted</th>
                     <th className="px-4 py-3 font-semibold">Actions</th>
                   </tr>
@@ -217,37 +203,63 @@ function MyRequestsContent({ personnel }: { personnel: AuthenticatedPersonnel })
                             "inline-flex rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset",
                             request.status === "draft"
                               ? "bg-zinc-100 text-zinc-700 ring-zinc-200"
-                              : "bg-amber-50 text-amber-900 ring-amber-200",
+                              : request.status === "approved"
+                                ? "bg-green-50 text-green-900 ring-green-200"
+                                : request.status === "denied"
+                                  ? "bg-red-50 text-red-900 ring-red-200"
+                                  : request.status === "returned_for_correction"
+                                    ? "bg-amber-100 text-amber-950 ring-amber-300"
+                                    : "bg-amber-50 text-amber-900 ring-amber-200",
                           )}
                         >
                           {formatTrainingRequestStatus(request.status)}
                         </span>
                       </td>
+                      <td className="px-4 py-4 align-top text-zinc-700">
+                        {formatCurrentActionRole(request.currentActionRole) ??
+                          "None"}
+                      </td>
                       <td className="px-4 py-4 align-top whitespace-nowrap text-zinc-700">
-                        {formatSubmittedAt(request.submittedAt)}
+                        {formatActionTimestamp(request.submittedAt)}
                       </td>
                       <td className="px-4 py-4 align-top">
-                        {request.status === "draft" ? (
-                          <Button
-                            type="button"
-                            variant="secondary"
-                            className="h-9 px-3 text-xs"
-                            onClick={() =>
-                              router.push(
-                                `/requests/new?draft=${encodeURIComponent(request.id)}`,
-                              )
-                            }
-                          >
-                            Continue
-                          </Button>
-                        ) : (
-                          <Link
-                            href={`/requests/${encodeURIComponent(request.requestNumber)}/confirmation`}
-                            className="inline-flex h-9 items-center rounded-xl border border-zinc-200 bg-white px-3 text-xs font-semibold text-zinc-800 shadow-sm hover:bg-zinc-50"
-                          >
-                            View
-                          </Link>
-                        )}
+                        <div className="flex flex-col gap-2">
+                          {request.status === "draft" ? (
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              className="h-9 px-3 text-xs"
+                              onClick={() =>
+                                router.push(
+                                  `/requests/new?draft=${encodeURIComponent(request.id)}`,
+                                )
+                              }
+                            >
+                              Continue
+                            </Button>
+                          ) : null}
+                          {request.status === "returned_for_correction" ? (
+                            <Button
+                              type="button"
+                              className="h-9 px-3 text-xs"
+                              onClick={() =>
+                                router.push(
+                                  `/requests/new?draft=${encodeURIComponent(request.id)}`,
+                                )
+                              }
+                            >
+                              Edit and Resubmit
+                            </Button>
+                          ) : null}
+                          {request.status !== "draft" ? (
+                            <Link
+                              href={`/requests/${encodeURIComponent(request.requestNumber)}/confirmation`}
+                              className="inline-flex h-9 items-center rounded-xl border border-zinc-200 bg-white px-3 text-xs font-semibold text-zinc-800 shadow-sm hover:bg-zinc-50"
+                            >
+                              View
+                            </Link>
+                          ) : null}
+                        </div>
                       </td>
                     </tr>
                   ))}

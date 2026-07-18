@@ -36,8 +36,10 @@ import {
   createAndSubmitTrainingRequest,
   createTrainingRequestDraft,
   getTrainingRequestById,
+  resubmitTrainingRequest,
   submitTrainingRequest,
   trainingRequestRecordToDraft,
+  updateReturnedTrainingRequest,
   updateTrainingRequestDraft,
 } from "@/lib/training-requests";
 import { TRAINING_REQUEST_NUMBER_PREVIEW } from "@/types/training-request";
@@ -117,6 +119,9 @@ export function TrainingRequestWizard({
     createInitialDraft(personnel),
   );
   const [draftRequestId, setDraftRequestId] = useState<string | null>(draftId);
+  const [editableStatus, setEditableStatus] = useState<
+    "draft" | "returned_for_correction" | null
+  >(draftId ? null : "draft");
   const [savedRequestNumber, setSavedRequestNumber] = useState<string | null>(
     null,
   );
@@ -169,7 +174,8 @@ export function TrainingRequestWizard({
         const request = await getTrainingRequestById(activeDraftId);
         if (
           !request ||
-          request.status !== "draft" ||
+          (request.status !== "draft" &&
+            request.status !== "returned_for_correction") ||
           request.requesterPersonnelId !== personnel.id
         ) {
           throw new Error("Draft request not found or no longer editable.");
@@ -177,9 +183,14 @@ export function TrainingRequestWizard({
 
         if (!cancelled) {
           setDraftRequestId(request.id);
+          setEditableStatus(request.status);
           setSavedRequestNumber(request.requestNumber);
           setDraft(trainingRequestRecordToDraft(request));
-          setStatusMessage(`Loaded draft ${request.requestNumber}.`);
+          setStatusMessage(
+            request.status === "returned_for_correction"
+              ? `Loaded returned request ${request.requestNumber} for correction.`
+              : `Loaded draft ${request.requestNumber}.`,
+          );
         }
       } catch (error) {
         if (!cancelled) {
@@ -354,9 +365,15 @@ export function TrainingRequestWizard({
     });
 
     if (draftRequestId) {
-      const updated = await updateTrainingRequestDraft(draftRequestId, input);
+      const updated =
+        editableStatus === "returned_for_correction"
+          ? await updateReturnedTrainingRequest(draftRequestId, input)
+          : await updateTrainingRequestDraft(draftRequestId, input);
       setDraftRequestId(updated.id);
       setSavedRequestNumber(updated.requestNumber);
+      setEditableStatus(updated.status === "returned_for_correction"
+        ? "returned_for_correction"
+        : "draft");
       return updated;
     }
 
@@ -443,7 +460,9 @@ export function TrainingRequestWizard({
       });
 
       const submitted = draftRequestId
-        ? await submitTrainingRequest(draftRequestId, input)
+        ? editableStatus === "returned_for_correction"
+          ? await resubmitTrainingRequest(draftRequestId, input)
+          : await submitTrainingRequest(draftRequestId, input)
         : await createAndSubmitTrainingRequest(input);
 
       router.push(
@@ -1146,7 +1165,13 @@ export function TrainingRequestWizard({
                 disabled={isSubmitting || isSavingDraft}
                 className="w-full sm:w-auto sm:min-w-36"
               >
-                {isSubmitting ? "Submitting…" : "Submit Request"}
+                {isSubmitting
+                  ? editableStatus === "returned_for_correction"
+                    ? "Resubmitting…"
+                    : "Submitting…"
+                  : editableStatus === "returned_for_correction"
+                    ? "Resubmit Request"
+                    : "Submit Request"}
               </Button>
             )}
           </div>

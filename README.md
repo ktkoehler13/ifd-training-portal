@@ -64,6 +64,7 @@ Apply these files in order using the Supabase SQL editor:
 3. `supabase/migrations/20260718160000_expand_administrative_roles.sql`
 4. `supabase/migrations/20260718170000_create_training_requests.sql`
 5. `supabase/migrations/20260718180000_add_personnel_names.sql`
+6. `supabase/migrations/20260718190000_training_request_approval_workflow.sql`
 
 ### 5. Insert test personnel manually
 
@@ -139,7 +140,9 @@ Protected routes:
 - `/dashboard`
 - `/requests`
 - `/requests/new`
+- `/approvals`
 - `/admin/users`
+- `/admin/requests`
 
 Authorization:
 
@@ -200,7 +203,45 @@ Request numbers are generated in the database using a per-year counter, for exam
 
 The browser does not assign final request numbers. A trigger assigns the number when a draft is first inserted.
 
-### Status workflow
+Drafts remain editable by the requester only. Submitted requests follow the approval workflow below.
+
+## Approval Workflow
+
+Training requests move through role-specific signing steps. MTO, Deputy Chief, and Admin have equal administrative permissions for personnel management, but workflow signing remains role-specific:
+
+- only active personnel with role `mto` may perform MTO review actions
+- only active personnel with role `deputy_chief` may perform Deputy Chief review actions
+- `admin` may view all requests but is not treated as MTO or Deputy Chief for signing unless their personnel role is changed
+
+### Workflow stages
+
+1. Firefighter submits request:
+   - status = `pending_mto`
+   - `current_action_role` = `mto`
+   - notify all active MTO personnel
+2. MTO approves:
+   - record MTO electronic signature
+   - status = `pending_deputy_chief`
+   - `current_action_role` = `deputy_chief`
+   - notify all active Deputy Chief personnel
+3. MTO returns for correction:
+   - status = `returned_for_correction`
+   - `current_action_role` = `firefighter`
+   - requester may edit and resubmit
+4. MTO denies:
+   - status = `denied`
+   - `current_action_role` = `null`
+5. Deputy Chief approves:
+   - record Deputy Chief electronic signature
+   - status = `approved`
+   - `current_action_role` = `null`
+6. Deputy Chief returns for correction:
+   - status = `returned_for_correction`
+   - `current_action_role` = `firefighter`
+   - resubmission restarts at `pending_mto`
+7. Deputy Chief denies:
+   - status = `denied`
+   - `current_action_role` = `null`
 
 Supported statuses:
 
@@ -208,24 +249,129 @@ Supported statuses:
 - `submitted`
 - `pending_mto`
 - `pending_deputy_chief`
+- `returned_for_correction`
 - `approved`
 - `denied`
 - `cancelled`
 
-When a firefighter submits a request:
+### Electronic signatures
 
-- status becomes `pending_mto`
-- `current_action_role` becomes `mto`
-- `submitted_at` is populated
+Approvals use authenticated electronic signature acknowledgment rather than handwritten drawing. Reviewers must:
 
-Drafts remain editable by the requester only. Submitted requests are no longer editable by the requester in the current UI.
+- confirm they are signing electronically
+- see their authenticated full name and badge number
+- optionally enter comments on approve, or required comments on return/deny
+- click a role-specific button such as **Sign and Approve as MTO**
+
+The database stores trusted actor identity snapshots and signature metadata in `public.training_request_actions`. Browser clients cannot supply signature identity fields directly.
+
+### Action history
+
+`public.training_request_actions` stores immutable workflow history including:
+
+- actor personnel ID, name, badge, and role snapshots
+- action type (`submitted`, `mto_approved`, `mto_returned`, `deputy_chief_approved`, etc.)
+- comments
+- `signature_name` and `signed_at` for approval actions
+
+History rows are inserted only by trusted `SECURITY DEFINER` workflow functions.
+
+### Workflow database functions
+
+Apply workflow transitions through RPC functions rather than direct table updates:
+
+- `submit_training_request(request_id)`
+- `resubmit_training_request(request_id)`
+- `mto_approve_training_request(request_id, comments)`
+- `mto_return_training_request(request_id, comments)`
+- `mto_deny_training_request(request_id, comments)`
+- `deputy_approve_training_request(request_id, comments)`
+- `deputy_return_training_request(request_id, comments)`
+- `deputy_deny_training_request(request_id, comments)`
+
+### Approval UI
+
+- `/approvals` — queue for the signed-in user's exact workflow role
+- `/approvals/[id]` — full request review page with signing actions
+- `/admin/requests` — administrative view of all requests without automatic signing rights for `admin`
+
+Dashboard quick actions include:
+
+- **Requests Requiring My Action** for MTO and Deputy Chief users
+- **Administrative Request View** for administrative roles
+
+### Email notification outbox
+
+Workflow functions enqueue rows in `public.training_request_notifications` in the same database transaction as the workflow action. The outbox is not exposed to browser users except for administrative delivery-status visibility on review/detail pages.
+
+Notification events:
+
+- `pending_mto`
+- `pending_deputy_chief`
+- `returned_for_correction`
+- `denied`
+- `approved`
+
+Duplicate notifications for the same workflow transition and recipient are prevented by a unique constraint on `(source_action_id, event_type, recipient_email)`.
+
+Workflow commits even if email delivery is temporarily unavailable. Failed sends remain retry-safe in the outbox.
+
+### Edge Function: `send-training-request-notifications`
+
+Deploy the function from:
+
+`supabase/functions/send-training-request-notifications/index.ts`
+
+Required Supabase Edge Function secrets:
+
+- `SUPABASE_URL`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `RESEND_API_KEY`
+- `RESEND_FROM_EMAIL`
+- `APP_BASE_URL`
+
+Do not place service-role or Resend secrets in `NEXT_PUBLIC_*` variables.
+
+Supported delivery options:
+
+1. **Database webhook (preferred):** invoke the Edge Function when a row with `status = pending` is inserted into `public.training_request_notifications`
+2. **Scheduled invocation:** run the Edge Function periodically to process pending rows
+
+Example webhook target:
+
+`https://<project-ref>.supabase.co/functions/v1/send-training-request-notifications`
+
+The function claims pending rows safely, sends email through Resend, marks successful rows `sent`, and records failed attempts without exposing provider secrets to the browser.
+
+Set `APP_BASE_URL` to the deployed application origin, for example:
+
+`https://training.example.gov`
+
+Email links use:
+
+- `APP_BASE_URL/approvals/[request-id]` for reviewer alerts
+- `APP_BASE_URL/requests/[request-number]/confirmation` for requester alerts
+
+### Approval workflow test procedure
+
+1. Apply all migrations in order.
+2. Ensure at least one active `mto`, one active `deputy_chief`, and one active `firefighter` test user exist with first and last names populated.
+3. Sign in as the firefighter, submit a training request, and confirm status becomes `pending_mto`.
+4. Sign in as MTO, open `/approvals`, review the request, and sign/approve.
+5. Sign in as Deputy Chief, review the request from `/approvals`, and sign/approve.
+6. Confirm the requester sees the full approval timeline on the request detail page.
+7. Repeat a return-for-correction path and confirm the requester can edit/resubmit without changing the request number.
+8. Verify notification rows are created in `public.training_request_notifications`.
+9. Deploy the Edge Function, configure Resend secrets and `APP_BASE_URL`, then trigger the webhook or scheduled job and confirm rows move to `sent`.
 
 ### Row Level Security
 
 - Authenticated personnel may create and update their own draft requests only when the requester fields match their active personnel record
 - Requesters may submit their own drafts into `pending_mto`
 - Requesters may read their own requests
-- MTO, Deputy Chief, and Admin may read all requests and perform future workflow updates through RLS-protected updates
+- MTO, Deputy Chief, and Admin may read all requests
+- Requesters may edit draft or returned requests and resubmit through trusted workflow functions
+- Workflow signing and status transitions occur only through `SECURITY DEFINER` RPC functions
 - Anonymous access is denied
 
 Authorization uses the authenticated personnel record from Supabase Auth. The browser cannot assign another user's personnel ID or role for authorization.

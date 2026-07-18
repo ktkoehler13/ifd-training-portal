@@ -10,6 +10,7 @@ export const config = {
     "/",
     "/dashboard/:path*",
     "/requests/:path*",
+    "/approvals/:path*",
     "/admin/:path*",
   ],
 };

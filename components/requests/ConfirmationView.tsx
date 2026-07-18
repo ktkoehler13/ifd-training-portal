@@ -2,42 +2,64 @@
 
 import { startTransition, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ExpenseSummary } from "@/components/requests/ExpenseSummary";
+import { RequestActionTimeline } from "@/components/requests/RequestActionTimeline";
+import { RequestDetailPanel } from "@/components/requests/RequestDetailPanel";
 import { AuthGate } from "@/components/layout/AuthGate";
 import { Button } from "@/components/ui/Button";
-import { formatCurrency, formatMileageRate } from "@/lib/currency";
-import { formatDepartmentVehicle } from "@/lib/expenses";
+import { isAdministrativeRole } from "@/lib/auth/roles";
+import type { AuthenticatedPersonnel } from "@/lib/auth/personnel";
+import {
+  formatCurrentActionRole,
+  getLatestCorrectionComments,
+  listTrainingRequestActions,
+} from "@/lib/training-request-actions";
+import {
+  formatNotificationStatus,
+  listTrainingRequestNotifications,
+} from "@/lib/training-request-notifications";
 import {
   formatTrainingRequestStatus,
   getTrainingRequestByNumber,
 } from "@/lib/training-requests";
-import { buildTrainingRequestFilename } from "@/lib/training-request-filename";
+import type { TrainingRequestActionRecord } from "@/types/training-request-action";
+import type { TrainingRequestNotificationRecord } from "@/types/training-request-action";
 import type { TrainingRequestRecord } from "@/types/training-request";
 
 interface ConfirmationViewProps {
   requestNumber: string;
 }
 
-function formatDisplayDate(value: string) {
-  if (!value) {
-    return "—";
+function getPageHeading(request: TrainingRequestRecord) {
+  switch (request.status) {
+    case "draft":
+      return "Draft request";
+    case "returned_for_correction":
+      return "Request returned for correction";
+    case "approved":
+      return "Request approved";
+    case "denied":
+      return "Request denied";
+    case "pending_mto":
+    case "pending_deputy_chief":
+      return "Request submitted";
+    default:
+      return "Training request details";
   }
-
-  const date = new Date(`${value}T00:00:00`);
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
-
-  return date.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
 }
 
-export function ConfirmationView({ requestNumber }: ConfirmationViewProps) {
+function ConfirmationContent({
+  personnel,
+  requestNumber,
+}: {
+  personnel: AuthenticatedPersonnel;
+  requestNumber: string;
+}) {
   const router = useRouter();
   const [request, setRequest] = useState<TrainingRequestRecord | null>(null);
+  const [actions, setActions] = useState<TrainingRequestActionRecord[]>([]);
+  const [notifications, setNotifications] = useState<
+    TrainingRequestNotificationRecord[]
+  >([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -50,13 +72,27 @@ export function ConfirmationView({ requestNumber }: ConfirmationViewProps) {
 
       try {
         const found = await getTrainingRequestByNumber(requestNumber);
+        if (!found) {
+          throw new Error("Training request not found.");
+        }
+
+        const loadedActions = await listTrainingRequestActions(found.id);
+        let loadedNotifications: TrainingRequestNotificationRecord[] = [];
+        if (isAdministrativeRole(personnel.role)) {
+          loadedNotifications = await listTrainingRequestNotifications(found.id);
+        }
+
         if (!cancelled) {
           setRequest(found);
+          setActions(loadedActions);
+          setNotifications(loadedNotifications);
           setIsLoading(false);
         }
       } catch (error) {
         if (!cancelled) {
           setRequest(null);
+          setActions([]);
+          setNotifications([]);
           setLoadError(
             error instanceof Error
               ? error.message
@@ -74,219 +110,156 @@ export function ConfirmationView({ requestNumber }: ConfirmationViewProps) {
     return () => {
       cancelled = true;
     };
-  }, [requestNumber]);
+  }, [personnel.role, requestNumber]);
+
+  const correctionComments = getLatestCorrectionComments(actions);
+  const canEditAndResubmit =
+    request?.status === "returned_for_correction" &&
+    request.requesterPersonnelId === personnel.id;
 
   return (
-    <AuthGate>
-      <div className="flex flex-1 flex-col bg-zinc-100">
-        <div className="mx-auto flex w-full max-w-2xl flex-1 flex-col justify-center px-4 py-12 sm:px-6">
-          <div className="rounded-2xl bg-white p-6 shadow-sm shadow-zinc-200/60 sm:p-8">
-            {isLoading ? (
-              <p className="text-center text-sm text-zinc-500" role="status">
-                Loading request...
+    <div className="flex flex-1 flex-col bg-zinc-100">
+      <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-4 py-8 sm:px-6">
+        <div className="rounded-2xl bg-white p-6 shadow-sm shadow-zinc-200/60 sm:p-8">
+          {isLoading ? (
+            <p className="text-center text-sm text-zinc-500" role="status">
+              Loading request...
+            </p>
+          ) : loadError ? (
+            <>
+              <h1 className="text-2xl font-semibold tracking-tight text-zinc-900">
+                Unable to load request
+              </h1>
+              <p className="mt-2 text-sm leading-6 text-red-700" role="alert">
+                {loadError}
               </p>
-            ) : loadError ? (
-              <>
+            </>
+          ) : request ? (
+            <>
+              <div className="mb-6">
                 <h1 className="text-2xl font-semibold tracking-tight text-zinc-900">
-                  Unable to load request
-                </h1>
-                <p className="mt-2 text-sm leading-6 text-red-700" role="alert">
-                  {loadError}
-                </p>
-                <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-                  <Button
-                    variant="secondary"
-                    className="w-full flex-1"
-                    onClick={() => router.push("/dashboard")}
-                  >
-                    Return to Dashboard
-                  </Button>
-                  <Button
-                    className="w-full flex-1"
-                    onClick={() => router.push("/requests")}
-                  >
-                    View My Requests
-                  </Button>
-                </div>
-              </>
-            ) : request ? (
-              <>
-                <div className="mb-6 text-center">
-                  <div
-                    className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-green-50 text-lg text-green-700"
-                    aria-hidden="true"
-                  >
-                    ✓
-                  </div>
-                  <h1 className="text-2xl font-semibold tracking-tight text-zinc-900">
-                    Request submitted
-                  </h1>
-                  <p className="mt-2 text-sm leading-6 text-zinc-600">
-                    Your training request has been saved in Supabase and is
-                    ready for MTO review. The planned PDF filename is shown
-                    below and will be used when PDF export is added.
-                  </p>
-                </div>
-
-                <dl className="space-y-4 rounded-xl border border-zinc-200 bg-zinc-50 p-5">
-                  <ConfirmItem
-                    label="Request number"
-                    value={request.requestNumber}
-                    emphasize
-                  />
-                  <ConfirmItem
-                    label="Requester name"
-                    value={request.requesterName}
-                  />
-                  <ConfirmItem
-                    label="Planned document filename"
-                    value={buildTrainingRequestFilename(request)}
-                    emphasize
-                  />
-                  <ConfirmItem label="Course name" value={request.courseName} />
-                  <ConfirmItem
-                    label="Course dates"
-                    value={`${formatDisplayDate(request.courseStartDate)} – ${formatDisplayDate(request.courseEndDate)}`}
-                  />
-                  <ConfirmItem
-                    label="Number of Days on Duty"
-                    value={String(request.numberOfDaysOnDuty)}
-                  />
-                  <ConfirmItem
-                    label="Department Vehicle Requested"
-                    value={formatDepartmentVehicle(
-                      request.requestDepartmentVehicle,
-                    )}
-                  />
-                  <ConfirmItem
-                    label="Total Reimbursable Miles"
-                    value={request.totalReimbursableMiles.toLocaleString(
-                      "en-US",
-                      { maximumFractionDigits: 2 },
-                    )}
-                  />
-                  <ConfirmItem
-                    label="GSA Mileage Rate Used"
-                    value={`${formatMileageRate(request.gsaMileageRate)} / mile`}
-                  />
-                  <ConfirmItem
-                    label="Mileage Reimbursement"
-                    value={formatCurrency(request.mileageReimbursement)}
-                  />
-                  <ConfirmItem
-                    label="Food / Meals"
-                    value={formatCurrency(request.foodExpenses)}
-                  />
-                  <ConfirmItem
-                    label="Total Estimated Expenses"
-                    value={formatCurrency(request.totalEstimatedExpenses)}
-                    emphasize
-                  />
-                  <div>
-                    <dt className="text-xs font-medium tracking-wide text-zinc-500 uppercase">
-                      Status
-                    </dt>
-                    <dd className="mt-1">
-                      <span className="inline-flex rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-900 ring-1 ring-amber-200 ring-inset">
-                        {formatTrainingRequestStatus(request.status)}
-                      </span>
-                    </dd>
-                  </div>
-                </dl>
-
-                <div className="mt-6">
-                  <ExpenseSummary
-                    values={{
-                      registrationFee: request.registrationFee,
-                      totalReimbursableMiles: request.totalReimbursableMiles,
-                      requestDepartmentVehicle: request.requestDepartmentVehicle,
-                      gsaMileageRate: request.gsaMileageRate,
-                      mileageReimbursement: request.mileageReimbursement,
-                      lodging: request.lodging,
-                      airfare: request.airfare,
-                      rentalVehicle: request.rentalVehicle,
-                      foodExpenses: request.foodExpenses,
-                      otherExpenses: request.otherExpenses,
-                      totalEstimatedExpenses: request.totalEstimatedExpenses,
-                    }}
-                  />
-                </div>
-
-                <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-                  <Button
-                    variant="secondary"
-                    className="w-full flex-1"
-                    onClick={() => router.push("/dashboard")}
-                  >
-                    Return to Dashboard
-                  </Button>
-                  <Button
-                    className="w-full flex-1"
-                    onClick={() => router.push("/requests")}
-                  >
-                    View My Requests
-                  </Button>
-                </div>
-              </>
-            ) : (
-              <>
-                <h1 className="text-2xl font-semibold tracking-tight text-zinc-900">
-                  Request not found
+                  {getPageHeading(request)}
                 </h1>
                 <p className="mt-2 text-sm leading-6 text-zinc-600">
-                  No training request was found for{" "}
-                  <span className="font-medium text-zinc-900">
-                    {requestNumber}
-                  </span>
-                  .
+                  Request {request.requestNumber} ·{" "}
+                  {formatTrainingRequestStatus(request.status)}
+                  {request.currentActionRole
+                    ? ` · Next action: ${formatCurrentActionRole(request.currentActionRole)}`
+                    : null}
                 </p>
-                <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-                  <Button
-                    variant="secondary"
-                    className="w-full flex-1"
-                    onClick={() => router.push("/dashboard")}
-                  >
-                    Return to Dashboard
-                  </Button>
-                  <Button
-                    className="w-full flex-1"
-                    onClick={() => router.push("/requests")}
-                  >
-                    View My Requests
-                  </Button>
+              </div>
+
+              {canEditAndResubmit && correctionComments ? (
+                <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                  <p className="font-semibold">Correction required</p>
+                  <p className="mt-2 whitespace-pre-wrap">{correctionComments}</p>
                 </div>
-              </>
-            )}
-          </div>
+              ) : null}
+
+              <RequestDetailPanel request={request} />
+
+              <section className="mt-8">
+                <h2 className="text-lg font-semibold text-zinc-900">
+                  Approval Timeline
+                </h2>
+                <div className="mt-4">
+                  <RequestActionTimeline actions={actions} />
+                </div>
+              </section>
+
+              {isAdministrativeRole(personnel.role) &&
+              notifications.length > 0 ? (
+                <section className="mt-8">
+                  <h2 className="text-lg font-semibold text-zinc-900">
+                    Email Notification Delivery
+                  </h2>
+                  <div className="mt-4 overflow-x-auto rounded-xl border border-zinc-200">
+                    <table className="min-w-full text-left text-sm">
+                      <thead className="border-b border-zinc-200 bg-zinc-50 text-xs tracking-wide text-zinc-500 uppercase">
+                        <tr>
+                          <th className="px-3 py-2 font-semibold">Recipient</th>
+                          <th className="px-3 py-2 font-semibold">Event</th>
+                          <th className="px-3 py-2 font-semibold">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {notifications.map((notification) => (
+                          <tr
+                            key={notification.id}
+                            className="border-b border-zinc-100 last:border-b-0"
+                          >
+                            <td className="px-3 py-3 text-zinc-700">
+                              {notification.recipientEmail}
+                            </td>
+                            <td className="px-3 py-3 text-zinc-700">
+                              {notification.eventType}
+                            </td>
+                            <td className="px-3 py-3 text-zinc-700">
+                              {formatNotificationStatus(notification.status)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </section>
+              ) : null}
+
+              <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+                {canEditAndResubmit ? (
+                  <Button
+                    className="w-full flex-1"
+                    onClick={() =>
+                      router.push(
+                        `/requests/new?draft=${encodeURIComponent(request.id)}`,
+                      )
+                    }
+                  >
+                    Edit and Resubmit
+                  </Button>
+                ) : null}
+                <Button
+                  variant="secondary"
+                  className="w-full flex-1"
+                  onClick={() => router.push("/dashboard")}
+                >
+                  Return to Dashboard
+                </Button>
+                <Button
+                  className="w-full flex-1"
+                  onClick={() => router.push("/requests")}
+                >
+                  View My Requests
+                </Button>
+              </div>
+            </>
+          ) : (
+            <>
+              <h1 className="text-2xl font-semibold tracking-tight text-zinc-900">
+                Request not found
+              </h1>
+              <p className="mt-2 text-sm leading-6 text-zinc-600">
+                No training request was found for{" "}
+                <span className="font-medium text-zinc-900">{requestNumber}</span>
+                .
+              </p>
+            </>
+          )}
         </div>
       </div>
-    </AuthGate>
+    </div>
   );
 }
 
-function ConfirmItem({
-  label,
-  value,
-  emphasize = false,
-}: {
-  label: string;
-  value: string;
-  emphasize?: boolean;
-}) {
+export function ConfirmationView({ requestNumber }: ConfirmationViewProps) {
   return (
-    <div>
-      <dt className="text-xs font-medium tracking-wide text-zinc-500 uppercase">
-        {label}
-      </dt>
-      <dd
-        className={
-          emphasize
-            ? "mt-1 text-base font-semibold text-zinc-900"
-            : "mt-1 text-sm text-zinc-900"
-        }
-      >
-        {value || "—"}
-      </dd>
-    </div>
+    <AuthGate>
+      {(personnel) => (
+        <ConfirmationContent
+          personnel={personnel}
+          requestNumber={requestNumber}
+        />
+      )}
+    </AuthGate>
   );
 }

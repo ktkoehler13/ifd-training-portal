@@ -2,6 +2,7 @@ import { roundCurrency } from "@/lib/currency";
 import { calculateExpenseSummary } from "@/lib/expenses";
 import { normalizePersonnelEmail } from "@/lib/personnel";
 import { createClient } from "@/lib/supabase/client";
+import { submitTrainingRequestWorkflow, resubmitTrainingRequestWorkflow } from "@/lib/training-request-workflow";
 import type { AuthenticatedPersonnel } from "@/lib/auth/personnel";
 import type {
   TrainingRequestDraft,
@@ -306,22 +307,16 @@ export async function updateTrainingRequestDraft(
   return mapTrainingRequestRow(data as TrainingRequestRow);
 }
 
-export async function submitTrainingRequest(
+export async function updateReturnedTrainingRequest(
   requestId: string,
   input: TrainingRequestUpdateInput,
 ): Promise<TrainingRequestRecord> {
   const supabase = createClient();
-  const submittedAt = new Date().toISOString();
   const { data, error } = await supabase
     .from("training_requests")
-    .update({
-      ...toDatabasePayload(input),
-      status: "pending_mto",
-      current_action_role: "mto",
-      submitted_at: submittedAt,
-    })
+    .update(toDatabasePayload(input))
     .eq("id", requestId)
-    .eq("status", "draft")
+    .eq("status", "returned_for_correction")
     .select("*")
     .single();
 
@@ -330,6 +325,22 @@ export async function submitTrainingRequest(
   }
 
   return mapTrainingRequestRow(data as TrainingRequestRow);
+}
+
+export async function resubmitTrainingRequest(
+  requestId: string,
+  input: TrainingRequestUpdateInput,
+): Promise<TrainingRequestRecord> {
+  await updateReturnedTrainingRequest(requestId, input);
+  return resubmitTrainingRequestWorkflow(requestId);
+}
+
+export async function submitTrainingRequest(
+  requestId: string,
+  input: TrainingRequestUpdateInput,
+): Promise<TrainingRequestRecord> {
+  await updateTrainingRequestDraft(requestId, input);
+  return submitTrainingRequestWorkflow(requestId);
 }
 
 export async function createAndSubmitTrainingRequest(
