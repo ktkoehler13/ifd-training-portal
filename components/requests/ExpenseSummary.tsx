@@ -1,4 +1,8 @@
-import { formatCurrency, formatMileageRate } from "@/lib/currency";
+import {
+  formatCurrency,
+  formatMileageRate,
+} from "@/lib/currency";
+import { formatDepartmentVehicle } from "@/lib/expenses";
 import type { ExpenseSummaryValues } from "@/types";
 
 interface ExpenseSummaryProps {
@@ -25,6 +29,10 @@ export function ExpenseSummary({
           })}
         />
         <SummaryRow
+          label="Department Vehicle Requested"
+          value={formatDepartmentVehicle(values.requestDepartmentVehicle)}
+        />
+        <SummaryRow
           label="GSA Mileage Rate"
           value={
             rateAvailable
@@ -41,6 +49,10 @@ export function ExpenseSummary({
         <SummaryRow
           label="Rental Vehicle"
           value={formatCurrency(values.rentalVehicle)}
+        />
+        <SummaryRow
+          label="Food / Meals"
+          value={formatCurrency(values.foodExpenses)}
         />
         <SummaryRow
           label="Other Expenses"

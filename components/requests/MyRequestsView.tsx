@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { PrototypeGate } from "@/components/layout/PrototypeGate";
 import { Button } from "@/components/ui/Button";
 import { formatCurrency } from "@/lib/currency";
+import { formatTransportationIndicator } from "@/lib/expenses";
 import { getPrototypeRequests } from "@/lib/prototypeRequests";
 import type { TrainingRequest } from "@/types";
 
@@ -133,11 +134,18 @@ export function MyRequestsView() {
                   <tbody>
                     {requests.map((request) => (
                       <tr
-                        key={request.requestNumber}
+                        key={request.id}
                         className="border-b border-zinc-100 last:border-b-0"
                       >
-                        <td className="px-4 py-4 align-top font-medium text-zinc-900">
-                          {request.requestNumber}
+                        <td className="px-4 py-4 align-top">
+                          <div className="font-medium text-zinc-900">
+                            {request.requestNumber}
+                          </div>
+                          <div className="mt-1 text-xs text-zinc-500">
+                            {formatTransportationIndicator(
+                              request.requestDepartmentVehicle,
+                            )}
+                          </div>
                         </td>
                         <td className="px-4 py-4 align-top">
                           <div className="font-medium text-zinc-900">

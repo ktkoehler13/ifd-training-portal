@@ -6,6 +6,7 @@ import { ExpenseSummary } from "@/components/requests/ExpenseSummary";
 import { PrototypeGate } from "@/components/layout/PrototypeGate";
 import { Button } from "@/components/ui/Button";
 import { formatCurrency, formatMileageRate } from "@/lib/currency";
+import { formatDepartmentVehicle } from "@/lib/expenses";
 import { getPrototypeRequest } from "@/lib/prototypeRequests";
 import type { TrainingRequest } from "@/types";
 
@@ -90,16 +91,12 @@ export function ConfirmationView({ requestNumber }: ConfirmationViewProps) {
                     label="Number of Days on Duty"
                     value={String(request.numberOfDaysOnDuty)}
                   />
-                  <div>
-                    <dt className="text-xs font-medium tracking-wide text-zinc-500 uppercase">
-                      Status
-                    </dt>
-                    <dd className="mt-1">
-                      <span className="inline-flex rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-900 ring-1 ring-amber-200 ring-inset">
-                        {request.status}
-                      </span>
-                    </dd>
-                  </div>
+                  <ConfirmItem
+                    label="Department Vehicle Requested"
+                    value={formatDepartmentVehicle(
+                      request.requestDepartmentVehicle,
+                    )}
+                  />
                   <ConfirmItem
                     label="Total Reimbursable Miles"
                     value={request.totalReimbursableMiles.toLocaleString(
@@ -116,10 +113,24 @@ export function ConfirmationView({ requestNumber }: ConfirmationViewProps) {
                     value={formatCurrency(request.mileageReimbursement)}
                   />
                   <ConfirmItem
+                    label="Food / Meals"
+                    value={formatCurrency(request.foodExpenses)}
+                  />
+                  <ConfirmItem
                     label="Total Estimated Expenses"
                     value={formatCurrency(request.totalEstimatedExpenses)}
                     emphasize
                   />
+                  <div>
+                    <dt className="text-xs font-medium tracking-wide text-zinc-500 uppercase">
+                      Status
+                    </dt>
+                    <dd className="mt-1">
+                      <span className="inline-flex rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-900 ring-1 ring-amber-200 ring-inset">
+                        {request.status}
+                      </span>
+                    </dd>
+                  </div>
                 </dl>
 
                 <div className="mt-6">
@@ -127,11 +138,13 @@ export function ConfirmationView({ requestNumber }: ConfirmationViewProps) {
                     values={{
                       registrationFee: request.registrationFee,
                       totalReimbursableMiles: request.totalReimbursableMiles,
+                      requestDepartmentVehicle: request.requestDepartmentVehicle,
                       gsaMileageRate: request.gsaMileageRate,
                       mileageReimbursement: request.mileageReimbursement,
                       lodging: request.lodging,
                       airfare: request.airfare,
                       rentalVehicle: request.rentalVehicle,
+                      foodExpenses: request.foodExpenses,
                       otherExpenses: request.otherExpenses,
                       totalEstimatedExpenses: request.totalEstimatedExpenses,
                     }}

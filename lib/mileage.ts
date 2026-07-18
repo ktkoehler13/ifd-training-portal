@@ -8,7 +8,7 @@ export function getGsaMileageRate(): number | null {
   }
 
   const parsed = Number.parseFloat(raw);
-  if (!Number.isFinite(parsed) || parsed < 0) {
+  if (!Number.isFinite(parsed) || parsed <= 0) {
     return null;
   }
 
@@ -23,7 +23,7 @@ export function calculateMileageReimbursement(
     !Number.isFinite(totalReimbursableMiles) ||
     !Number.isFinite(gsaMileageRate) ||
     totalReimbursableMiles < 0 ||
-    gsaMileageRate < 0
+    gsaMileageRate <= 0
   ) {
     return 0;
   }
