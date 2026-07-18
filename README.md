@@ -62,6 +62,7 @@ Apply these files in order using the Supabase SQL editor:
 1. `supabase/migrations/20260718140000_create_personnel.sql`
 2. `supabase/migrations/20260718150000_personnel_login_allowed.sql`
 3. `supabase/migrations/20260718160000_expand_administrative_roles.sql`
+4. `supabase/migrations/20260718170000_create_training_requests.sql`
 
 ### 5. Insert test personnel manually
 
@@ -160,6 +161,63 @@ The `personnel` table stores only:
 It intentionally does not store names, phone numbers, addresses, passwords, medical information, or payroll information.
 
 Do not add real personnel data to shared environments until production authentication and governance are complete.
+
+## Training Requests
+
+Training requests are stored in Supabase in `public.training_requests`. They are shared across browsers and devices for authenticated personnel.
+
+### Request schema
+
+Each request stores requester identity, course details, expense fields, workflow status, and timestamps. Additional preserved form fields include:
+
+- requester name
+- course number
+- number of days on duty
+- airfare, rental vehicle, and other expense amounts
+- GSA mileage rate and total reimbursable miles
+- transportation notes in `department_vehicle_details`
+
+### Request numbers
+
+Request numbers are generated in the database using a per-year counter, for example:
+
+`IFD-2026-0001`
+
+The browser does not assign final request numbers. A trigger assigns the number when a draft is first inserted.
+
+### Status workflow
+
+Supported statuses:
+
+- `draft`
+- `submitted`
+- `pending_mto`
+- `pending_deputy_chief`
+- `approved`
+- `denied`
+- `cancelled`
+
+When a firefighter submits a request:
+
+- status becomes `pending_mto`
+- `current_action_role` becomes `mto`
+- `submitted_at` is populated
+
+Drafts remain editable by the requester only. Submitted requests are no longer editable by the requester in the current UI.
+
+### Row Level Security
+
+- Authenticated personnel may create and update their own draft requests only when the requester fields match their active personnel record
+- Requesters may submit their own drafts into `pending_mto`
+- Requesters may read their own requests
+- MTO, Deputy Chief, and Admin may read all requests and perform future workflow updates through RLS-protected updates
+- Anonymous access is denied
+
+Authorization uses the authenticated personnel record from Supabase Auth. The browser cannot assign another user's personnel ID or role for authorization.
+
+### localStorage removal
+
+Older prototype requests saved in browser `localStorage` are not migrated automatically. The app now reads and writes requests only through Supabase.
 
 ## Useful Commands
 

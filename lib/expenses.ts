@@ -1,6 +1,6 @@
 import { addCurrency } from "@/lib/currency";
 import { calculateMileageReimbursement } from "@/lib/mileage";
-import type { ExpenseSummaryValues } from "@/types";
+import type { ExpenseSummaryValues } from "@/types/training-request";
 
 export function calculateExpenseSummary(input: {
   requestDepartmentVehicle: boolean;

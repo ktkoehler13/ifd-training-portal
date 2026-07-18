@@ -7,8 +7,11 @@ import { AuthGate } from "@/components/layout/AuthGate";
 import { Button } from "@/components/ui/Button";
 import { formatCurrency, formatMileageRate } from "@/lib/currency";
 import { formatDepartmentVehicle } from "@/lib/expenses";
-import { getPrototypeRequest } from "@/lib/prototypeRequests";
-import type { TrainingRequest } from "@/types";
+import {
+  formatTrainingRequestStatus,
+  getTrainingRequestByNumber,
+} from "@/lib/training-requests";
+import type { TrainingRequestRecord } from "@/types/training-request";
 
 interface ConfirmationViewProps {
   requestNumber: string;
@@ -33,16 +36,43 @@ function formatDisplayDate(value: string) {
 
 export function ConfirmationView({ requestNumber }: ConfirmationViewProps) {
   const router = useRouter();
-  const [request, setRequest] = useState<TrainingRequest | null>(null);
+  const [request, setRequest] = useState<TrainingRequestRecord | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
-    const found = getPrototypeRequest(requestNumber);
+    let cancelled = false;
+
+    async function loadRequest() {
+      setIsLoading(true);
+      setLoadError(null);
+
+      try {
+        const found = await getTrainingRequestByNumber(requestNumber);
+        if (!cancelled) {
+          setRequest(found);
+          setIsLoading(false);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setRequest(null);
+          setLoadError(
+            error instanceof Error
+              ? error.message
+              : "Unable to load training request.",
+          );
+          setIsLoading(false);
+        }
+      }
+    }
 
     startTransition(() => {
-      setRequest(found);
-      setIsLoading(false);
+      void loadRequest();
     });
+
+    return () => {
+      cancelled = true;
+    };
   }, [requestNumber]);
 
   return (
@@ -54,6 +84,30 @@ export function ConfirmationView({ requestNumber }: ConfirmationViewProps) {
               <p className="text-center text-sm text-zinc-500" role="status">
                 Loading request...
               </p>
+            ) : loadError ? (
+              <>
+                <h1 className="text-2xl font-semibold tracking-tight text-zinc-900">
+                  Unable to load request
+                </h1>
+                <p className="mt-2 text-sm leading-6 text-red-700" role="alert">
+                  {loadError}
+                </p>
+                <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+                  <Button
+                    variant="secondary"
+                    className="w-full flex-1"
+                    onClick={() => router.push("/dashboard")}
+                  >
+                    Return to Dashboard
+                  </Button>
+                  <Button
+                    className="w-full flex-1"
+                    onClick={() => router.push("/requests")}
+                  >
+                    View My Requests
+                  </Button>
+                </div>
+              </>
             ) : request ? (
               <>
                 <div className="mb-6 text-center">
@@ -67,8 +121,8 @@ export function ConfirmationView({ requestNumber }: ConfirmationViewProps) {
                     Request submitted
                   </h1>
                   <p className="mt-2 text-sm leading-6 text-zinc-600">
-                    Your training request has been recorded in this prototype
-                    environment and is ready for MTO review.
+                    Your training request has been saved in Supabase and is
+                    ready for MTO review.
                   </p>
                 </div>
 
@@ -127,7 +181,7 @@ export function ConfirmationView({ requestNumber }: ConfirmationViewProps) {
                     </dt>
                     <dd className="mt-1">
                       <span className="inline-flex rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-900 ring-1 ring-amber-200 ring-inset">
-                        {request.status}
+                        {formatTrainingRequestStatus(request.status)}
                       </span>
                     </dd>
                   </div>
@@ -173,11 +227,11 @@ export function ConfirmationView({ requestNumber }: ConfirmationViewProps) {
                   Request not found
                 </h1>
                 <p className="mt-2 text-sm leading-6 text-zinc-600">
-                  No prototype request was found for{" "}
+                  No training request was found for{" "}
                   <span className="font-medium text-zinc-900">
                     {requestNumber}
                   </span>
-                  . It may have been cleared from this browser.
+                  .
                 </p>
                 <div className="mt-8 flex flex-col gap-3 sm:flex-row">
                   <Button

@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useMemo, useState, type ReactNode } from "react";
+import { FormEvent, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { ExpenseSummary } from "@/components/requests/ExpenseSummary";
 import { WizardProgress } from "@/components/requests/WizardProgress";
@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/Button";
 import { Field } from "@/components/ui/Field";
 import { Input } from "@/components/ui/Input";
 import { Textarea } from "@/components/ui/Textarea";
+import type { AuthenticatedPersonnel } from "@/lib/auth/personnel";
 import {
   formatCurrency,
   formatCurrencyInput,
@@ -24,13 +25,18 @@ import {
   isValidMilesInput,
   parseMilesInput,
 } from "@/lib/mileage";
+import { normalizePersonnelEmail } from "@/lib/personnel";
 import {
-  generateRequestNumber,
-  generateUniqueId,
-  savePrototypeRequest,
-} from "@/lib/prototypeRequests";
-import { buildRequestNumberPreview } from "@/lib/requestNumber";
-import type { TrainingRequest, TrainingRequestDraft } from "@/types";
+  buildTrainingRequestInput,
+  createAndSubmitTrainingRequest,
+  createTrainingRequestDraft,
+  getTrainingRequestById,
+  submitTrainingRequest,
+  trainingRequestRecordToDraft,
+  updateTrainingRequestDraft,
+} from "@/lib/training-requests";
+import { TRAINING_REQUEST_NUMBER_PREVIEW } from "@/types/training-request";
+import type { TrainingRequestDraft } from "@/types";
 import { cn } from "@/lib/utils";
 
 const TOTAL_STEPS = 4;
@@ -59,8 +65,21 @@ const initialDraft: TrainingRequestDraft = {
   confirmedAccurate: false,
 };
 
+function createInitialDraft(personnel: AuthenticatedPersonnel): TrainingRequestDraft {
+  return {
+    ...initialDraft,
+    badgeNumber: personnel.badgeNumber,
+    departmentEmail: personnel.email,
+  };
+}
+
+interface TrainingRequestWizardProps {
+  personnel: AuthenticatedPersonnel;
+  draftId?: string | null;
+}
+
 type DraftErrors = Partial<
-  Record<keyof TrainingRequestDraft | "gsaMileageRate", string>
+  Record<keyof TrainingRequestDraft | "gsaMileageRate" | "submit", string>
 >;
 
 function isValidEmail(value: string) {
@@ -84,13 +103,25 @@ function formatDisplayDate(value: string) {
   });
 }
 
-export function TrainingRequestWizard() {
+export function TrainingRequestWizard({
+  personnel,
+  draftId = null,
+}: TrainingRequestWizardProps) {
   const router = useRouter();
   const [step, setStep] = useState(1);
-  const [draft, setDraft] = useState<TrainingRequestDraft>(initialDraft);
+  const [draft, setDraft] = useState<TrainingRequestDraft>(() =>
+    createInitialDraft(personnel),
+  );
+  const [draftRequestId, setDraftRequestId] = useState<string | null>(draftId);
+  const [savedRequestNumber, setSavedRequestNumber] = useState<string | null>(
+    null,
+  );
   const [preservedMileage, setPreservedMileage] = useState("");
   const [errors, setErrors] = useState<DraftErrors>({});
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSavingDraft, setIsSavingDraft] = useState(false);
+  const [isLoadingDraft, setIsLoadingDraft] = useState(Boolean(draftId));
 
   const gsaMileageRate = useMemo(() => getGsaMileageRate(), []);
   const rateAvailable = gsaMileageRate !== null;
@@ -116,11 +147,58 @@ export function TrainingRequestWizard() {
     otherExpenses,
   });
 
-  const requestNumberPreview = buildRequestNumberPreview({
-    requesterName: draft.requesterName,
-    courseName: draft.courseName,
-    courseStartDate: draft.courseStartDate,
-  });
+  const requestNumberPreview = savedRequestNumber ?? TRAINING_REQUEST_NUMBER_PREVIEW;
+
+  useEffect(() => {
+    if (!draftId) {
+      return;
+    }
+
+    const activeDraftId = draftId;
+    let cancelled = false;
+
+    async function loadDraft() {
+      setIsLoadingDraft(true);
+      setErrors({});
+
+      try {
+        const request = await getTrainingRequestById(activeDraftId);
+        if (
+          !request ||
+          request.status !== "draft" ||
+          request.requesterPersonnelId !== personnel.id
+        ) {
+          throw new Error("Draft request not found or no longer editable.");
+        }
+
+        if (!cancelled) {
+          setDraftRequestId(request.id);
+          setSavedRequestNumber(request.requestNumber);
+          setDraft(trainingRequestRecordToDraft(request));
+          setStatusMessage(`Loaded draft ${request.requestNumber}.`);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setErrors({
+            submit:
+              error instanceof Error
+                ? error.message
+                : "Unable to load the selected draft.",
+          });
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoadingDraft(false);
+        }
+      }
+    }
+
+    void loadDraft();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [draftId, personnel.id]);
 
   function updateField<K extends keyof TrainingRequestDraft>(
     key: K,
@@ -149,9 +227,17 @@ export function TrainingRequestWizard() {
       }
       if (!draft.badgeNumber.trim()) {
         nextErrors.badgeNumber = "Badge number is required.";
+      } else if (draft.badgeNumber.trim() !== personnel.badgeNumber) {
+        nextErrors.badgeNumber =
+          "Badge number must match your signed-in personnel record.";
       }
       if (!draft.departmentEmail.trim()) {
         nextErrors.departmentEmail = "Department email is required.";
+      } else if (
+        normalizePersonnelEmail(draft.departmentEmail) !== personnel.email
+      ) {
+        nextErrors.departmentEmail =
+          "Department email must match your signed-in personnel record.";
       } else if (!isValidEmail(draft.departmentEmail.trim())) {
         nextErrors.departmentEmail = "Enter a valid email address.";
       }
@@ -227,6 +313,79 @@ export function TrainingRequestWizard() {
     return nextErrors;
   }
 
+  function validateDraftSave(): DraftErrors {
+    const nextErrors: DraftErrors = {};
+
+    if (!draft.requesterName.trim()) {
+      nextErrors.requesterName = "Full name is required.";
+    }
+
+    if (!draft.badgeNumber.trim()) {
+      nextErrors.badgeNumber = "Badge number is required.";
+    } else if (draft.badgeNumber.trim() !== personnel.badgeNumber) {
+      nextErrors.badgeNumber =
+        "Badge number must match your signed-in personnel record.";
+    }
+
+    if (!draft.departmentEmail.trim()) {
+      nextErrors.departmentEmail = "Department email is required.";
+    } else if (
+      normalizePersonnelEmail(draft.departmentEmail) !== personnel.email
+    ) {
+      nextErrors.departmentEmail =
+        "Department email must match your signed-in personnel record.";
+    } else if (!isValidEmail(draft.departmentEmail.trim())) {
+      nextErrors.departmentEmail = "Enter a valid email address.";
+    }
+
+    return nextErrors;
+  }
+
+  async function persistDraft() {
+    const input = buildTrainingRequestInput({
+      personnel,
+      draft,
+      expenseSummary,
+    });
+
+    if (draftRequestId) {
+      const updated = await updateTrainingRequestDraft(draftRequestId, input);
+      setDraftRequestId(updated.id);
+      setSavedRequestNumber(updated.requestNumber);
+      return updated;
+    }
+
+    const created = await createTrainingRequestDraft(input);
+    setDraftRequestId(created.id);
+    setSavedRequestNumber(created.requestNumber);
+    return created;
+  }
+
+  async function handleSaveDraft() {
+    const nextErrors = validateDraftSave();
+    setErrors(nextErrors);
+    if (Object.keys(nextErrors).length > 0) {
+      return;
+    }
+
+    setIsSavingDraft(true);
+    setStatusMessage(null);
+
+    try {
+      const saved = await persistDraft();
+      setStatusMessage(`Draft saved as ${saved.requestNumber}.`);
+    } catch (error) {
+      setErrors({
+        submit:
+          error instanceof Error
+            ? error.message
+            : "Unable to save draft. Try again later.",
+      });
+    } finally {
+      setIsSavingDraft(false);
+    }
+  }
+
   function handleNext() {
     const nextErrors = validateStep(step);
     setErrors(nextErrors);
@@ -254,7 +413,7 @@ export function TrainingRequestWizard() {
     updateField(key, formatCurrencyInput(draft[key]));
   }
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     const nextErrors = validateStep(4);
@@ -269,45 +428,40 @@ export function TrainingRequestWizard() {
     }
 
     setIsSubmitting(true);
+    setStatusMessage(null);
 
-    const requestNumber = generateRequestNumber({
-      requesterName: draft.requesterName.trim(),
-      courseName: draft.courseName.trim(),
-      courseStartDate: draft.courseStartDate,
-    });
+    try {
+      const input = buildTrainingRequestInput({
+        personnel,
+        draft,
+        expenseSummary,
+      });
 
-    const request: TrainingRequest = {
-      id: generateUniqueId(),
-      requestNumber,
-      requesterName: draft.requesterName.trim(),
-      badgeNumber: draft.badgeNumber.trim(),
-      departmentEmail: draft.departmentEmail.trim(),
-      courseName: draft.courseName.trim(),
-      courseNumber: draft.courseNumber.trim(),
-      trainingProvider: draft.trainingProvider.trim(),
-      location: draft.location.trim(),
-      courseStartDate: draft.courseStartDate,
-      courseEndDate: draft.courseEndDate,
-      numberOfDaysOnDuty: Number.parseInt(draft.numberOfDaysOnDuty, 10),
-      courseDescription: draft.courseDescription.trim(),
-      requestDepartmentVehicle: draft.requestDepartmentVehicle,
-      registrationFee,
-      totalReimbursableMiles: expenseSummary.totalReimbursableMiles,
-      gsaMileageRate: activeRate,
-      mileageReimbursement: expenseSummary.mileageReimbursement,
-      lodging,
-      airfare,
-      rentalVehicle,
-      foodExpenses,
-      otherExpenses,
-      transportationNotes: draft.transportationNotes.trim(),
-      totalEstimatedExpenses: expenseSummary.totalEstimatedExpenses,
-      status: "Submitted — Awaiting MTO Review",
-      submittedAt: new Date().toISOString(),
-    };
+      const submitted = draftRequestId
+        ? await submitTrainingRequest(draftRequestId, input)
+        : await createAndSubmitTrainingRequest(input);
 
-    savePrototypeRequest(request);
-    router.push(`/requests/${encodeURIComponent(requestNumber)}/confirmation`);
+      router.push(
+        `/requests/${encodeURIComponent(submitted.requestNumber)}/confirmation`,
+      );
+    } catch (error) {
+      setErrors({
+        submit:
+          error instanceof Error
+            ? error.message
+            : "Unable to submit request. Try again later.",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  if (isLoadingDraft) {
+    return (
+      <div className="mx-auto w-full max-w-3xl rounded-2xl bg-white p-8 text-sm text-zinc-500 shadow-sm shadow-zinc-200/60">
+        Loading draft...
+      </div>
+    );
   }
 
   return (
@@ -805,10 +959,22 @@ export function TrainingRequestWizard() {
                 {requestNumberPreview}
               </p>
               <p className="mt-1 text-xs text-zinc-500">
-                The final sequence number may change if another matching request
-                is submitted first.
+                Request numbers such as {TRAINING_REQUEST_NUMBER_PREVIEW} are
+                assigned automatically when a draft is saved or submitted.
               </p>
             </div>
+
+            {statusMessage ? (
+              <p className="text-sm text-green-800" role="status">
+                {statusMessage}
+              </p>
+            ) : null}
+
+            {errors.submit ? (
+              <p role="alert" className="text-sm text-red-700">
+                {errors.submit}
+              </p>
+            ) : null}
 
             <ReviewSection title="Requester">
               <ReviewItem label="Full Name" value={draft.requesterName} />
@@ -938,34 +1104,51 @@ export function TrainingRequestWizard() {
           </section>
         ) : null}
 
-        <div className="mt-8 flex flex-col-reverse gap-3 sm:flex-row sm:justify-between">
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={handleBack}
-            disabled={step === 1 || isSubmitting}
-            className="w-full sm:w-auto sm:min-w-28"
-          >
-            Back
-          </Button>
-
-          {step < TOTAL_STEPS ? (
+        <div className="mt-8 flex flex-col gap-3">
+          <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-between">
             <Button
               type="button"
-              onClick={handleNext}
-              className="w-full sm:w-auto sm:min-w-36"
+              variant="secondary"
+              onClick={handleBack}
+              disabled={step === 1 || isSubmitting || isSavingDraft}
+              className="w-full sm:w-auto sm:min-w-28"
             >
-              Continue
+              Back
             </Button>
-          ) : (
+
+            {step < TOTAL_STEPS ? (
+              <Button
+                type="button"
+                onClick={handleNext}
+                disabled={isSubmitting || isSavingDraft}
+                className="w-full sm:w-auto sm:min-w-36"
+              >
+                Continue
+              </Button>
+            ) : (
+              <Button
+                type="submit"
+                disabled={isSubmitting || isSavingDraft}
+                className="w-full sm:w-auto sm:min-w-36"
+              >
+                {isSubmitting ? "Submitting…" : "Submit Request"}
+              </Button>
+            )}
+          </div>
+
+          <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
             <Button
-              type="submit"
-              disabled={isSubmitting}
+              type="button"
+              variant="secondary"
+              disabled={isSubmitting || isSavingDraft}
               className="w-full sm:w-auto sm:min-w-36"
+              onClick={() => {
+                void handleSaveDraft();
+              }}
             >
-              {isSubmitting ? "Submitting…" : "Submit Request"}
+              {isSavingDraft ? "Saving Draft…" : "Save Draft"}
             </Button>
-          )}
+          </div>
         </div>
       </form>
     </div>
