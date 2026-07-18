@@ -948,16 +948,12 @@ as $$
 begin
   return query
   with candidates as (
-    select
-      n.id,
-      case
-        when n.status = 'processing' then false
-        else true
-      end as should_increment_attempts
+    select n.id
     from public.training_request_notifications as n
     where (
       (
         n.status = 'pending'
+        and n.attempts < 5
         and n.next_attempt_at <= now()
       )
       or (
@@ -980,10 +976,7 @@ begin
   set
     status = 'processing',
     processing_started_at = now(),
-    attempts = case
-      when c.should_increment_attempts then n.attempts + 1
-      else n.attempts
-    end
+    attempts = n.attempts + 1
   from candidates as c
   where n.id = c.id
   returning n.*;
@@ -1114,4 +1107,4 @@ comment on function public.deputy_approve_training_request(uuid, text) is
   'Records an authenticated Deputy Chief electronic signature and marks the request approved.';
 
 comment on function public.claim_pending_training_request_notifications(integer) is
-  'Claims pending, retryable failed, and stale processing notification rows for delivery. Uses FOR UPDATE SKIP LOCKED and increments attempts only for new claims, not stale processing recovery.';
+  'Claims pending, retryable failed, and stale processing notification rows for delivery. Every claim consumes one attempt, up to five total. Uses FOR UPDATE SKIP LOCKED and excludes rows with attempts >= 5.';

@@ -6,6 +6,8 @@
  * - Database webhooks and schedulers must invoke the function with an authorized
  *   request (service role or Supabase-signed webhook), never from browser code.
  * - Do not expose SUPABASE_SERVICE_ROLE_KEY or RESEND_API_KEY to client code.
+ * - Resend requests use Idempotency-Key: <notification UUID> so retries for the
+ *   same outbox row do not create duplicate provider sends after uncertain results.
  */
 import { createClient } from "npm:@supabase/supabase-js@2.49.1";
 
@@ -124,6 +126,7 @@ function buildEmailHtml(input: {
 async function sendWithResend(input: {
   apiKey: string;
   fromEmail: string;
+  idempotencyKey: string;
   to: string;
   subject: string;
   text: string;
@@ -134,6 +137,7 @@ async function sendWithResend(input: {
     headers: {
       Authorization: `Bearer ${input.apiKey}`,
       "Content-Type": "application/json",
+      "Idempotency-Key": input.idempotencyKey,
     },
     body: JSON.stringify({
       from: input.fromEmail,
@@ -224,6 +228,7 @@ Deno.serve(async (request) => {
       await sendWithResend({
         apiKey: resendApiKey,
         fromEmail: resendFromEmail,
+        idempotencyKey: notification.id,
         to: notification.recipient_email,
         subject: notification.subject,
         text: textBody,
