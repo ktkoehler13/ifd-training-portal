@@ -241,11 +241,20 @@ using (
 grant select, insert, update, delete on table public.personnel_signatures to authenticated;
 
 revoke all on function public.can_manage_own_personnel_signature() from public;
+revoke all on function public.can_manage_own_personnel_signature() from anon;
 grant execute on function public.can_manage_own_personnel_signature() to authenticated;
 
 revoke all on function public.expected_personnel_signature_storage_path(uuid) from public;
 revoke all on function public.expected_personnel_signature_storage_path(uuid) from anon;
-revoke all on function public.expected_personnel_signature_storage_path(uuid) from authenticated;
+grant execute on function public.expected_personnel_signature_storage_path(uuid) to authenticated;
+
+revoke all on function public.is_personnel_signature_pending_object_path(text, uuid) from public;
+revoke all on function public.is_personnel_signature_pending_object_path(text, uuid) from anon;
+grant execute on function public.is_personnel_signature_pending_object_path(text, uuid) to authenticated;
+
+revoke all on function public.is_personnel_signature_owner_object_path(text, uuid) from public;
+revoke all on function public.is_personnel_signature_owner_object_path(text, uuid) from anon;
+grant execute on function public.is_personnel_signature_owner_object_path(text, uuid) to authenticated;
 
 revoke all on function public.validate_personnel_signature_row() from public;
 revoke all on function public.validate_personnel_signature_row() from anon;
@@ -260,13 +269,8 @@ comment on column public.personnel_signatures.certified_at is
 comment on function public.can_manage_own_personnel_signature() is
   'Returns true when the authenticated active personnel role may manage a personal signature (mto or deputy_chief only).';
 
-revoke all on function public.is_personnel_signature_pending_object_path(text, uuid) from public;
-revoke all on function public.is_personnel_signature_pending_object_path(text, uuid) from anon;
-revoke all on function public.is_personnel_signature_pending_object_path(text, uuid) from authenticated;
-
-revoke all on function public.is_personnel_signature_owner_object_path(text, uuid) from public;
-revoke all on function public.is_personnel_signature_owner_object_path(text, uuid) from anon;
-revoke all on function public.is_personnel_signature_owner_object_path(text, uuid) from authenticated;
+comment on function public.expected_personnel_signature_storage_path(uuid) is
+  'Returns the owner final signature object path used by storage policies and metadata validation.';
 
 comment on function public.is_personnel_signature_pending_object_path(text, uuid) is
   'Validates owner-scoped staged signature object paths under pending/ without path traversal.';

@@ -424,6 +424,8 @@ Migration `20260718210000_personnel_signatures.sql` adds secure stored signature
 
 The save API rejects any request where `certificationConfirmed` is not literal `true`. The database trigger requires `certification_confirmed = true` and assigns `certified_at` on the server. Client-supplied personnel IDs or certification timestamps are not trusted.
 
+Storage policy helper functions (`can_manage_own_personnel_signature`, `expected_personnel_signature_storage_path`, `is_personnel_signature_pending_object_path`, and `is_personnel_signature_owner_object_path`) are executable by `authenticated` users only so Storage RLS can evaluate owner-scoped paths. They do not grant cross-user access.
+
 **Application route:** `/settings/signature`
 
 MTO and Deputy Chief users can draw or upload a signature, preview the stored PNG, replace it, or delete it. Firefighters and admin-only accounts see access denied. Stale metadata can be deleted even when the Storage object is already missing.

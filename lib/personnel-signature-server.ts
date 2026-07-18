@@ -22,6 +22,7 @@ import {
   PERSONNEL_SIGNATURE_BUCKET,
   PERSONNEL_SIGNATURE_MIME_TYPE,
 } from "@/types/personnel-signature";
+import { getPersonnelSignatureFailureCleanupPlan } from "@/lib/personnel-signature-failure-plan";
 
 const SIGNED_URL_TTL_SECONDS = 300;
 
@@ -79,13 +80,50 @@ async function restoreFinalSignatureFromBackup(
   finalPath: string,
 ): Promise<void> {
   const supabase = await createClient();
-  const { error } = await supabase.storage
+
+  const { error: removeFinalError } = await supabase.storage
+    .from(PERSONNEL_SIGNATURE_BUCKET)
+    .remove([finalPath]);
+
+  if (
+    removeFinalError &&
+    !isStorageObjectNotFoundError(removeFinalError.message ?? "")
+  ) {
+    throw new Error(
+      `Unable to remove the failed replacement signature before restore: ${removeFinalError.message}. Manual intervention may be required.`,
+    );
+  }
+
+  const { error: copyError } = await supabase.storage
     .from(PERSONNEL_SIGNATURE_BUCKET)
     .copy(backupPath, finalPath);
 
-  if (error) {
+  if (copyError) {
     throw new Error(
-      `Unable to restore the previous signature after a failed replacement: ${error.message}`,
+      `Unable to copy the backup signature back to the final path: ${copyError.message}. Manual intervention may be required.`,
+    );
+  }
+
+  const { data: restoredObject, error: verifyError } = await supabase.storage
+    .from(PERSONNEL_SIGNATURE_BUCKET)
+    .download(finalPath);
+
+  if (verifyError || !restoredObject) {
+    throw new Error(
+      `Restored signature could not be verified at the final path: ${verifyError?.message ?? "missing object"}. Manual intervention may be required.`,
+    );
+  }
+
+  const { error: backupRemoveError } = await supabase.storage
+    .from(PERSONNEL_SIGNATURE_BUCKET)
+    .remove([backupPath]);
+
+  if (
+    backupRemoveError &&
+    !isStorageObjectNotFoundError(backupRemoveError.message ?? "")
+  ) {
+    throw new Error(
+      `Previous signature was restored, but the temporary backup could not be removed: ${backupRemoveError.message}. Manual intervention may be required.`,
     );
   }
 }
@@ -231,31 +269,50 @@ export async function saveOwnPersonnelSignature(input: {
 
     return mapPersonnelSignatureRow(data as PersonnelSignatureRow);
   } catch (error) {
-    if (finalPromoted && backupCreated) {
-      try {
-        await restoreFinalSignatureFromBackup(backupPath, finalPath);
-      } catch (restoreError) {
-        throw new Error(
-          restoreError instanceof Error
-            ? restoreError.message
-            : "Unable to restore the previous signature after a failed replacement.",
-        );
-      }
-    } else if (finalPromoted && !hadExistingFinal) {
-      await removeStorageObjects([finalPath]);
-    }
+    const originalMessage =
+      error instanceof Error
+        ? error.message
+        : "Unable to save the personnel signature.";
+    const cleanupPlan = getPersonnelSignatureFailureCleanupPlan({
+      pendingUploaded,
+      finalPromoted,
+      backupCreated,
+      hadExistingFinal,
+    });
 
-    if (pendingUploaded) {
+    if (cleanupPlan.removePendingPath) {
       await removeStorageObjects([pendingPath]);
     }
 
-    if (backupCreated) {
+    if (cleanupPlan.restoreFromBackup) {
+      try {
+        await restoreFinalSignatureFromBackup(backupPath, finalPath);
+        throw new Error(
+          `${originalMessage} Your previous signature was restored.`,
+        );
+      } catch (restoreError) {
+        const restoreMessage =
+          restoreError instanceof Error
+            ? restoreError.message
+            : "Unable to restore the previous signature.";
+
+        throw new Error(
+          `${originalMessage} ${restoreMessage} The temporary backup remains at ${backupPath}.`,
+        );
+      }
+    }
+
+    if (cleanupPlan.removePromotedFinalPath) {
+      await removeStorageObjects([finalPath]);
+    }
+
+    if (cleanupPlan.removeUnusedBackupPath) {
       await removeStorageObjects([backupPath]);
     }
 
     throw error instanceof Error
       ? error
-      : new Error("Unable to save the personnel signature.");
+      : new Error(originalMessage);
   }
 }
 
