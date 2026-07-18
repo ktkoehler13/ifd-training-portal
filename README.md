@@ -2,6 +2,15 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 
 ## Getting Started
 
+Copy the example environment file and set local values:
+
+```bash
+cp .env.local.example .env.local
+```
+
+- `NEXT_PUBLIC_DEPARTMENT_ACCESS_CODE` — prototype landing-page access code
+- `NEXT_PUBLIC_GSA_MILEAGE_RATE` — example mileage rate only; replace it with the approved current GSA rate before calculating real reimbursements
+
 First, run the development server:
 
 ```bash

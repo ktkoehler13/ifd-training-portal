@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
@@ -14,16 +15,18 @@ const actionCards = [
     title: "New Training Request",
     description:
       "Submit a new request for department training, courses, or certifications.",
+    href: "/requests/new",
   },
   {
     title: "My Requests",
     description:
       "Review the status of training requests you have already submitted.",
+    href: "/requests",
   },
   {
     title: "Help & Instructions",
-    description:
-      "Find guidance on how to use the portal and complete training requests.",
+    description: "Coming soon",
+    href: null,
   },
 ] as const;
 
@@ -109,24 +112,43 @@ export function DashboardView() {
             Quick actions
           </h2>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {actionCards.map((card) => (
-              <button
-                key={card.title}
-                type="button"
-                className={cn(
-                  "rounded-2xl border border-zinc-200 bg-white p-5 text-left shadow-sm shadow-zinc-200/60",
-                  "transition-colors hover:border-zinc-300 hover:bg-zinc-50",
-                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-700 focus-visible:ring-offset-2",
-                )}
-              >
-                <h3 className="text-base font-semibold text-zinc-900">
-                  {card.title}
-                </h3>
-                <p className="mt-2 text-sm leading-6 text-zinc-600">
-                  {card.description}
-                </p>
-              </button>
-            ))}
+            {actionCards.map((card) => {
+              const className = cn(
+                "rounded-2xl border border-zinc-200 bg-white p-5 text-left shadow-sm shadow-zinc-200/60",
+                "transition-colors",
+                card.href
+                  ? "hover:border-zinc-300 hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-700 focus-visible:ring-offset-2"
+                  : "cursor-not-allowed opacity-75",
+              );
+
+              if (card.href) {
+                return (
+                  <Link key={card.title} href={card.href} className={className}>
+                    <h3 className="text-base font-semibold text-zinc-900">
+                      {card.title}
+                    </h3>
+                    <p className="mt-2 text-sm leading-6 text-zinc-600">
+                      {card.description}
+                    </p>
+                  </Link>
+                );
+              }
+
+              return (
+                <div
+                  key={card.title}
+                  className={className}
+                  aria-disabled="true"
+                >
+                  <h3 className="text-base font-semibold text-zinc-900">
+                    {card.title}
+                  </h3>
+                  <p className="mt-2 text-sm leading-6 text-zinc-600">
+                    {card.description}
+                  </p>
+                </div>
+              );
+            })}
           </div>
         </section>
       </div>
