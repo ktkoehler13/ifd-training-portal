@@ -21,7 +21,7 @@ function mapWorkflowRow(data: unknown): TrainingRequestRecord {
 
 async function callWorkflowRpc(
   functionName: string,
-  args: Record<string, string | null>,
+  args: Record<string, string | null | boolean>,
 ): Promise<TrainingRequestRecord> {
   const supabase = createClient();
   const { data, error } = await supabase.rpc(functionName, args);
@@ -55,11 +55,13 @@ export async function resubmitTrainingRequestWorkflow(
 
 export async function mtoApproveTrainingRequest(
   requestId: string,
-  comments?: string | null,
+  comments: string | null | undefined,
+  electronicSignatureConfirmed: boolean,
 ): Promise<TrainingRequestRecord> {
   return callWorkflowRpc("mto_approve_training_request", {
     p_request_id: requestId,
     p_comments: comments?.trim() || null,
+    p_electronic_signature_confirmed: electronicSignatureConfirmed,
   });
 }
 
@@ -85,11 +87,13 @@ export async function mtoDenyTrainingRequest(
 
 export async function deputyApproveTrainingRequest(
   requestId: string,
-  comments?: string | null,
+  comments: string | null | undefined,
+  electronicSignatureConfirmed: boolean,
 ): Promise<TrainingRequestRecord> {
   return callWorkflowRpc("deputy_approve_training_request", {
     p_request_id: requestId,
     p_comments: comments?.trim() || null,
+    p_electronic_signature_confirmed: electronicSignatureConfirmed,
   });
 }
 

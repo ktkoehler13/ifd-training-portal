@@ -52,9 +52,19 @@ export function RequestActionTimeline({
               {formatActionTimestamp(action.createdAt)}
             </p>
           </div>
-          {action.signatureName ? (
+          {action.electronicSignatureConfirmed && action.signatureName ? (
             <p className="mt-3 text-sm text-zinc-700">
-              Signed electronically as{" "}
+              Electronically signed by{" "}
+              <span className="font-medium text-zinc-900">
+                {action.signatureName}
+              </span>
+              {action.signedAt
+                ? ` on ${formatActionTimestamp(action.signedAt)}`
+                : null}
+            </p>
+          ) : action.signatureName ? (
+            <p className="mt-3 text-sm text-zinc-700">
+              Signed as{" "}
               <span className="font-medium text-zinc-900">
                 {action.signatureName}
               </span>

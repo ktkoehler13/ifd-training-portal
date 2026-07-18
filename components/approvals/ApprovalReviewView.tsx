@@ -108,6 +108,7 @@ function ApprovalReviewContent({
   async function handleWorkflowConfirm(input: {
     action: WorkflowActionKind;
     comments: string;
+    electronicSignatureConfirmed: boolean;
   }) {
     if (!request) {
       return;
@@ -117,7 +118,11 @@ function ApprovalReviewContent({
 
     switch (input.action) {
       case "mto_approve":
-        await mtoApproveTrainingRequest(request.id, input.comments);
+        await mtoApproveTrainingRequest(
+          request.id,
+          input.comments,
+          input.electronicSignatureConfirmed,
+        );
         break;
       case "mto_return":
         await mtoReturnTrainingRequest(request.id, input.comments);
@@ -126,7 +131,11 @@ function ApprovalReviewContent({
         await mtoDenyTrainingRequest(request.id, input.comments);
         break;
       case "deputy_approve":
-        await deputyApproveTrainingRequest(request.id, input.comments);
+        await deputyApproveTrainingRequest(
+          request.id,
+          input.comments,
+          input.electronicSignatureConfirmed,
+        );
         break;
       case "deputy_return":
         await deputyReturnTrainingRequest(request.id, input.comments);

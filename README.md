@@ -258,12 +258,17 @@ Supported statuses:
 
 Approvals use authenticated electronic signature acknowledgment rather than handwritten drawing. Reviewers must:
 
-- confirm they are signing electronically
+- confirm they are signing electronically in the review dialog
 - see their authenticated full name and badge number
 - optionally enter comments on approve, or required comments on return/deny
 - click a role-specific button such as **Sign and Approve as MTO**
 
-The database stores trusted actor identity snapshots and signature metadata in `public.training_request_actions`. Browser clients cannot supply signature identity fields directly.
+Signature intent is enforced in both places:
+
+- the approval review dialog requires the acknowledgment checkbox before calling the workflow RPC
+- the database approval RPC functions require `p_electronic_signature_confirmed = true` and reject false or missing acknowledgment with a clear error
+
+The database stores trusted actor identity snapshots and signature metadata in `public.training_request_actions`, including `electronic_signature_confirmed`. Browser clients cannot supply signature identity fields directly.
 
 ### Action history
 
@@ -272,7 +277,7 @@ The database stores trusted actor identity snapshots and signature metadata in `
 - actor personnel ID, name, badge, and role snapshots
 - action type (`submitted`, `mto_approved`, `mto_returned`, `deputy_chief_approved`, etc.)
 - comments
-- `signature_name` and `signed_at` for approval actions
+- `signature_name`, `signed_at`, and `electronic_signature_confirmed` for approval actions
 
 History rows are inserted only by trusted `SECURITY DEFINER` workflow functions.
 
@@ -282,10 +287,10 @@ Apply workflow transitions through RPC functions rather than direct table update
 
 - `submit_training_request(request_id)`
 - `resubmit_training_request(request_id)`
-- `mto_approve_training_request(request_id, comments)`
+- `mto_approve_training_request(request_id, comments, electronic_signature_confirmed)`
 - `mto_return_training_request(request_id, comments)`
 - `mto_deny_training_request(request_id, comments)`
-- `deputy_approve_training_request(request_id, comments)`
+- `deputy_approve_training_request(request_id, comments, electronic_signature_confirmed)`
 - `deputy_return_training_request(request_id, comments)`
 - `deputy_deny_training_request(request_id, comments)`
 

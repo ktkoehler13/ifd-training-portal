@@ -41,6 +41,7 @@ export interface TrainingRequestActionRow {
   comments: string | null;
   signature_name: string | null;
   signed_at: string | null;
+  electronic_signature_confirmed: boolean;
   created_at: string;
 }
 
@@ -55,6 +56,7 @@ export interface TrainingRequestActionRecord {
   comments: string | null;
   signatureName: string | null;
   signedAt: string | null;
+  electronicSignatureConfirmed: boolean;
   createdAt: string;
 }
 

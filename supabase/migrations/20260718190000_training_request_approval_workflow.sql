@@ -40,6 +40,7 @@ create table if not exists public.training_request_actions (
   comments text,
   signature_name text,
   signed_at timestamptz,
+  electronic_signature_confirmed boolean not null default false,
   created_at timestamptz not null default now(),
   constraint training_request_actions_actor_role_check check (
     actor_role in ('firefighter', 'mto', 'deputy_chief', 'admin')
@@ -61,6 +62,19 @@ create table if not exists public.training_request_actions (
 
 create index if not exists training_request_actions_training_request_id_idx
   on public.training_request_actions (training_request_id, created_at);
+
+alter table public.training_request_actions
+  add column if not exists electronic_signature_confirmed boolean;
+
+update public.training_request_actions
+set electronic_signature_confirmed = false
+where electronic_signature_confirmed is null;
+
+alter table public.training_request_actions
+  alter column electronic_signature_confirmed set default false;
+
+alter table public.training_request_actions
+  alter column electronic_signature_confirmed set not null;
 
 create table if not exists public.training_request_notifications (
   id uuid primary key default gen_random_uuid(),
@@ -193,7 +207,8 @@ create or replace function public.insert_training_request_action(
   p_action text,
   p_comments text default null,
   p_signature_name text default null,
-  p_signed_at timestamptz default null
+  p_signed_at timestamptz default null,
+  p_electronic_signature_confirmed boolean default false
 )
 returns public.training_request_actions
 language plpgsql
@@ -221,7 +236,8 @@ begin
     action,
     comments,
     signature_name,
-    signed_at
+    signed_at,
+    electronic_signature_confirmed
   )
   values (
     p_training_request_id,
@@ -232,7 +248,8 @@ begin
     p_action,
     nullif(btrim(coalesce(p_comments, '')), ''),
     p_signature_name,
-    p_signed_at
+    p_signed_at,
+    coalesce(p_electronic_signature_confirmed, false)
   )
   returning * into inserted_action;
 
@@ -541,7 +558,8 @@ $$;
 
 create or replace function public.mto_approve_training_request(
   p_request_id uuid,
-  p_comments text default null
+  p_comments text,
+  p_electronic_signature_confirmed boolean
 )
 returns public.training_requests
 language plpgsql
@@ -553,6 +571,10 @@ declare
   request_row public.training_requests;
   action_row public.training_request_actions;
 begin
+  if coalesce(p_electronic_signature_confirmed, false) is distinct from true then
+    raise exception 'Electronic signature acknowledgment is required to approve this request';
+  end if;
+
   select *
   into actor
   from public.get_current_personnel_actor();
@@ -587,7 +609,8 @@ begin
     'mto_approved',
     p_comments,
     actor.actor_name,
-    now()
+    now(),
+    true
   );
 
   perform public.enqueue_training_request_notifications(
@@ -730,7 +753,8 @@ $$;
 
 create or replace function public.deputy_approve_training_request(
   p_request_id uuid,
-  p_comments text default null
+  p_comments text,
+  p_electronic_signature_confirmed boolean
 )
 returns public.training_requests
 language plpgsql
@@ -742,6 +766,10 @@ declare
   request_row public.training_requests;
   action_row public.training_request_actions;
 begin
+  if coalesce(p_electronic_signature_confirmed, false) is distinct from true then
+    raise exception 'Electronic signature acknowledgment is required to approve this request';
+  end if;
+
   select *
   into actor
   from public.get_current_personnel_actor();
@@ -777,7 +805,8 @@ begin
     'deputy_chief_approved',
     p_comments,
     actor.actor_name,
-    now()
+    now(),
+    true
   );
 
   perform public.enqueue_training_request_notifications(
@@ -1048,9 +1077,9 @@ revoke all on function public.get_current_personnel_actor() from authenticated;
 revoke all on function public.require_training_request_action_comments(text, text) from public;
 revoke all on function public.require_training_request_action_comments(text, text) from anon;
 revoke all on function public.require_training_request_action_comments(text, text) from authenticated;
-revoke all on function public.insert_training_request_action(uuid, text, text, text, timestamptz) from public;
-revoke all on function public.insert_training_request_action(uuid, text, text, text, timestamptz) from anon;
-revoke all on function public.insert_training_request_action(uuid, text, text, text, timestamptz) from authenticated;
+revoke all on function public.insert_training_request_action(uuid, text, text, text, timestamptz, boolean) from public;
+revoke all on function public.insert_training_request_action(uuid, text, text, text, timestamptz, boolean) from anon;
+revoke all on function public.insert_training_request_action(uuid, text, text, text, timestamptz, boolean) from authenticated;
 revoke all on function public.build_training_request_notification_copy(text, public.training_requests) from public;
 revoke all on function public.build_training_request_notification_copy(text, public.training_requests) from anon;
 revoke all on function public.build_training_request_notification_copy(text, public.training_requests) from authenticated;
@@ -1060,10 +1089,10 @@ revoke all on function public.enqueue_training_request_notifications(uuid, uuid,
 
 revoke all on function public.submit_training_request(uuid) from public;
 revoke all on function public.resubmit_training_request(uuid) from public;
-revoke all on function public.mto_approve_training_request(uuid, text) from public;
+revoke all on function public.mto_approve_training_request(uuid, text, boolean) from public;
 revoke all on function public.mto_return_training_request(uuid, text) from public;
 revoke all on function public.mto_deny_training_request(uuid, text) from public;
-revoke all on function public.deputy_approve_training_request(uuid, text) from public;
+revoke all on function public.deputy_approve_training_request(uuid, text, boolean) from public;
 revoke all on function public.deputy_return_training_request(uuid, text) from public;
 revoke all on function public.deputy_deny_training_request(uuid, text) from public;
 
@@ -1078,10 +1107,10 @@ grant select on table public.training_requests to service_role;
 
 grant execute on function public.submit_training_request(uuid) to authenticated;
 grant execute on function public.resubmit_training_request(uuid) to authenticated;
-grant execute on function public.mto_approve_training_request(uuid, text) to authenticated;
+grant execute on function public.mto_approve_training_request(uuid, text, boolean) to authenticated;
 grant execute on function public.mto_return_training_request(uuid, text) to authenticated;
 grant execute on function public.mto_deny_training_request(uuid, text) to authenticated;
-grant execute on function public.deputy_approve_training_request(uuid, text) to authenticated;
+grant execute on function public.deputy_approve_training_request(uuid, text, boolean) to authenticated;
 grant execute on function public.deputy_return_training_request(uuid, text) to authenticated;
 grant execute on function public.deputy_deny_training_request(uuid, text) to authenticated;
 
@@ -1090,6 +1119,9 @@ comment on table public.training_request_actions is
 
 comment on column public.training_request_actions.signature_name is
   'Authenticated electronic signature name captured at approval time.';
+
+comment on column public.training_request_actions.electronic_signature_confirmed is
+  'True when the reviewer explicitly acknowledged an authenticated electronic signature for an approval action.';
 
 comment on table public.training_request_notifications is
   'Email notification outbox for training request workflow events. Not exposed through the Supabase Data API.';
@@ -1100,11 +1132,11 @@ comment on function public.submit_training_request(uuid) is
 comment on function public.resubmit_training_request(uuid) is
   'Resubmits a returned request into pending MTO review and restarts the approval workflow.';
 
-comment on function public.mto_approve_training_request(uuid, text) is
-  'Records an authenticated MTO electronic signature and advances the request to Deputy Chief review.';
+comment on function public.mto_approve_training_request(uuid, text, boolean) is
+  'Records an authenticated MTO electronic signature and advances the request to Deputy Chief review. Requires explicit electronic signature acknowledgment.';
 
-comment on function public.deputy_approve_training_request(uuid, text) is
-  'Records an authenticated Deputy Chief electronic signature and marks the request approved.';
+comment on function public.deputy_approve_training_request(uuid, text, boolean) is
+  'Records an authenticated Deputy Chief electronic signature and marks the request approved. Requires explicit electronic signature acknowledgment.';
 
 comment on function public.claim_pending_training_request_notifications(integer) is
   'Claims pending, retryable failed, and stale processing notification rows for delivery. Every claim consumes one attempt, up to five total. Uses FOR UPDATE SKIP LOCKED and excludes rows with attempts >= 5.';

@@ -31,6 +31,7 @@ export function mapTrainingRequestActionRow(
     comments: row.comments,
     signatureName: row.signature_name,
     signedAt: row.signed_at,
+    electronicSignatureConfirmed: row.electronic_signature_confirmed,
     createdAt: row.created_at,
   };
 }
