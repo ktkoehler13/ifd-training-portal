@@ -21,6 +21,15 @@ create table if not exists public.training_request_number_counters (
     check (last_value >= 0)
 );
 
+alter table public.training_request_number_counters enable row level security;
+
+revoke all on table public.training_request_number_counters from public;
+revoke all on table public.training_request_number_counters from anon;
+revoke all on table public.training_request_number_counters from authenticated;
+
+comment on table public.training_request_number_counters is
+  'Internal per-year sequence state for training request numbers. Not exposed through the Supabase Data API; accessed only by SECURITY DEFINER database functions.';
+
 create or replace function public.generate_training_request_number(
   reference_timestamp timestamptz default now()
 )
@@ -176,6 +185,7 @@ $$;
 create or replace function public.protect_training_request_immutable_fields()
 returns trigger
 language plpgsql
+security definer
 set search_path = public
 as $$
 begin
@@ -218,7 +228,20 @@ execute function public.set_updated_at();
 
 revoke all on function public.current_personnel_id() from public;
 revoke all on function public.generate_training_request_number(timestamptz) from public;
+revoke all on function public.generate_training_request_number(timestamptz) from anon;
 revoke all on function public.generate_training_request_number(timestamptz) from authenticated;
+
+revoke all on function public.set_training_request_requester_identity() from public;
+revoke all on function public.set_training_request_requester_identity() from anon;
+revoke all on function public.set_training_request_requester_identity() from authenticated;
+
+revoke all on function public.set_training_request_number() from public;
+revoke all on function public.set_training_request_number() from anon;
+revoke all on function public.set_training_request_number() from authenticated;
+
+revoke all on function public.protect_training_request_immutable_fields() from public;
+revoke all on function public.protect_training_request_immutable_fields() from anon;
+revoke all on function public.protect_training_request_immutable_fields() from authenticated;
 
 grant execute on function public.current_personnel_id() to authenticated;
 
