@@ -3,7 +3,7 @@
 import { startTransition, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ExpenseSummary } from "@/components/requests/ExpenseSummary";
-import { PrototypeGate } from "@/components/layout/PrototypeGate";
+import { AuthGate } from "@/components/layout/AuthGate";
 import { Button } from "@/components/ui/Button";
 import { formatCurrency, formatMileageRate } from "@/lib/currency";
 import { formatDepartmentVehicle } from "@/lib/expenses";
@@ -46,7 +46,7 @@ export function ConfirmationView({ requestNumber }: ConfirmationViewProps) {
   }, [requestNumber]);
 
   return (
-    <PrototypeGate>
+    <AuthGate>
       <div className="flex flex-1 flex-col bg-zinc-100">
         <div className="mx-auto flex w-full max-w-2xl flex-1 flex-col justify-center px-4 py-12 sm:px-6">
           <div className="rounded-2xl bg-white p-6 shadow-sm shadow-zinc-200/60 sm:p-8">
@@ -199,7 +199,7 @@ export function ConfirmationView({ requestNumber }: ConfirmationViewProps) {
           </div>
         </div>
       </div>
-    </PrototypeGate>
+    </AuthGate>
   );
 }
 

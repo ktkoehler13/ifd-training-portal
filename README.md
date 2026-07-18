@@ -1,6 +1,6 @@
 # IFD Training Portal
 
-Next.js prototype for Ithaca Fire Department training request workflows.
+Next.js application for Ithaca Fire Department training request workflows and personnel access.
 
 ## Getting Started
 
@@ -12,10 +12,9 @@ cp .env.local.example .env.local
 
 Required local variables:
 
-- `NEXT_PUBLIC_DEPARTMENT_ACCESS_CODE` — prototype landing-page access code
-- `NEXT_PUBLIC_GSA_MILEAGE_RATE` — example mileage rate only; replace it with the approved current GSA rate before calculating real reimbursements
 - `NEXT_PUBLIC_SUPABASE_URL` — Supabase project URL
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY` — Supabase anon/public key
+- `NEXT_PUBLIC_GSA_MILEAGE_RATE` — example mileage rate only; replace it with the approved current GSA rate before calculating real reimbursements
 
 Never commit `.env.local`. Never add a Supabase service-role key to browser code or to `.env.local.example`.
 
@@ -48,76 +47,99 @@ Use only the anon key in this application. Do not expose the service-role key in
 
 ### 3. Configure `.env.local`
 
-Add the Supabase values alongside the existing prototype variables:
-
 ```bash
 NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+NEXT_PUBLIC_GSA_MILEAGE_RATE=0.70
 ```
 
 Restart `npm run dev` after changing environment variables.
 
-### 4. Run the migration
+### 4. Run the migrations
 
-Apply the personnel migration using one of these methods:
+Apply these files in order using the Supabase SQL editor:
 
-**Supabase SQL editor**
+1. `supabase/migrations/20260718140000_create_personnel.sql`
+2. `supabase/migrations/20260718150000_personnel_login_allowed.sql`
 
-1. Open **SQL** in the Supabase dashboard.
-2. Paste the contents of `supabase/migrations/20260718140000_create_personnel.sql`.
-3. Run the script.
+### 5. Insert test personnel manually
 
-**Supabase CLI (optional)**
+Use `supabase/seed.example.sql` as a development-only guide, or insert your initial MTO test user directly:
 
-If you use the Supabase CLI locally, link the project and run:
-
-```bash
-supabase db push
+```sql
+insert into public.personnel (badge_number, email, role, active)
+values ('207', 'ifd.mto@gmail.com', 'mto', true);
 ```
 
-### 5. Insert a few test users
+Do not add real personnel information to the repository.
 
-Use `supabase/seed.example.sql` as a development-only guide.
+## Email OTP Authentication
 
-1. Open the Supabase SQL editor.
-2. Uncomment the example inserts you want to use.
-3. Run them manually.
+The login page uses badge number plus department email verification, followed by a six-digit email OTP from Supabase Auth.
 
-The repository includes only fake example badge numbers and example emails such as `firefighter.example@ifd-prototype.local`.
+### Enable email authentication
 
-Do not add real personnel information to the repository or to shared development projects until Microsoft 365 authentication is implemented.
+In the Supabase dashboard:
 
-### 6. Open the prototype admin page
+1. Open **Authentication**.
+2. Open **Providers**.
+3. Ensure **Email** is enabled.
 
-After entering the department access code, visit:
+### Configure the email template for numeric OTP codes
 
-```text
-/admin/users
+1. Open **Authentication**.
+2. Open **Email Templates**.
+3. Open **Magic Link**.
+4. Edit the template so the message includes the numeric token:
+
+```html
+<p>Your IFD Training Portal login code is:</p>
+<p><strong>{{ .Token }}</strong></p>
 ```
 
-The page is protected only by the prototype session for navigation. Supabase Row Level Security remains enabled and will block anonymous reads and writes until Microsoft 365 authentication is connected.
+Do not rely on the magic-link URL alone for this login flow. The application verifies the six-digit code with `verifyOtp`.
+
+Optional dashboard settings that help reduce abuse:
+
+- Keep Supabase auth rate limits enabled
+- Review **Authentication -> Rate Limits** in the Supabase dashboard
+
+The application also enforces a 60-second resend cooldown in the login UI.
+
+## Authentication and Authorization
+
+- Login uses Supabase secure session cookies through `@supabase/ssr`
+- The app does not use `sessionStorage` or `localStorage` for authentication
+- Middleware refreshes Supabase sessions and protects authenticated routes
+- After OTP verification, the app confirms the signed-in email and badge number match an active personnel row
+- Roles come only from `public.personnel`, never from browser input after login
+
+Protected routes:
+
+- `/dashboard`
+- `/requests`
+- `/requests/new`
+- `/admin/users`
+
+Authorization:
+
+- `firefighter`, `mto`, `deputy_chief`, and `admin` may use normal request routes
+- Only `admin` may access `/admin/users`
+- The initial test MTO account does not receive admin access automatically
 
 ## Personnel Data Model
 
 The `personnel` table stores only:
 
 - badge number
-- department email
+- email
 - role
 - active status
 - created/updated timestamps
 
-It intentionally does **not** store names, phone numbers, addresses, passwords, medical information, or payroll information.
+It intentionally does not store names, phone numbers, addresses, passwords, medical information, or payroll information.
 
-## Security Notes
-
-- The department access code is a temporary prototype gate, not production security.
-- Row Level Security is enabled on `personnel`.
-- Anonymous users cannot read or write personnel records.
-- Future Microsoft 365 authenticated users will be matched to personnel rows by email.
-- Firefighters will eventually read only their own row.
-- MTO and Deputy Chief users will eventually read active personnel needed for routing.
-- Only admins will eventually insert, update, deactivate, or change roles.
+Do not add real personnel data to shared environments until production authentication and governance are complete.
 
 ## Useful Commands
 

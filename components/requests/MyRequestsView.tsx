@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { startTransition, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { PrototypeGate } from "@/components/layout/PrototypeGate";
+import { AuthGate } from "@/components/layout/AuthGate";
 import { Button } from "@/components/ui/Button";
 import { formatCurrency } from "@/lib/currency";
 import { formatTransportationIndicator } from "@/lib/expenses";
@@ -57,7 +57,7 @@ export function MyRequestsView() {
   }, []);
 
   return (
-    <PrototypeGate>
+    <AuthGate>
       <div className="flex flex-1 flex-col bg-zinc-100">
         <header className="border-b border-zinc-200 bg-white">
           <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 px-4 py-5 sm:flex-row sm:items-start sm:justify-between sm:px-6">
@@ -188,6 +188,6 @@ export function MyRequestsView() {
           )}
         </div>
       </div>
-    </PrototypeGate>
+    </AuthGate>
   );
 }

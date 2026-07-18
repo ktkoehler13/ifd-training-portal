@@ -4,13 +4,18 @@ import Link from "next/link";
 import { startTransition, useCallback, useEffect, useState } from "react";
 import { AddUserForm } from "@/components/admin/AddUserForm";
 import { UsersTable } from "@/components/admin/UsersTable";
-import { PrototypeGate } from "@/components/layout/PrototypeGate";
+import { SignOutButton } from "@/components/auth/SignOutButton";
+import { AdminGate } from "@/components/layout/AuthGate";
 import {
   getPersonnelErrorMessage,
   mapPersonnelRow,
 } from "@/lib/personnel";
 import { createClient } from "@/lib/supabase/client";
-import type { PersonnelInsertInput, PersonnelRecord, PersonnelRow } from "@/types/personnel";
+import type {
+  PersonnelInsertInput,
+  PersonnelRecord,
+  PersonnelRow,
+} from "@/types/personnel";
 
 function getSupabaseConfigError(): string | null {
   if (
@@ -97,7 +102,7 @@ export function UserManagementView() {
   const dataUnavailable = Boolean(configError || loadError);
 
   return (
-    <PrototypeGate>
+    <AdminGate>
       <div className="flex flex-1 flex-col bg-zinc-100">
         <header className="border-b border-zinc-200 bg-white">
           <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 px-4 py-5 sm:flex-row sm:items-start sm:justify-between sm:px-6">
@@ -110,12 +115,15 @@ export function UserManagementView() {
                 email.
               </p>
             </div>
-            <Link
-              href="/dashboard"
-              className="inline-flex h-11 shrink-0 items-center justify-center rounded-xl border border-zinc-200 bg-white px-5 text-sm font-semibold text-zinc-800 shadow-sm transition-colors hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 focus-visible:ring-offset-2"
-            >
-              Back to Dashboard
-            </Link>
+            <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
+              <Link
+                href="/dashboard"
+                className="inline-flex h-11 items-center justify-center rounded-xl border border-zinc-200 bg-white px-5 text-sm font-semibold text-zinc-800 shadow-sm transition-colors hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 focus-visible:ring-offset-2"
+              >
+                Dashboard
+              </Link>
+              <SignOutButton className="px-5" />
+            </div>
           </div>
         </header>
 
@@ -124,17 +132,8 @@ export function UserManagementView() {
             className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
             role="status"
           >
-            Prototype only. Real personnel access will require Microsoft 365
-            authentication before production use.
-          </div>
-
-          <div
-            className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"
-            role="status"
-          >
-            The department access code only unlocks prototype navigation. It does
-            not provide production security. Supabase Row Level Security remains
-            enabled and will block anonymous reads and writes.
+            Admin access only. Personnel changes are protected by Supabase Row
+            Level Security and require an active admin personnel record.
           </div>
 
           {loadError ? (
@@ -170,9 +169,10 @@ export function UserManagementView() {
                   No users found
                 </h3>
                 <p className="mt-2 text-sm leading-6 text-zinc-600">
-                  Personnel records will appear here after Microsoft 365
-                  authentication is connected or after test users are inserted
-                  through the Supabase SQL editor.
+                  Active personnel records visible to your admin account will
+                  appear here. Additional users can still be inserted manually
+                  through the Supabase SQL editor until broader admin workflows
+                  are added.
                 </p>
               </div>
             ) : (
@@ -181,6 +181,6 @@ export function UserManagementView() {
           </section>
         </div>
       </div>
-    </PrototypeGate>
+    </AdminGate>
   );
 }
