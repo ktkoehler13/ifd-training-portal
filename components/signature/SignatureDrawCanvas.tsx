@@ -9,13 +9,16 @@ import {
 } from "react";
 import { Button } from "@/components/ui/Button";
 import {
-  PERSONNEL_SIGNATURE_MIN_HEIGHT,
-  PERSONNEL_SIGNATURE_MIN_WIDTH,
-} from "@/types/personnel-signature";
+  mapSignatureErrorForUser,
+  normalizeSignatureCanvas,
+} from "@/lib/personnel-signature-normalize";
 
 interface SignatureDrawCanvasProps {
   disabled?: boolean;
-  onSave: (blob: Blob) => void | Promise<void>;
+  onSave: (
+    blob: Blob,
+    meta?: { resized?: boolean },
+  ) => void | Promise<void>;
 }
 
 interface Point {
@@ -23,68 +26,7 @@ interface Point {
   y: number;
 }
 
-function trimCanvas(source: HTMLCanvasElement): HTMLCanvasElement | null {
-  const context = source.getContext("2d");
-  if (!context) {
-    return null;
-  }
-
-  const { width, height } = source;
-  const imageData = context.getImageData(0, 0, width, height);
-  const { data } = imageData;
-  let top = height;
-  let left = width;
-  let right = 0;
-  let bottom = 0;
-
-  for (let y = 0; y < height; y += 1) {
-    for (let x = 0; x < width; x += 1) {
-      const index = (y * width + x) * 4;
-      const alpha = data[index + 3];
-      const red = data[index];
-      const green = data[index + 1];
-      const blue = data[index + 2];
-      const isStroke =
-        alpha > 0 && !(red === 255 && green === 255 && blue === 255);
-
-      if (isStroke) {
-        top = Math.min(top, y);
-        bottom = Math.max(bottom, y);
-        left = Math.min(left, x);
-        right = Math.max(right, x);
-      }
-    }
-  }
-
-  if (right < left || bottom < top) {
-    return null;
-  }
-
-  const trimmedWidth = right - left + 1;
-  const trimmedHeight = bottom - top + 1;
-  const trimmedCanvas = document.createElement("canvas");
-  trimmedCanvas.width = trimmedWidth;
-  trimmedCanvas.height = trimmedHeight;
-
-  const trimmedContext = trimmedCanvas.getContext("2d");
-  if (!trimmedContext) {
-    return null;
-  }
-
-  trimmedContext.drawImage(
-    source,
-    left,
-    top,
-    trimmedWidth,
-    trimmedHeight,
-    0,
-    0,
-    trimmedWidth,
-    trimmedHeight,
-  );
-
-  return trimmedCanvas;
-}
+const DRAWING_INSET_PX = 16;
 
 export function SignatureDrawCanvas({
   disabled = false,
@@ -97,6 +39,15 @@ export function SignatureDrawCanvas({
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
+  const configureDrawingContext = useCallback((context: CanvasRenderingContext2D) => {
+    context.fillStyle = "#ffffff";
+    context.fillRect(0, 0, context.canvas.width, context.canvas.height);
+    context.strokeStyle = "#000000";
+    context.lineWidth = 2;
+    context.lineCap = "round";
+    context.lineJoin = "round";
+  }, []);
+
   const resizeCanvas = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) {
@@ -104,8 +55,8 @@ export function SignatureDrawCanvas({
     }
 
     const rect = canvas.getBoundingClientRect();
-    const nextWidth = Math.max(Math.floor(rect.width), 320);
-    const nextHeight = Math.max(Math.floor(rect.height), 180);
+    const nextWidth = Math.max(Math.floor(rect.width), 480);
+    const nextHeight = Math.max(Math.floor(rect.height), 224);
     const imageData = canvas
       .getContext("2d")
       ?.getImageData(0, 0, canvas.width, canvas.height);
@@ -118,17 +69,12 @@ export function SignatureDrawCanvas({
       return;
     }
 
-    context.fillStyle = "#ffffff";
-    context.fillRect(0, 0, canvas.width, canvas.height);
-    context.strokeStyle = "#000000";
-    context.lineWidth = 2;
-    context.lineCap = "round";
-    context.lineJoin = "round";
+    configureDrawingContext(context);
 
     if (imageData && hasStroke) {
       context.putImageData(imageData, 0, 0);
     }
-  }, [hasStroke]);
+  }, [configureDrawingContext, hasStroke]);
 
   useEffect(() => {
     resizeCanvas();
@@ -145,9 +91,18 @@ export function SignatureDrawCanvas({
     }
 
     const rect = canvas.getBoundingClientRect();
+    const rawX = ((event.clientX - rect.left) / rect.width) * canvas.width;
+    const rawY = ((event.clientY - rect.top) / rect.height) * canvas.height;
+
     return {
-      x: ((event.clientX - rect.left) / rect.width) * canvas.width,
-      y: ((event.clientY - rect.top) / rect.height) * canvas.height,
+      x: Math.min(
+        canvas.width - DRAWING_INSET_PX,
+        Math.max(DRAWING_INSET_PX, rawX),
+      ),
+      y: Math.min(
+        canvas.height - DRAWING_INSET_PX,
+        Math.max(DRAWING_INSET_PX, rawY),
+      ),
     };
   }
 
@@ -214,8 +169,7 @@ export function SignatureDrawCanvas({
       return;
     }
 
-    context.fillStyle = "#ffffff";
-    context.fillRect(0, 0, canvas.width, canvas.height);
+    configureDrawingContext(context);
     setHasStroke(false);
     setError(null);
   }
@@ -227,44 +181,14 @@ export function SignatureDrawCanvas({
       return;
     }
 
-    const trimmedCanvas = trimCanvas(canvas);
-    if (!trimmedCanvas) {
-      setError("Draw your signature before saving.");
-      return;
-    }
-
-    if (
-      trimmedCanvas.width < PERSONNEL_SIGNATURE_MIN_WIDTH ||
-      trimmedCanvas.height < PERSONNEL_SIGNATURE_MIN_HEIGHT
-    ) {
-      setError(
-        `Signature must be at least ${PERSONNEL_SIGNATURE_MIN_WIDTH}px wide and ${PERSONNEL_SIGNATURE_MIN_HEIGHT}px tall after trimming.`,
-      );
-      return;
-    }
-
     setIsSaving(true);
     setError(null);
 
     try {
-      const blob = await new Promise<Blob>((resolve, reject) => {
-        trimmedCanvas.toBlob((value) => {
-          if (!value) {
-            reject(new Error("Unable to export the drawn signature."));
-            return;
-          }
-
-          resolve(value);
-        }, "image/png");
-      });
-
-      await onSave(blob);
+      const normalized = await normalizeSignatureCanvas(canvas);
+      await onSave(normalized.blob, { resized: normalized.resized });
     } catch (saveError) {
-      setError(
-        saveError instanceof Error
-          ? saveError.message
-          : "Unable to save the drawn signature.",
-      );
+      setError(mapSignatureErrorForUser(saveError));
     } finally {
       setIsSaving(false);
     }
@@ -272,10 +196,10 @@ export function SignatureDrawCanvas({
 
   return (
     <div className="space-y-4">
-      <div className="overflow-hidden rounded-xl border border-zinc-300 bg-white">
+      <div className="overflow-hidden rounded-xl border border-zinc-300 bg-white p-4 sm:p-6">
         <canvas
           ref={canvasRef}
-          className="block h-48 w-full touch-none sm:h-56"
+          className="block h-56 w-full touch-none lg:h-72"
           aria-label="Signature drawing canvas"
           onPointerDown={startDrawing}
           onPointerMove={continueDrawing}
@@ -285,7 +209,8 @@ export function SignatureDrawCanvas({
         />
       </div>
       <p className="text-sm text-zinc-600">
-        Draw with your mouse, finger, or stylus. Use Clear to start over.
+        Draw with your mouse, finger, or stylus. The panel is wider on desktop so
+        long signatures fit comfortably. Use Clear to start over.
       </p>
       {error ? (
         <p className="text-sm text-red-700" role="alert">

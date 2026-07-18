@@ -12,7 +12,11 @@ import {
   formatPersonnelDashboardIdentity,
 } from "@/lib/personnel";
 import { savePersonnelSignature } from "@/lib/personnel-signature";
-import { validateSignatureFile } from "@/lib/personnel-signature-validation";
+import {
+  mapSignatureErrorForUser,
+  normalizeSignatureFile,
+} from "@/lib/personnel-signature-normalize";
+import { validateSignatureFileForUpload } from "@/lib/personnel-signature-validation";
 import type { PersonnelSignatureRecord } from "@/types/personnel-signature";
 import { PERSONNEL_ROLE_LABELS } from "@/types/personnel";
 import type { SignatureInputMethod, SignatureUploadState } from "@/types/personnel-signature";
@@ -119,7 +123,11 @@ function MySignatureContent({ personnel }: { personnel: AuthenticatedPersonnel }
     void refreshSignature();
   }, [refreshSignature]);
 
-  async function handleSaveBlob(blob: Blob, originalFilename?: string | null) {
+  async function handleSaveBlob(
+    blob: Blob,
+    originalFilename?: string | null,
+    options?: { resized?: boolean },
+  ) {
     if (!certificationConfirmed) {
       setUploadState((current) => ({
         ...current,
@@ -147,19 +155,19 @@ function MySignatureContent({ personnel }: { personnel: AuthenticatedPersonnel }
         });
       setSignature(savedSignature);
       setPreviewUrl(savedPreviewUrl);
+      const resizeNote = options?.resized
+        ? " Your signature image was resized automatically for secure storage."
+        : "";
       setUploadState((current) => ({
         ...current,
         successMessage: replacingExistingSignature
-          ? "Signature replaced successfully."
-          : "Signature saved successfully.",
+          ? `Signature replaced successfully.${resizeNote}`
+          : `Signature saved successfully.${resizeNote}`,
       }));
     } catch (error) {
       setUploadState((current) => ({
         ...current,
-        error:
-          error instanceof Error
-            ? error.message
-            : "Unable to save your signature.",
+        error: mapSignatureErrorForUser(error),
       }));
     } finally {
       setUploadState((current) => ({
@@ -174,7 +182,7 @@ function MySignatureContent({ personnel }: { personnel: AuthenticatedPersonnel }
       return;
     }
 
-    const validation = await validateSignatureFile(file);
+    const validation = await validateSignatureFileForUpload(file);
     if (!validation.valid) {
       setUploadState((current) => ({
         ...current,
@@ -184,7 +192,17 @@ function MySignatureContent({ personnel }: { personnel: AuthenticatedPersonnel }
       return;
     }
 
-    await handleSaveBlob(file, file.name);
+    try {
+      const normalized = await normalizeSignatureFile(file);
+      await handleSaveBlob(normalized.blob, file.name, {
+        resized: normalized.resized,
+      });
+    } catch (error) {
+      setUploadState((current) => ({
+        ...current,
+        error: mapSignatureErrorForUser(error),
+      }));
+    }
   }
 
   async function handleDeleteSignature() {
@@ -234,7 +252,7 @@ function MySignatureContent({ personnel }: { personnel: AuthenticatedPersonnel }
   return (
     <div className="flex flex-1 flex-col bg-zinc-100">
       <header className="border-b border-zinc-200 bg-white">
-        <div className="mx-auto flex w-full max-w-3xl items-start justify-between gap-4 px-4 py-5 sm:px-6">
+        <div className="mx-auto flex w-full max-w-5xl items-start justify-between gap-4 px-4 py-5 sm:px-6">
           <div>
             <h1 className="text-xl font-semibold tracking-tight text-zinc-900 sm:text-2xl">
               My Signature
@@ -251,7 +269,7 @@ function MySignatureContent({ personnel }: { personnel: AuthenticatedPersonnel }
         </div>
       </header>
 
-      <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-4 py-8 sm:px-6">
+      <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 px-4 py-8 sm:px-6">
         <section className="rounded-2xl bg-white p-6 shadow-sm shadow-zinc-200/60 sm:p-8">
           <h2 className="text-lg font-semibold text-zinc-900">
             Authenticated identity
@@ -363,8 +381,10 @@ function MySignatureContent({ personnel }: { personnel: AuthenticatedPersonnel }
             {inputMethod === "draw" ? (
               <SignatureDrawCanvas
                 disabled={isBusy || !certificationConfirmed}
-                onSave={async (blob) => {
-                  await handleSaveBlob(blob, "signature.png");
+                onSave={async (blob, meta) => {
+                  await handleSaveBlob(blob, "signature.png", {
+                    resized: meta?.resized,
+                  });
                 }}
               />
             ) : (
@@ -382,9 +402,8 @@ function MySignatureContent({ personnel }: { personnel: AuthenticatedPersonnel }
                   }}
                 />
                 <p className="text-sm text-zinc-600">
-                  PNG only. Maximum file size 1 MB. Recommended dimensions are
-                  at least 150 by 50 pixels and no larger than 2000 by 1000
-                  pixels.
+                  PNG only. Large images are trimmed and resized automatically to
+                  fit secure storage limits before upload.
                 </p>
                 <Button
                   type="button"

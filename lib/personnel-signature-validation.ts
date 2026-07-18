@@ -1,10 +1,6 @@
 import {
   PERSONNEL_SIGNATURE_MAX_BYTES,
-  PERSONNEL_SIGNATURE_MAX_HEIGHT,
-  PERSONNEL_SIGNATURE_MAX_WIDTH,
   PERSONNEL_SIGNATURE_MIME_TYPE,
-  PERSONNEL_SIGNATURE_MIN_HEIGHT,
-  PERSONNEL_SIGNATURE_MIN_WIDTH,
   type SignatureValidationResult,
 } from "@/types/personnel-signature";
 
@@ -16,86 +12,51 @@ const REJECTED_MIME_TYPES = new Set([
   "application/pdf",
 ]);
 
-function validateDimensions(
-  width: number,
-  height: number,
-): SignatureValidationResult {
-  if (width < PERSONNEL_SIGNATURE_MIN_WIDTH) {
-    return {
-      valid: false,
-      error: `Signature width must be at least ${PERSONNEL_SIGNATURE_MIN_WIDTH}px.`,
-    };
-  }
+async function canDecodeSignatureImage(file: Blob): Promise<boolean> {
+  try {
+    if (typeof createImageBitmap === "function") {
+      const bitmap = await createImageBitmap(file);
+      bitmap.close();
+      return true;
+    }
 
-  if (height < PERSONNEL_SIGNATURE_MIN_HEIGHT) {
-    return {
-      valid: false,
-      error: `Signature height must be at least ${PERSONNEL_SIGNATURE_MIN_HEIGHT}px.`,
-    };
-  }
+    return await new Promise((resolve) => {
+      const url = URL.createObjectURL(file);
+      const image = new Image();
 
-  if (width > PERSONNEL_SIGNATURE_MAX_WIDTH) {
-    return {
-      valid: false,
-      error: `Signature width must be ${PERSONNEL_SIGNATURE_MAX_WIDTH}px or less.`,
-    };
-  }
+      image.onload = () => {
+        URL.revokeObjectURL(url);
+        resolve(true);
+      };
 
-  if (height > PERSONNEL_SIGNATURE_MAX_HEIGHT) {
-    return {
-      valid: false,
-      error: `Signature height must be ${PERSONNEL_SIGNATURE_MAX_HEIGHT}px or less.`,
-    };
-  }
+      image.onerror = () => {
+        URL.revokeObjectURL(url);
+        resolve(false);
+      };
 
-  return { valid: true, width, height };
+      image.src = url;
+    });
+  } catch {
+    return false;
+  }
 }
 
-async function readImageDimensions(
-  blob: Blob,
-): Promise<{ width: number; height: number }> {
-  if (typeof createImageBitmap === "function") {
-    const bitmap = await createImageBitmap(blob);
-    const dimensions = { width: bitmap.width, height: bitmap.height };
-    bitmap.close();
-    return dimensions;
-  }
-
-  return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(blob);
-    const image = new Image();
-
-    image.onload = () => {
-      URL.revokeObjectURL(url);
-      resolve({ width: image.naturalWidth, height: image.naturalHeight });
-    };
-
-    image.onerror = () => {
-      URL.revokeObjectURL(url);
-      reject(new Error("Unable to read signature image dimensions."));
-    };
-
-    image.src = url;
-  });
-}
-
-export async function validateSignatureBlob(
-  blob: Blob,
-  originalFilename?: string | null,
+export async function validateSignatureFileForUpload(
+  file: File,
 ): Promise<SignatureValidationResult> {
-  if (!blob || blob.size === 0) {
+  if (!file || file.size === 0) {
     return { valid: false, error: "Signature file cannot be empty." };
   }
 
-  if (blob.size > PERSONNEL_SIGNATURE_MAX_BYTES) {
+  if (file.size > PERSONNEL_SIGNATURE_MAX_BYTES * 4) {
     return {
       valid: false,
-      error: "Signature file must be 1 MB or smaller.",
+      error: "Signature file is too large to process. Try a smaller PNG.",
     };
   }
 
-  if (blob.type !== PERSONNEL_SIGNATURE_MIME_TYPE) {
-    if (REJECTED_MIME_TYPES.has(blob.type)) {
+  if (file.type !== PERSONNEL_SIGNATURE_MIME_TYPE) {
+    if (REJECTED_MIME_TYPES.has(file.type)) {
       return {
         valid: false,
         error: "Only PNG signature files are supported.",
@@ -108,34 +69,20 @@ export async function validateSignatureBlob(
     };
   }
 
-  if (originalFilename) {
-    const lowerName = originalFilename.toLowerCase();
-    if (!lowerName.endsWith(".png")) {
-      return {
-        valid: false,
-        error: "Signature uploads must use a .png file extension.",
-      };
-    }
-  }
-
-  try {
-    const { width, height } = await readImageDimensions(blob);
-    const dimensionResult = validateDimensions(width, height);
-    if (!dimensionResult.valid) {
-      return dimensionResult;
-    }
-
-    return { valid: true, width, height };
-  } catch {
+  if (!file.name.toLowerCase().endsWith(".png")) {
     return {
       valid: false,
-      error: "Unable to validate the signature image.",
+      error: "Signature uploads must use a .png file extension.",
     };
   }
-}
 
-export async function validateSignatureFile(
-  file: File,
-): Promise<SignatureValidationResult> {
-  return validateSignatureBlob(file, file.name);
+  const decodable = await canDecodeSignatureImage(file);
+  if (!decodable) {
+    return {
+      valid: false,
+      error: "Unable to read the uploaded signature image.",
+    };
+  }
+
+  return { valid: true };
 }
