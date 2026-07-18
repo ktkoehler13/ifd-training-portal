@@ -128,6 +128,8 @@ function UserManagementContent({ currentPersonnel }: UserManagementContentProps)
     const { data, error } = await supabase
       .from("personnel")
       .insert({
+        first_name: input.firstName,
+        last_name: input.lastName,
         badge_number: input.badgeNumber,
         email: input.email,
         role: input.role,
@@ -164,6 +166,8 @@ function UserManagementContent({ currentPersonnel }: UserManagementContentProps)
     const { data, error } = await supabase
       .from("personnel")
       .update({
+        first_name: input.firstName,
+        last_name: input.lastName,
         badge_number: input.badgeNumber,
         email: input.email,
         role: input.role,

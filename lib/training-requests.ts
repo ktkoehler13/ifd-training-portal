@@ -85,7 +85,6 @@ export function trainingRequestRecordToDraft(
   request: TrainingRequestRecord,
 ): TrainingRequestDraft {
   return {
-    requesterName: request.requesterName,
     badgeNumber: request.requesterBadgeNumber,
     departmentEmail: request.requesterEmail,
     courseName: request.courseName,
@@ -121,7 +120,6 @@ export function buildTrainingRequestInput(input: {
     requesterPersonnelId: input.personnel.id,
     requesterBadgeNumber: input.draft.badgeNumber.trim(),
     requesterEmail: normalizedEmail,
-    requesterName: input.draft.requesterName.trim(),
     courseName: input.draft.courseName.trim(),
     courseNumber: input.draft.courseNumber.trim(),
     trainingProvider: input.draft.trainingProvider.trim(),
@@ -155,7 +153,6 @@ function toDatabasePayload(
     requester_personnel_id: input.requesterPersonnelId,
     requester_badge_number: input.requesterBadgeNumber,
     requester_email: input.requesterEmail,
-    requester_name: input.requesterName,
     training_title: input.courseName,
     course_number: input.courseNumber,
     provider: input.trainingProvider,
@@ -199,6 +196,13 @@ export function getTrainingRequestErrorMessage(error: unknown): string {
 
     if (error.message.includes("duplicate key")) {
       return "A training request with this request number already exists.";
+    }
+
+    if (
+      error.message.includes("first and last name") ||
+      error.message.includes("personnel profile must include")
+    ) {
+      return "Your personnel profile must include a first and last name before creating a training request.";
     }
 
     return error.message;
@@ -267,6 +271,7 @@ export async function createTrainingRequestDraft(
     .insert({
       ...toDatabasePayload(input),
       request_number: "",
+      requester_name: "",
       status: "draft",
       current_action_role: null,
       submitted_at: null,

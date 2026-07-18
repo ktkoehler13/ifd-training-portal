@@ -4,6 +4,8 @@ export interface PersonnelRecord {
   id: string;
   badgeNumber: string;
   email: string;
+  firstName: string | null;
+  lastName: string | null;
   role: PersonnelRole;
   active: boolean;
   createdAt: string;
@@ -11,6 +13,8 @@ export interface PersonnelRecord {
 }
 
 export interface PersonnelUpdateInput {
+  firstName: string;
+  lastName: string;
   badgeNumber: string;
   email: string;
   role: PersonnelRole;
@@ -18,6 +22,8 @@ export interface PersonnelUpdateInput {
 }
 
 export interface PersonnelInsertInput {
+  firstName: string;
+  lastName: string;
   badgeNumber: string;
   email: string;
   role: PersonnelRole;
@@ -28,6 +34,8 @@ export interface PersonnelRow {
   id: string;
   badge_number: string;
   email: string;
+  first_name: string | null;
+  last_name: string | null;
   role: PersonnelRole;
   active: boolean;
   created_at: string;

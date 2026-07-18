@@ -5,7 +5,7 @@ import { AuthGate } from "@/components/layout/AuthGate";
 import { SignOutButton } from "@/components/auth/SignOutButton";
 import { isAdministrativeRole } from "@/lib/auth/roles";
 import type { AuthenticatedPersonnel } from "@/lib/auth/personnel";
-import { PERSONNEL_ROLE_LABELS } from "@/types/personnel";
+import { formatPersonnelDashboardIdentity } from "@/lib/personnel";
 import { cn } from "@/lib/utils";
 
 const baseActionCards = [
@@ -75,8 +75,7 @@ export function DashboardView() {
                 className="rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-700"
                 role="status"
               >
-                Signed in as badge {personnel.badgeNumber} (
-                {PERSONNEL_ROLE_LABELS[personnel.role]}).
+                Signed in as {formatPersonnelDashboardIdentity(personnel)}.
               </div>
 
               <section className="rounded-2xl bg-white p-6 shadow-sm shadow-zinc-200/60 sm:p-8">

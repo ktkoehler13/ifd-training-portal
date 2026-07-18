@@ -35,6 +35,40 @@ export function PersonnelFormFields({
 
       <div className="grid gap-4 sm:grid-cols-2">
         <Field
+          id={`${idPrefix}-firstName`}
+          label="First Name"
+          error={errors.firstName}
+        >
+          <Input
+            id={`${idPrefix}-firstName`}
+            value={values.firstName}
+            onChange={(event) =>
+              onChange({ ...values, firstName: event.target.value })
+            }
+            disabled={disabled || disabledFields?.firstName}
+            autoComplete="given-name"
+            aria-invalid={errors.firstName ? true : undefined}
+          />
+        </Field>
+
+        <Field
+          id={`${idPrefix}-lastName`}
+          label="Last Name"
+          error={errors.lastName}
+        >
+          <Input
+            id={`${idPrefix}-lastName`}
+            value={values.lastName}
+            onChange={(event) =>
+              onChange({ ...values, lastName: event.target.value })
+            }
+            disabled={disabled || disabledFields?.lastName}
+            autoComplete="family-name"
+            aria-invalid={errors.lastName ? true : undefined}
+          />
+        </Field>
+
+        <Field
           id={`${idPrefix}-badgeNumber`}
           label="Badge Number"
           error={errors.badgeNumber}

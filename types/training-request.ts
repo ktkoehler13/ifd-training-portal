@@ -100,7 +100,6 @@ export interface TrainingRequestInsertInput {
   requesterPersonnelId: string;
   requesterBadgeNumber: string;
   requesterEmail: string;
-  requesterName: string;
   courseName: string;
   courseNumber: string;
   trainingProvider: string;
@@ -126,7 +125,6 @@ export interface TrainingRequestInsertInput {
 export type TrainingRequestUpdateInput = TrainingRequestInsertInput;
 
 export interface TrainingRequestDraft {
-  requesterName: string;
   badgeNumber: string;
   departmentEmail: string;
   courseName: string;

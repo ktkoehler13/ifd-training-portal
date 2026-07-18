@@ -3,6 +3,7 @@
 import { Button } from "@/components/ui/Button";
 import {
   formatPersonnelCreatedAt,
+  formatPersonnelLastFirstName,
   isSamePersonnelRecord,
   SELF_ACCOUNT_PROTECTION_MESSAGE,
 } from "@/lib/personnel";
@@ -46,6 +47,7 @@ export function UsersTable({
         <table className="min-w-full text-left text-sm">
           <thead className="border-b border-zinc-200 bg-zinc-50 text-xs tracking-wide text-zinc-500 uppercase">
             <tr>
+              <th className="px-4 py-3 font-semibold">Name</th>
               <th className="px-4 py-3 font-semibold">Badge Number</th>
               <th className="px-4 py-3 font-semibold">Email</th>
               <th className="px-4 py-3 font-semibold">Role</th>
@@ -66,6 +68,9 @@ export function UsersTable({
                     !user.active && "bg-zinc-50/80 text-zinc-600",
                   )}
                 >
+                  <td className="px-4 py-4 align-top text-zinc-700">
+                    {formatPersonnelLastFirstName(user)}
+                  </td>
                   <td className="px-4 py-4 align-top font-medium text-zinc-900">
                     {user.badgeNumber}
                   </td>

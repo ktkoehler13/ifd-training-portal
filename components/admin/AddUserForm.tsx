@@ -12,6 +12,8 @@ import {
 import type { PersonnelInsertInput, PersonnelRecord } from "@/types/personnel";
 
 const initialValues: PersonnelFormValues = {
+  firstName: "",
+  lastName: "",
   badgeNumber: "",
   email: "",
   role: "",

@@ -11,6 +11,7 @@ import {
   formatTrainingRequestStatus,
   getTrainingRequestByNumber,
 } from "@/lib/training-requests";
+import { buildTrainingRequestFilename } from "@/lib/training-request-filename";
 import type { TrainingRequestRecord } from "@/types/training-request";
 
 interface ConfirmationViewProps {
@@ -122,7 +123,8 @@ export function ConfirmationView({ requestNumber }: ConfirmationViewProps) {
                   </h1>
                   <p className="mt-2 text-sm leading-6 text-zinc-600">
                     Your training request has been saved in Supabase and is
-                    ready for MTO review.
+                    ready for MTO review. The planned PDF filename is shown
+                    below and will be used when PDF export is added.
                   </p>
                 </div>
 
@@ -135,6 +137,11 @@ export function ConfirmationView({ requestNumber }: ConfirmationViewProps) {
                   <ConfirmItem
                     label="Requester name"
                     value={request.requesterName}
+                  />
+                  <ConfirmItem
+                    label="Planned document filename"
+                    value={buildTrainingRequestFilename(request)}
+                    emphasize
                   />
                   <ConfirmItem label="Course name" value={request.courseName} />
                   <ConfirmItem

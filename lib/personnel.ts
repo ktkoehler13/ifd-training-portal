@@ -5,18 +5,67 @@ import type {
   PersonnelRow,
   PersonnelUpdateInput,
 } from "@/types/personnel";
+import { PERSONNEL_ROLE_LABELS } from "@/types/personnel";
 
 export function mapPersonnelRow(row: PersonnelRow): PersonnelRecord {
   return {
     id: row.id,
     badgeNumber: row.badge_number,
     email: row.email,
+    firstName: row.first_name,
+    lastName: row.last_name,
     role: row.role,
     active: row.active,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
 }
+
+export function normalizePersonnelName(value: string): string {
+  return value.trim();
+}
+
+export function hasCompletePersonnelName(
+  personnel: Pick<PersonnelRecord, "firstName" | "lastName">,
+): boolean {
+  return Boolean(personnel.firstName?.trim() && personnel.lastName?.trim());
+}
+
+export function formatPersonnelFullName(
+  personnel: Pick<PersonnelRecord, "firstName" | "lastName">,
+): string | null {
+  if (!hasCompletePersonnelName(personnel)) {
+    return null;
+  }
+
+  return `${personnel.firstName!.trim()} ${personnel.lastName!.trim()}`;
+}
+
+export function formatPersonnelLastFirstName(
+  personnel: Pick<PersonnelRecord, "firstName" | "lastName">,
+): string {
+  if (!hasCompletePersonnelName(personnel)) {
+    return "Name not entered";
+  }
+
+  return `${personnel.lastName!.trim()}, ${personnel.firstName!.trim()}`;
+}
+
+export function formatPersonnelDashboardIdentity(
+  personnel: Pick<PersonnelRecord, "badgeNumber" | "role" | "firstName" | "lastName">,
+): string {
+  const fullName = formatPersonnelFullName(personnel);
+  const roleLabel = PERSONNEL_ROLE_LABELS[personnel.role];
+
+  if (fullName) {
+    return `${fullName} — Badge ${personnel.badgeNumber} (${roleLabel})`;
+  }
+
+  return `Badge ${personnel.badgeNumber} (${roleLabel})`;
+}
+
+export const PERSONNEL_NAME_REQUIRED_MESSAGE =
+  "Your personnel profile must include a first and last name before creating a training request.";
 
 export function normalizePersonnelEmail(email: string): string {
   return email.trim().toLowerCase();
@@ -82,6 +131,8 @@ export function getSelfEditChanges(
 }
 
 export interface PersonnelFormValues {
+  firstName: string;
+  lastName: string;
   badgeNumber: string;
   email: string;
   role: PersonnelRole | "";
@@ -100,6 +151,8 @@ export function personnelRecordToFormValues(
   user: PersonnelRecord,
 ): PersonnelFormValues {
   return {
+    firstName: user.firstName ?? "",
+    lastName: user.lastName ?? "",
     badgeNumber: user.badgeNumber,
     email: user.email,
     role: user.role,
@@ -121,10 +174,20 @@ export function validatePersonnelForm(
 ): PersonnelFormErrors {
   const errors: PersonnelFormErrors = {};
   const badgeNumber = values.badgeNumber.trim();
+  const firstName = normalizePersonnelName(values.firstName);
+  const lastName = normalizePersonnelName(values.lastName);
   const email = normalizePersonnelEmail(values.email);
   const comparableUsers = options?.excludeUserId
     ? existingUsers.filter((user) => user.id !== options.excludeUserId)
     : existingUsers;
+
+  if (!firstName) {
+    errors.firstName = "First name is required.";
+  }
+
+  if (!lastName) {
+    errors.lastName = "Last name is required.";
+  }
 
   if (!badgeNumber) {
     errors.badgeNumber = "Badge number is required.";
@@ -170,6 +233,8 @@ export function toPersonnelUpdateInput(
   values: PersonnelFormValues,
 ): PersonnelUpdateInput {
   return {
+    firstName: normalizePersonnelName(values.firstName),
+    lastName: normalizePersonnelName(values.lastName),
     badgeNumber: values.badgeNumber.trim(),
     email: normalizePersonnelEmail(values.email),
     role: values.role as PersonnelRole,
@@ -181,6 +246,8 @@ export function toPersonnelInsertInput(
   values: PersonnelFormValues,
 ): PersonnelInsertInput {
   return {
+    firstName: normalizePersonnelName(values.firstName),
+    lastName: normalizePersonnelName(values.lastName),
     badgeNumber: values.badgeNumber.trim(),
     email: normalizePersonnelEmail(values.email),
     role: values.role as PersonnelRole,

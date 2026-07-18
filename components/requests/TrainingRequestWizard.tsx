@@ -25,7 +25,12 @@ import {
   isValidMilesInput,
   parseMilesInput,
 } from "@/lib/mileage";
-import { normalizePersonnelEmail } from "@/lib/personnel";
+import {
+  formatPersonnelFullName,
+  hasCompletePersonnelName,
+  normalizePersonnelEmail,
+  PERSONNEL_NAME_REQUIRED_MESSAGE,
+} from "@/lib/personnel";
 import {
   buildTrainingRequestInput,
   createAndSubmitTrainingRequest,
@@ -42,7 +47,6 @@ import { cn } from "@/lib/utils";
 const TOTAL_STEPS = 4;
 
 const initialDraft: TrainingRequestDraft = {
-  requesterName: "",
   badgeNumber: "",
   departmentEmail: "",
   courseName: "",
@@ -222,9 +226,10 @@ export function TrainingRequestWizard({
     const nextErrors: DraftErrors = {};
 
     if (currentStep === 1) {
-      if (!draft.requesterName.trim()) {
-        nextErrors.requesterName = "Full name is required.";
+      if (!hasCompletePersonnelName(personnel)) {
+        nextErrors.submit = PERSONNEL_NAME_REQUIRED_MESSAGE;
       }
+
       if (!draft.badgeNumber.trim()) {
         nextErrors.badgeNumber = "Badge number is required.";
       } else if (draft.badgeNumber.trim() !== personnel.badgeNumber) {
@@ -316,8 +321,8 @@ export function TrainingRequestWizard({
   function validateDraftSave(): DraftErrors {
     const nextErrors: DraftErrors = {};
 
-    if (!draft.requesterName.trim()) {
-      nextErrors.requesterName = "Full name is required.";
+    if (!hasCompletePersonnelName(personnel)) {
+      nextErrors.submit = PERSONNEL_NAME_REQUIRED_MESSAGE;
     }
 
     if (!draft.badgeNumber.trim()) {
@@ -483,30 +488,33 @@ export function TrainingRequestWizard({
                 Requester Information
               </h2>
               <p className="mt-1 text-sm text-zinc-600">
-                Enter the firefighter or member submitting this training
-                request.
+                Your signed-in personnel record is used for request ownership.
               </p>
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <Field
-                id="requesterName"
-                label="Full Name"
-                error={errors.requesterName}
+                id="requesterNameDisplay"
+                label="Requester Name"
                 className="sm:col-span-2"
               >
                 <Input
-                  id="requesterName"
-                  value={draft.requesterName}
-                  onChange={(event) =>
-                    updateField("requesterName", event.target.value)
+                  id="requesterNameDisplay"
+                  value={
+                    formatPersonnelFullName(personnel) ??
+                    "Name not entered — contact an administrator"
                   }
-                  autoComplete="name"
-                  aria-invalid={errors.requesterName ? true : undefined}
-                  aria-describedby={
-                    errors.requesterName ? "requesterName-error" : undefined
-                  }
+                  readOnly
+                  disabled
                 />
               </Field>
+              {!hasCompletePersonnelName(personnel) ? (
+                <p
+                  className="sm:col-span-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
+                  role="alert"
+                >
+                  {PERSONNEL_NAME_REQUIRED_MESSAGE}
+                </p>
+              ) : null}
               <Field
                 id="badgeNumber"
                 label="Badge Number"
@@ -515,9 +523,8 @@ export function TrainingRequestWizard({
                 <Input
                   id="badgeNumber"
                   value={draft.badgeNumber}
-                  onChange={(event) =>
-                    updateField("badgeNumber", event.target.value)
-                  }
+                  readOnly
+                  disabled
                   aria-invalid={errors.badgeNumber ? true : undefined}
                   aria-describedby={
                     errors.badgeNumber ? "badgeNumber-error" : undefined
@@ -533,10 +540,8 @@ export function TrainingRequestWizard({
                   id="departmentEmail"
                   type="email"
                   value={draft.departmentEmail}
-                  onChange={(event) =>
-                    updateField("departmentEmail", event.target.value)
-                  }
-                  autoComplete="email"
+                  readOnly
+                  disabled
                   aria-invalid={errors.departmentEmail ? true : undefined}
                   aria-describedby={
                     errors.departmentEmail
@@ -546,6 +551,11 @@ export function TrainingRequestWizard({
                 />
               </Field>
             </div>
+            {errors.submit ? (
+              <p role="alert" className="text-sm text-red-700">
+                {errors.submit}
+              </p>
+            ) : null}
           </section>
         ) : null}
 
@@ -977,7 +987,12 @@ export function TrainingRequestWizard({
             ) : null}
 
             <ReviewSection title="Requester">
-              <ReviewItem label="Full Name" value={draft.requesterName} />
+              <ReviewItem
+                label="Requester Name"
+                value={
+                  formatPersonnelFullName(personnel) ?? "Name not entered"
+                }
+              />
               <ReviewItem label="Badge Number" value={draft.badgeNumber} />
               <ReviewItem
                 label="Department Email"

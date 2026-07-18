@@ -63,6 +63,7 @@ Apply these files in order using the Supabase SQL editor:
 2. `supabase/migrations/20260718150000_personnel_login_allowed.sql`
 3. `supabase/migrations/20260718160000_expand_administrative_roles.sql`
 4. `supabase/migrations/20260718170000_create_training_requests.sql`
+5. `supabase/migrations/20260718180000_add_personnel_names.sql`
 
 ### 5. Insert test personnel manually
 
@@ -154,13 +155,27 @@ The `personnel` table stores only:
 
 - badge number
 - email
+- first name
+- last name
 - role
 - active status
 - created/updated timestamps
 
-It intentionally does not store names, phone numbers, addresses, passwords, medical information, or payroll information.
+First and last names are trimmed on write and stored as null when blank. Names are required before a personnel user can create a training request. Login continues to use badge number and department email only.
+
+It intentionally does not store phone numbers, addresses, passwords, medical information, or payroll information.
 
 Do not add real personnel data to shared environments until production authentication and governance are complete.
+
+After applying the personnel names migration, update existing personnel records manually in the Supabase SQL editor. Example for a development test user:
+
+```sql
+update public.personnel
+set first_name = 'Kevin', last_name = 'Koehler'
+where badge_number = '207';
+```
+
+Do not commit real personnel names into shared migrations or seed files.
 
 ## Training Requests
 
@@ -215,7 +230,21 @@ Drafts remain editable by the requester only. Submitted requests are no longer e
 
 Authorization uses the authenticated personnel record from Supabase Auth. The browser cannot assign another user's personnel ID or role for authorization.
 
-On insert, a database trigger assigns `requester_personnel_id`, `requester_badge_number`, and `requester_email` from the authenticated personnel row. `requester_personnel_id` is the stable ownership key. Email and badge values stored on the request are historical snapshots and may differ from current personnel values after administrative edits.
+On insert, a database trigger assigns `requester_personnel_id`, `requester_badge_number`, `requester_email`, and `requester_name` from the authenticated personnel row. `requester_personnel_id` is the stable ownership key. Email, badge, and name values stored on the request are historical snapshots and do not change when personnel records are edited later.
+
+Personnel must have both a first and last name before creating a training request.
+
+### Document filename standard
+
+PDF export is not implemented yet. The application generates a deterministic filename from the immutable request snapshot:
+
+`LastName_FirstInitial_TrainingName_RequestNumber.pdf`
+
+Example:
+
+`Koehler_K_Fire_Officer_I_IFD-2026-0001.pdf`
+
+The confirmation screen displays this planned filename. It will become the downloaded PDF filename when export is added.
 
 ### localStorage removal
 
