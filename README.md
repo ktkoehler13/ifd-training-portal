@@ -142,10 +142,10 @@ Protected routes:
 Authorization:
 
 - `firefighter`, `mto`, `deputy_chief`, and `admin` may use normal request routes
-- Administrative roles (`mto`, `deputy_chief`, `admin`) may access `/admin/users` and manage personnel records through Supabase RLS
-- `firefighter` is the only non-administrative role
-- Workflow routing still uses distinct role values: MTO actions go to `mto`, Deputy Chief actions go to `deputy_chief`, and `admin` remains the system-management role
-- Hard deletion of personnel records is limited to the `admin` role; MTO and Deputy Chief should deactivate users instead
+- `firefighter` is the only non-administrative role and has no personnel-management permissions
+- `mto`, `deputy_chief`, and `admin` have equal administrative permissions: read, add, edit, activate, deactivate, assign any valid role (including `admin`), and hard-delete personnel records
+- Administrative roles may access `/admin/users` and manage personnel through Supabase RLS
+- Distinct role values remain for future workflow routing only: MTO approval actions go to `mto`, Deputy Chief approval actions go to `deputy_chief`, and `admin` has administrative access without an automatic approval stage
 
 ## Personnel Data Model
 

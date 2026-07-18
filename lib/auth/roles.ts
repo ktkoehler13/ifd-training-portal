@@ -15,7 +15,3 @@ export function isAdministrativeRole(
     role === "mto" || role === "deputy_chief" || role === "admin"
   );
 }
-
-export function isSystemAdminRole(role: PersonnelRole): boolean {
-  return role === "admin";
-}
