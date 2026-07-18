@@ -24,7 +24,7 @@ export function Button({
     <button
       type={type}
       className={cn(
-        "inline-flex h-11 w-full items-center justify-center rounded-xl px-4 text-sm font-semibold transition-colors",
+        "inline-flex h-11 items-center justify-center rounded-xl px-4 text-sm font-semibold transition-colors",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2",
         "disabled:pointer-events-none disabled:opacity-50",
         variantStyles[variant],

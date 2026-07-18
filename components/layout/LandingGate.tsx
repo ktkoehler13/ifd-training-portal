@@ -1,12 +1,38 @@
 "use client";
 
-import { FormEvent } from "react";
+import { FormEvent, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { setPrototypeSession } from "@/lib/session";
 
 export function LandingGate() {
+  const router = useRouter();
+  const [accessCode, setAccessCode] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    setError(null);
+    setIsSubmitting(true);
+
+    const expectedCode = process.env.NEXT_PUBLIC_DEPARTMENT_ACCESS_CODE;
+
+    if (!expectedCode) {
+      setError("Access is temporarily unavailable. Please contact the Training Bureau.");
+      setIsSubmitting(false);
+      return;
+    }
+
+    if (accessCode.trim() !== expectedCode) {
+      setError("Incorrect department access code. Please try again.");
+      setIsSubmitting(false);
+      return;
+    }
+
+    setPrototypeSession();
+    router.push("/dashboard");
   }
 
   return (
@@ -25,20 +51,44 @@ export function LandingGate() {
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4" noValidate>
           <div className="space-y-2">
-            <label htmlFor="password" className="sr-only">
-              Password
+            <label
+              htmlFor="access-code"
+              className="block text-sm font-medium text-zinc-700"
+            >
+              Department Access Code
             </label>
             <Input
-              id="password"
-              name="password"
+              id="access-code"
+              name="accessCode"
               type="password"
-              placeholder="Password"
-              autoComplete="current-password"
+              value={accessCode}
+              onChange={(event) => {
+                setAccessCode(event.target.value);
+                if (error) {
+                  setError(null);
+                }
+              }}
+              placeholder="Enter department code"
+              autoComplete="off"
+              aria-invalid={error ? true : undefined}
+              aria-describedby={error ? "access-code-error" : undefined}
+              disabled={isSubmitting}
             />
+            {error ? (
+              <p
+                id="access-code-error"
+                role="alert"
+                className="text-sm text-red-700"
+              >
+                {error}
+              </p>
+            ) : null}
           </div>
-          <Button type="submit">Continue</Button>
+          <Button type="submit" className="w-full" disabled={isSubmitting}>
+            {isSubmitting ? "Checking…" : "Continue"}
+          </Button>
         </form>
       </div>
     </div>
