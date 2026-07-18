@@ -464,17 +464,24 @@ Field mappings live in `lib/pdf/field-mapping.ts`.
 **Signature snapshot workflow**
 
 1. Authenticated reviewer calls `POST /api/training-requests/[id]/workflow`.
-2. Database reserves an action ID through `reserve_training_request_signature_action`.
+2. Database reserves an action ID and immutable reviewer identity through `reserve_training_request_signature_action`.
 3. Server downloads and re-validates the reviewer's current personnel signature PNG.
-4. Server uploads immutable snapshot bytes to the private snapshot bucket.
-5. Database completes the workflow through `complete_training_request_signature_action`, validating bucket/path/hash metadata supplied by the trusted server process.
-6. If database completion fails, the unused snapshot object is deleted.
+4. Server uploads immutable snapshot bytes to the private snapshot bucket using the service role.
+5. Server re-downloads the uploaded snapshot object, verifies the PNG bytes, and derives SHA-256 from the actual stored object.
+6. Database completes the workflow through `complete_training_request_signature_action` using the **service-role client only**.
+7. If database completion fails, the unused snapshot object is deleted.
 
-Approval and denial actions require a stored personnel signature. Return-for-correction does not.
+`complete_training_request_signature_action` is **not** executable by browser sessions. Completion derives the actor from the reservation identity snapshot rather than `auth.uid()`.
+
+Signature-required actions:
+
+- `mto_approve`, `mto_deny`, `deputy_approve`, `deputy_deny`
+
+Return-for-correction does not require a signature snapshot.
 
 Error when no signature exists:
 
-`You must save your signature before approving a training request.`
+`You must save your signature before signing this training request action.`
 
 **Approved packet generation**
 
@@ -482,7 +489,7 @@ After Deputy Chief approval:
 
 1. Request status becomes `approved`.
 2. A `training_request_packets` row is upserted with status `pending`.
-3. Server-side code generates a two-page PDF (Training Request Form + TAL), uploads it to the private packet bucket, and marks the packet `ready`.
+3. Server-side code generates a two-page PDF (Training Request Form + TAL), validates required AcroForm fields, verifies the final merged PDF is noninteractive, uploads it to the private packet bucket, and marks the packet `ready`.
 4. Failed generation leaves the request approved, marks the packet `failed`, stores a safe error message, and allows authorized administrative retry.
 
 Repeated generation replaces `<request-id>/approved-packet.pdf` and reuses the single packet metadata row.

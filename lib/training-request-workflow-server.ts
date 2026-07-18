@@ -11,9 +11,15 @@ import {
   getApprovedPacketStoragePath,
   mapWorkflowKindToExpectedAction,
   sha256Hex,
+  SIGNATURE_REQUIRED_MESSAGE,
   TRAINING_REQUEST_PACKET_BUCKET,
   TRAINING_REQUEST_SIGNATURE_SNAPSHOT_BUCKET,
 } from "@/lib/training-request-signature-snapshot";
+import {
+  assertSnapshotMetadataMatchesBucket,
+  verifyUploadedSignatureSnapshot,
+} from "@/lib/training-request-signature-verification";
+import { validateSignatureWorkflowActionInput } from "@/lib/training-request-workflow-policy";
 import type { WorkflowActionKind } from "@/lib/training-request-workflow";
 import type { TrainingRequestActionRow } from "@/types/training-request-action";
 import type { TrainingRequestRow } from "@/types/training-request";
@@ -74,6 +80,10 @@ async function uploadSignatureSnapshot(input: {
   }
 }
 
+async function downloadSnapshotObject(storagePath: string): Promise<Uint8Array> {
+  return downloadStorageObject(TRAINING_REQUEST_SIGNATURE_SNAPSHOT_BUCKET, storagePath);
+}
+
 async function deleteSignatureSnapshot(storagePath: string): Promise<void> {
   const service = createServiceRoleClient();
   await service.storage
@@ -94,9 +104,7 @@ async function loadPersonnelSignaturePng(personnelId: string): Promise<Uint8Arra
   }
 
   if (!data) {
-    throw new TrainingRequestWorkflowValidationError(
-      "You must save your signature before approving a training request.",
-    );
+    throw new TrainingRequestWorkflowValidationError(SIGNATURE_REQUIRED_MESSAGE);
   }
 
   const signature = data as PersonnelSignatureRow;
@@ -235,9 +243,11 @@ export async function executeSignatureWorkflowAction(input: {
     throw new TrainingRequestWorkflowValidationError("Unsupported workflow action.");
   }
 
-  if (input.electronicSignatureConfirmed !== true) {
+  try {
+    validateSignatureWorkflowActionInput(input);
+  } catch (error) {
     throw new TrainingRequestWorkflowValidationError(
-      "Electronic signature acknowledgment is required to complete this action.",
+      error instanceof Error ? error.message : "Invalid workflow action input.",
     );
   }
 
@@ -273,20 +283,22 @@ export async function executeSignatureWorkflowAction(input: {
       throw new TrainingRequestWorkflowValidationError(verified.error);
     }
 
-    const snapshotMetadata = buildSignatureSnapshotMetadata({
-      requestId: input.requestId,
-      actionId: reservationId,
-      pngBytes,
-    });
-    snapshotPath = snapshotMetadata.storagePath;
-
     await uploadSignatureSnapshot({
       requestId: input.requestId,
       reservationId,
       pngBytes,
     });
 
-    const { data, error: completeError } = await supabase.rpc(
+    const snapshotMetadata = await verifyUploadedSignatureSnapshot({
+      requestId: input.requestId,
+      reservationId,
+      downloadSnapshotBytes: downloadSnapshotObject,
+    });
+    assertSnapshotMetadataMatchesBucket(snapshotMetadata);
+    snapshotPath = snapshotMetadata.storagePath;
+
+    const service = createServiceRoleClient();
+    const { data, error: completeError } = await service.rpc(
       "complete_training_request_signature_action",
       {
         p_reservation_id: reservationId,

@@ -36,6 +36,10 @@ create table if not exists public.training_request_signature_action_reservations
   id uuid primary key default gen_random_uuid(),
   training_request_id uuid not null references public.training_requests(id) on delete cascade,
   actor_personnel_id uuid not null references public.personnel(id) on delete cascade,
+  actor_name text not null,
+  actor_badge_number text not null,
+  actor_role text not null,
+  actor_auth_user_id uuid,
   expected_action text not null,
   created_at timestamptz not null default now(),
   expires_at timestamptz not null default (now() + interval '15 minutes'),
@@ -47,6 +51,15 @@ create table if not exists public.training_request_signature_action_reservations
       'deputy_chief_approved',
       'deputy_chief_denied'
     )
+  ),
+  constraint training_request_signature_action_reservations_actor_role_check check (
+    actor_role in ('mto', 'deputy_chief')
+  ),
+  constraint training_request_signature_action_reservations_actor_name_check check (
+    length(btrim(actor_name)) > 0
+  ),
+  constraint training_request_signature_action_reservations_actor_badge_check check (
+    length(btrim(actor_badge_number)) > 0
   )
 );
 
@@ -185,7 +198,7 @@ begin
     from public.personnel_signatures as ps
     where ps.personnel_id = p_personnel_id
   ) then
-    raise exception 'You must save your signature before approving a training request.';
+    raise exception 'You must save your signature before signing this training request action.';
   end if;
 end;
 $$;
@@ -194,6 +207,10 @@ create or replace function public.insert_training_request_signature_action(
   p_action_id uuid,
   p_training_request_id uuid,
   p_action text,
+  p_actor_personnel_id uuid,
+  p_actor_name text,
+  p_actor_badge_number text,
+  p_actor_role text,
   p_comments text default null,
   p_signature_name text default null,
   p_signed_at timestamptz default null,
@@ -210,15 +227,18 @@ security definer
 set search_path = public
 as $$
 declare
-  actor record;
   inserted_action public.training_request_actions;
 begin
-  select *
-  into actor
-  from public.get_current_personnel_actor();
+  if p_actor_name is null or btrim(p_actor_name) = '' then
+    raise exception 'Reviewer name is required to record this action';
+  end if;
 
-  if actor.actor_name is null then
-    raise exception 'Your personnel profile must include a first and last name before performing this action';
+  if p_actor_badge_number is null or btrim(p_actor_badge_number) = '' then
+    raise exception 'Reviewer badge number is required to record this action';
+  end if;
+
+  if p_actor_role not in ('mto', 'deputy_chief', 'admin', 'firefighter') then
+    raise exception 'Invalid reviewer role for training request action';
   end if;
 
   insert into public.training_request_actions (
@@ -242,10 +262,10 @@ begin
   values (
     p_action_id,
     p_training_request_id,
-    actor.personnel_id,
-    actor.actor_name,
-    actor.badge_number,
-    actor.actor_role,
+    p_actor_personnel_id,
+    p_actor_name,
+    p_actor_badge_number,
+    p_actor_role,
     p_action,
     nullif(btrim(coalesce(p_comments, '')), ''),
     p_signature_name,
@@ -475,14 +495,26 @@ begin
 
   perform public.require_personnel_signature_for_workflow_action(actor.personnel_id);
 
+  if actor.actor_name is null or btrim(actor.actor_name) = '' then
+    raise exception 'Your personnel profile must include a first and last name before performing this action';
+  end if;
+
   insert into public.training_request_signature_action_reservations (
     training_request_id,
     actor_personnel_id,
+    actor_name,
+    actor_badge_number,
+    actor_role,
+    actor_auth_user_id,
     expected_action
   )
   values (
     p_request_id,
     actor.personnel_id,
+    actor.actor_name,
+    actor.badge_number,
+    actor.actor_role,
+    auth.uid(),
     p_expected_action
   )
   returning id into reservation_id;
@@ -507,7 +539,6 @@ security definer
 set search_path = public
 as $$
 declare
-  actor record;
   reservation_row public.training_request_signature_action_reservations;
   request_row public.training_requests;
   action_row public.training_request_actions;
@@ -516,10 +547,6 @@ begin
   if coalesce(p_electronic_signature_confirmed, false) is distinct from true then
     raise exception 'Electronic signature acknowledgment is required to complete this action';
   end if;
-
-  select *
-  into actor
-  from public.get_current_personnel_actor();
 
   select *
   into reservation_row
@@ -539,8 +566,8 @@ begin
     raise exception 'Signature action reservation has expired';
   end if;
 
-  if reservation_row.actor_personnel_id <> actor.personnel_id then
-    raise exception 'Signature action reservation does not belong to the authenticated reviewer';
+  if reservation_row.actor_name is null or btrim(reservation_row.actor_name) = '' then
+    raise exception 'Signature action reservation is missing reviewer identity';
   end if;
 
   select *
@@ -564,7 +591,7 @@ begin
   );
 
   if reservation_row.expected_action in ('mto_approved', 'mto_denied') then
-    if actor.actor_role <> 'mto' then
+    if reservation_row.actor_role <> 'mto' then
       raise exception 'Only active MTO personnel may complete this action at the MTO review step';
     end if;
 
@@ -572,7 +599,7 @@ begin
       raise exception 'Training request is not awaiting MTO review';
     end if;
   elsif reservation_row.expected_action in ('deputy_chief_approved', 'deputy_chief_denied') then
-    if actor.actor_role <> 'deputy_chief' then
+    if reservation_row.actor_role <> 'deputy_chief' then
       raise exception 'Only active Deputy Chief personnel may complete this action at the Deputy Chief review step';
     end if;
 
@@ -595,8 +622,12 @@ begin
         reservation_row.id,
         request_row.id,
         'mto_approved',
+        reservation_row.actor_personnel_id,
+        reservation_row.actor_name,
+        reservation_row.actor_badge_number,
+        reservation_row.actor_role,
         p_comments,
-        actor.actor_name,
+        reservation_row.actor_name,
         now(),
         true,
         p_signature_storage_bucket,
@@ -624,8 +655,12 @@ begin
         reservation_row.id,
         request_row.id,
         'mto_denied',
+        reservation_row.actor_personnel_id,
+        reservation_row.actor_name,
+        reservation_row.actor_badge_number,
+        reservation_row.actor_role,
         p_comments,
-        actor.actor_name,
+        reservation_row.actor_name,
         now(),
         true,
         p_signature_storage_bucket,
@@ -648,8 +683,12 @@ begin
         reservation_row.id,
         request_row.id,
         'deputy_chief_approved',
+        reservation_row.actor_personnel_id,
+        reservation_row.actor_name,
+        reservation_row.actor_badge_number,
+        reservation_row.actor_role,
         p_comments,
-        actor.actor_name,
+        reservation_row.actor_name,
         now(),
         true,
         p_signature_storage_bucket,
@@ -677,8 +716,12 @@ begin
         reservation_row.id,
         request_row.id,
         'deputy_chief_denied',
+        reservation_row.actor_personnel_id,
+        reservation_row.actor_name,
+        reservation_row.actor_badge_number,
+        reservation_row.actor_role,
         p_comments,
-        actor.actor_name,
+        reservation_row.actor_name,
         now(),
         true,
         p_signature_storage_bucket,
@@ -767,6 +810,10 @@ revoke all on function public.insert_training_request_signature_action(
   uuid,
   uuid,
   text,
+  uuid,
+  text,
+  text,
+  text,
   text,
   text,
   timestamptz,
@@ -781,6 +828,10 @@ revoke all on function public.insert_training_request_signature_action(
   uuid,
   uuid,
   text,
+  uuid,
+  text,
+  text,
+  text,
   text,
   text,
   timestamptz,
@@ -794,6 +845,10 @@ revoke all on function public.insert_training_request_signature_action(
 revoke all on function public.insert_training_request_signature_action(
   uuid,
   uuid,
+  text,
+  uuid,
+  text,
+  text,
   text,
   text,
   text,
@@ -840,6 +895,56 @@ revoke all on function public.complete_training_request_signature_action(
 ) from public;
 
 grant execute on function public.reserve_training_request_signature_action(uuid, text) to authenticated;
+
+revoke execute on function public.complete_training_request_signature_action(
+  uuid,
+  text,
+  boolean,
+  text,
+  text,
+  text,
+  text,
+  bigint
+) from public;
+revoke execute on function public.complete_training_request_signature_action(
+  uuid,
+  text,
+  boolean,
+  text,
+  text,
+  text,
+  text,
+  bigint
+) from anon;
+revoke execute on function public.complete_training_request_signature_action(
+  uuid,
+  text,
+  boolean,
+  text,
+  text,
+  text,
+  text,
+  bigint
+) from authenticated;
+
+grant execute on function public.insert_training_request_signature_action(
+  uuid,
+  uuid,
+  text,
+  uuid,
+  text,
+  text,
+  text,
+  text,
+  text,
+  timestamptz,
+  boolean,
+  text,
+  text,
+  text,
+  text,
+  bigint
+) to service_role;
 grant execute on function public.complete_training_request_signature_action(
   uuid,
   text,
@@ -849,7 +954,7 @@ grant execute on function public.complete_training_request_signature_action(
   text,
   text,
   bigint
-) to authenticated;
+) to service_role;
 
 grant execute on function public.upsert_training_request_packet_pending(uuid) to service_role;
 grant execute on function public.mark_training_request_packet_processing(uuid) to service_role;
@@ -860,7 +965,10 @@ grant select, insert, update, delete on table public.training_request_packets to
 grant select, insert, update on table public.training_request_signature_action_reservations to service_role;
 
 comment on table public.training_request_signature_action_reservations is
-  'Short-lived reservations that assign action IDs before immutable approval signature snapshots are uploaded. Consumed by complete_training_request_signature_action.';
+  'Short-lived reservations that assign action IDs and immutable reviewer identity snapshots before signature upload. Consumed only by the service-role completion RPC.';
+
+comment on column public.training_request_signature_action_reservations.actor_auth_user_id is
+  'Optional auth.users correlation captured at reservation time for audit purposes.';
 
 comment on table public.training_request_packets is
   'Metadata for server-generated approved PDF packets stored in the private training-request-packets bucket. Browser users may read metadata through RLS but cannot write rows directly.';
@@ -887,7 +995,7 @@ comment on function public.reserve_training_request_signature_action(uuid, text)
   'Reserves an action ID and validates reviewer role, request state, and stored personnel signature before snapshot upload.';
 
 comment on function public.complete_training_request_signature_action(uuid, text, boolean, text, text, text, text, bigint) is
-  'Completes an approval or denial after server-side snapshot upload, records immutable snapshot metadata on the action row, and queues Deputy Chief approved packet generation.';
+  'Service-role-only completion RPC. Uses reservation identity snapshots and trusted snapshot metadata after server-side upload verification.';
 
 comment on function public.upsert_training_request_packet_pending(uuid) is
   'Creates or resets approved packet metadata to pending after Deputy Chief approval. Intended for trusted server processes.';

@@ -16,10 +16,10 @@ describe("training request signature snapshots", () => {
   const deputyActionId = "33333333-3333-3333-3333-333333333333";
   const pngBytes = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d]);
 
-  it("requires a stored signature before approval", () => {
+  it("requires a stored signature before signing", () => {
     assert.equal(
       SIGNATURE_REQUIRED_MESSAGE,
-      "You must save your signature before approving a training request.",
+      "You must save your signature before signing this training request action.",
     );
   });
 

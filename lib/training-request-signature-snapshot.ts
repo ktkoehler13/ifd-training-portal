@@ -6,7 +6,7 @@ import {
 } from "@/types/training-request-packet";
 
 export const SIGNATURE_REQUIRED_MESSAGE =
-  "You must save your signature before approving a training request.";
+  "You must save your signature before signing this training request action.";
 
 export function sha256Hex(bytes: Uint8Array): string {
   return createHash("sha256").update(bytes).digest("hex");

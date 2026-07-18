@@ -1,11 +1,18 @@
+import { readFile } from "node:fs/promises";
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { PDFDocument } from "pdf-lib";
 import {
   generateApprovedPacketBytes,
   inspectTalPopulationForTest,
-  loadApprovedPacketTemplatesForTest,
+  PdfFormFieldError,
+  populateTrainingRequestFormForTest,
 } from "./generate-approved-packet";
+import {
+  countWidgetAnnotations,
+  validateFinalMergedPacketNonInteractive,
+} from "./validate-merged-packet";
+import { setOptionalTextField, setRequiredTextField } from "./pdf-form-fields";
 import { TAL_FORM_FIELDS } from "./field-mapping";
 import type { TrainingRequestActionRecord } from "@/types/training-request-action";
 import type { TrainingRequestRecord } from "@/types/training-request";
@@ -70,80 +77,86 @@ function buildAction(
   };
 }
 
+const packetInput = {
+  request: sampleRequest,
+  mtoAction: buildAction({ action: "mto_approved", actorRole: "mto" }),
+  deputyAction: buildAction({
+    id: "55555555-5555-5555-5555-555555555555",
+    action: "deputy_chief_approved",
+    actorRole: "deputy_chief",
+    actorName: "Deputy Chief Reviewer",
+    signatureName: "Deputy Chief Reviewer",
+    signatureStoragePath: `${sampleRequest.id}/55555555-5555-5555-5555-555555555555/signature.png`,
+  }),
+  mtoSignaturePng: VALID_TEST_PNG,
+  deputySignaturePng: VALID_TEST_PNG,
+};
+
 describe("generateApprovedPacketBytes", () => {
-  it("loads one-page source templates", async () => {
-    const templates = await loadApprovedPacketTemplatesForTest();
-    assert.equal(templates.trainingRequestFormPageCount, 1);
-    assert.equal(templates.talPageCount, 1);
-  });
-
   it("produces a two-page merged approved packet", async () => {
-    const mtoPng = VALID_TEST_PNG;
-    const deputyPng = VALID_TEST_PNG;
-    const bytes = await generateApprovedPacketBytes({
-      request: sampleRequest,
-      mtoAction: buildAction({ action: "mto_approved", actorRole: "mto" }),
-      deputyAction: buildAction({
-        id: "55555555-5555-5555-5555-555555555555",
-        action: "deputy_chief_approved",
-        actorRole: "deputy_chief",
-        actorName: "Deputy Chief Reviewer",
-        signatureName: "Deputy Chief Reviewer",
-        signatureStoragePath: `${sampleRequest.id}/55555555-5555-5555-5555-555555555555/signature.png`,
-      }),
-      mtoSignaturePng: mtoPng,
-      deputySignaturePng: deputyPng,
-    });
-
+    const bytes = await generateApprovedPacketBytes(packetInput);
     const pdf = await PDFDocument.load(bytes);
     assert.equal(pdf.getPageCount(), 2);
   });
 
-  it("leaves firefighter TAL signature fields blank", async () => {
-    const populated = await inspectTalPopulationForTest({
-      request: sampleRequest,
-      mtoAction: buildAction({ action: "mto_approved" }),
-      deputyAction: buildAction({
-        id: "55555555-5555-5555-5555-555555555555",
-        action: "deputy_chief_approved",
-        actorRole: "deputy_chief",
-      }),
-      mtoSignaturePng: VALID_TEST_PNG,
-      deputySignaturePng: VALID_TEST_PNG,
-    });
+  it("validates the final packet has zero AcroForm fields", async () => {
+    const bytes = await generateApprovedPacketBytes(packetInput);
+    const pdf = await PDFDocument.load(bytes);
+    assert.equal(pdf.getForm().getFields().length, 0);
+    await validateFinalMergedPacketNonInteractive(bytes);
+  });
 
+  it("validates the final packet has no widget annotations", async () => {
+    const bytes = await generateApprovedPacketBytes(packetInput);
+    const pdf = await PDFDocument.load(bytes);
+    assert.equal(countWidgetAnnotations(pdf), 0);
+  });
+
+  it("leaves firefighter TAL signature fields blank", async () => {
+    const populated = await inspectTalPopulationForTest(packetInput);
     assert.equal(populated.studentPrintName, "");
     assert.equal(populated.studentSignatureDate, "");
   });
 
-  it("uses immutable MTO snapshot bytes in both required signature placements", async () => {
-    const mtoPng = VALID_TEST_PNG;
-    const bytes = await generateApprovedPacketBytes({
-      request: sampleRequest,
-      mtoAction: buildAction({
-        signatureStoragePath: `${sampleRequest.id}/mto-action/signature.png`,
-      }),
-      deputyAction: buildAction({
-        id: "55555555-5555-5555-5555-555555555555",
-        action: "deputy_chief_approved",
-        actorRole: "deputy_chief",
-        signatureStoragePath: `${sampleRequest.id}/deputy-action/signature.png`,
-      }),
-      mtoSignaturePng: mtoPng,
-      deputySignaturePng: VALID_TEST_PNG,
-    });
-
-    assert.ok(bytes.byteLength > 0);
-    assert.match(
-      buildAction().signatureStoragePath ?? "",
-      /^[0-9a-f-]+\/[0-9a-f-]+\/signature\.png$/,
+  it("fails generation when a required training request field is missing", async () => {
+    await assert.rejects(
+      () =>
+        populateTrainingRequestFormForTest({
+          ...packetInput,
+          request: { ...sampleRequest, requesterName: "" },
+        }),
+      (error: unknown) => {
+        assert.ok(error instanceof PdfFormFieldError);
+        assert.match(error.message, /"Name"/i);
+        return true;
+      },
     );
+  });
+
+  it("does not fail when an optional TAL field is absent", async () => {
+    const talPdf = await PDFDocument.load(
+      await readFile("lib/pdf/templates/tal.pdf"),
+    );
+    const form = talPdf.getForm();
+
+    assert.doesNotThrow(() => {
+      setRequiredTextField(form, TAL_FORM_FIELDS.courseName, "Fire Officer I", "TAL");
+      setOptionalTextField(form, TAL_FORM_FIELDS.courseNumber, "");
+    });
   });
 });
 
-describe("TAL student signature fields", () => {
-  it("documents unsupported student signature field names", () => {
-    assert.equal(TAL_FORM_FIELDS.studentSignatureField, "Student signature");
-    assert.equal(TAL_FORM_FIELDS.studentSignatureDate, "DATE OF STUDENT SIGNATURE");
+describe("validateFinalMergedPacketNonInteractive", () => {
+  it("rejects packets that still contain AcroForm fields", async () => {
+    const pdf = await PDFDocument.create();
+    pdf.addPage();
+    pdf.addPage();
+    const form = pdf.getForm();
+    form.createTextField("test-field");
+
+    await assert.rejects(
+      async () => validateFinalMergedPacketNonInteractive(await pdf.save()),
+      /AcroForm field/,
+    );
   });
 });

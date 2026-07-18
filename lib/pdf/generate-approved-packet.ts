@@ -16,6 +16,18 @@ import {
   formatTransportationSelection,
   splitRequesterNameForTal,
 } from "@/lib/pdf/format-pdf-values";
+import {
+  checkOptionalCheckbox,
+  checkRequiredCheckbox,
+  PdfFormFieldError,
+  setOptionalTextField,
+  setRequiredTextField,
+  uncheckOptionalCheckbox,
+} from "@/lib/pdf/pdf-form-fields";
+import {
+  stripInteractivePdfArtifacts,
+  validateFinalMergedPacketNonInteractive,
+} from "@/lib/pdf/validate-merged-packet";
 import type { TrainingRequestActionRecord } from "@/types/training-request-action";
 import type { TrainingRequestRecord } from "@/types/training-request";
 
@@ -34,43 +46,7 @@ export interface ApprovedPacketGenerationInput {
   deputySignaturePng: Uint8Array;
 }
 
-function setTextField(
-  form: ReturnType<PDFDocument["getForm"]>,
-  fieldName: string,
-  value: string,
-): void {
-  if (!value) {
-    return;
-  }
-
-  try {
-    form.getTextField(fieldName).setText(value);
-  } catch {
-    // Unsupported or missing field names are ignored.
-  }
-}
-
-function checkField(
-  form: ReturnType<PDFDocument["getForm"]>,
-  fieldName: string,
-): void {
-  try {
-    form.getCheckBox(fieldName).check();
-  } catch {
-    // Unsupported or missing field names are ignored.
-  }
-}
-
-function uncheckField(
-  form: ReturnType<PDFDocument["getForm"]>,
-  fieldName: string,
-): void {
-  try {
-    form.getCheckBox(fieldName).uncheck();
-  } catch {
-    // Unsupported or missing field names are ignored.
-  }
-}
+export { PdfFormFieldError };
 
 async function drawSignatureInBox(
   page: PDFPage,
@@ -98,30 +74,30 @@ function populateTrainingRequestForm(
   const form = pdf.getForm();
   const { request, mtoAction, deputyAction } = input;
   const fields = TRAINING_REQUEST_FORM_FIELDS;
+  const context = "Training Request Form";
+  const trainingDates = formatTrainingDatesIncludingTravel(
+    request.courseStartDate,
+    request.courseEndDate,
+  );
 
-  setTextField(form, fields.requesterName, request.requesterName);
-  setTextField(form, fields.badge, request.requesterBadgeNumber);
-  setTextField(
+  setRequiredTextField(form, fields.requesterName, request.requesterName, context);
+  setRequiredTextField(form, fields.badge, request.requesterBadgeNumber, context);
+  setRequiredTextField(
     form,
     fields.applicationDate,
     formatPdfDate(request.submittedAt ?? request.createdAt),
+    context,
   );
-  setTextField(form, fields.trainingName, request.courseName);
-  setTextField(form, fields.trainingLocation, request.location);
-  setTextField(
-    form,
-    fields.trainingDatesIncludingTravel,
-    formatTrainingDatesIncludingTravel(
-      request.courseStartDate,
-      request.courseEndDate,
-    ),
-  );
-  setTextField(
+  setRequiredTextField(form, fields.trainingName, request.courseName, context);
+  setRequiredTextField(form, fields.trainingLocation, request.location, context);
+  setRequiredTextField(form, fields.trainingDatesIncludingTravel, trainingDates, context);
+
+  setOptionalTextField(
     form,
     fields.totalDaysIncludingTravel,
     formatPdfNumber(request.numberOfDaysOnDuty),
   );
-  setTextField(
+  setOptionalTextField(
     form,
     fields.transportation,
     formatTransportationSelection({
@@ -129,69 +105,68 @@ function populateTrainingRequestForm(
       transportationNotes: request.transportationNotes,
     }),
   );
-  setTextField(
+  setOptionalTextField(
     form,
     fields.registrationFees,
     formatPdfCurrency(request.registrationFee),
   );
-  setTextField(
+  setOptionalTextField(
     form,
     fields.mileage,
     formatPdfNumber(request.totalReimbursableMiles),
   );
-  setTextField(
+  setOptionalTextField(
     form,
     fields.mileageRate,
     formatPdfCurrency(request.gsaMileageRate),
   );
-  setTextField(
+  setOptionalTextField(
     form,
     fields.mileageTotal,
     formatPdfCurrency(request.mileageReimbursement),
   );
-  setTextField(form, fields.mealFoodTotal, formatPdfCurrency(request.foodExpenses));
-  setTextField(form, fields.lodgingTotal, formatPdfCurrency(request.lodging));
-  setTextField(form, fields.otherTotal, formatPdfCurrency(request.otherExpenses));
-  setTextField(form, fields.airfareTotal, formatPdfCurrency(request.airfare));
-  setTextField(
+  setOptionalTextField(form, fields.mealFoodTotal, formatPdfCurrency(request.foodExpenses));
+  setOptionalTextField(form, fields.lodgingTotal, formatPdfCurrency(request.lodging));
+  setOptionalTextField(form, fields.otherTotal, formatPdfCurrency(request.otherExpenses));
+  setOptionalTextField(form, fields.airfareTotal, formatPdfCurrency(request.airfare));
+  setOptionalTextField(
     form,
     fields.rentalVehicleTotal,
     formatPdfCurrency(request.rentalVehicle),
   );
-  setTextField(
+  setOptionalTextField(
     form,
     fields.totalEstimatedExpenses,
     formatPdfCurrency(request.totalEstimatedExpenses),
   );
-  setTextField(
+  setOptionalTextField(
     form,
     fields.onDutyDatePrimary,
-    formatTrainingDatesIncludingTravel(
-      request.courseStartDate,
-      request.courseEndDate,
-    ),
+    trainingDates,
   );
-  setTextField(
+  setOptionalTextField(
     form,
     fields.onDutyDateSecondary,
     formatPdfNumber(request.numberOfDaysOnDuty),
   );
 
-  checkField(form, fields.approvedCheckbox);
-  uncheckField(form, fields.deniedCheckbox);
-  setTextField(form, fields.denialReason, "");
+  checkRequiredCheckbox(form, fields.approvedCheckbox, context);
+  uncheckOptionalCheckbox(form, fields.deniedCheckbox);
+  setOptionalTextField(form, fields.denialReason, "");
 
-  checkField(form, fields.mtoApprovalCheckbox);
-  checkField(form, fields.deputyApprovalCheckbox);
-  setTextField(
+  checkOptionalCheckbox(form, fields.mtoApprovalCheckbox);
+  checkOptionalCheckbox(form, fields.deputyApprovalCheckbox);
+  setRequiredTextField(
     form,
     fields.mtoApprovalDate,
     formatPdfDate(mtoAction.signedAt ?? mtoAction.createdAt),
+    context,
   );
-  setTextField(
+  setRequiredTextField(
     form,
     fields.deputyApprovalDate,
     formatPdfDate(deputyAction.signedAt ?? deputyAction.createdAt),
+    context,
   );
 }
 
@@ -200,28 +175,29 @@ function populateTalForm(pdf: PDFDocument, input: ApprovedPacketGenerationInput)
   const { request, mtoAction } = input;
   const fields = TAL_FORM_FIELDS;
   const student = splitRequesterNameForTal(request.requesterName);
+  const context = "TAL";
 
-  setTextField(form, fields.courseName, request.courseName);
-  setTextField(form, fields.courseNumber, request.courseNumber);
-  setTextField(form, fields.courseLocation, request.location);
-  setTextField(form, fields.agencyName, TAL_CONSTANTS.agencyName);
-  setTextField(form, fields.fdid, TAL_CONSTANTS.fdid);
-  setTextField(
+  setRequiredTextField(form, fields.courseName, request.courseName, context);
+  setOptionalTextField(form, fields.courseNumber, request.courseNumber);
+  setRequiredTextField(form, fields.courseLocation, request.location, context);
+  setRequiredTextField(form, fields.agencyName, TAL_CONSTANTS.agencyName, context);
+  setRequiredTextField(form, fields.fdid, TAL_CONSTANTS.fdid, context);
+  setRequiredTextField(
     form,
     fields.authorizationDate,
     formatPdfDate(mtoAction.signedAt ?? mtoAction.createdAt),
+    context,
   );
-  setTextField(
+  setRequiredTextField(
     form,
     fields.authorizedRepresentativeName,
     mtoAction.signatureName ?? mtoAction.actorName,
+    context,
   );
-  checkField(form, fields.studentAuthorized);
-  setTextField(form, fields.lastName, student.lastName);
-  setTextField(form, fields.firstName, student.firstName);
-  setTextField(form, fields.email, request.requesterEmail);
-
-  // Future personnel fields intentionally left blank until trusted data exists.
+  checkRequiredCheckbox(form, fields.studentAuthorized, context);
+  setRequiredTextField(form, fields.lastName, student.lastName, context);
+  setRequiredTextField(form, fields.firstName, student.firstName, context);
+  setRequiredTextField(form, fields.email, request.requesterEmail, context);
 }
 
 async function stampTrainingRequestSignatures(
@@ -258,6 +234,38 @@ async function stampTalAgencySignature(
   );
 }
 
+async function renderTrainingRequestFormNonInteractive(
+  trainingPdf: PDFDocument,
+): Promise<PDFDocument> {
+  const form = trainingPdf.getForm();
+  form.updateFieldAppearances();
+
+  try {
+    form.flatten();
+    return trainingPdf;
+  } catch {
+    const rendered = await PDFDocument.create();
+    const [page] = await rendered.copyPages(trainingPdf, [0]);
+    rendered.addPage(page);
+
+    const remainingFields = rendered.getForm().getFields();
+    if (remainingFields.length > 0) {
+      throw new PdfFormFieldError(
+        `Training Request Form could not be flattened and still contains ${remainingFields.length} AcroForm field(s).`,
+      );
+    }
+
+    return rendered;
+  }
+}
+
+async function renderTalFormNonInteractive(talPdf: PDFDocument): Promise<PDFDocument> {
+  const form = talPdf.getForm();
+  form.updateFieldAppearances();
+  form.flatten();
+  return talPdf;
+}
+
 export async function generateApprovedPacketBytes(
   input: ApprovedPacketGenerationInput,
 ): Promise<Uint8Array> {
@@ -275,22 +283,23 @@ export async function generateApprovedPacketBytes(
   await stampTrainingRequestSignatures(trainingPdf, input);
   await stampTalAgencySignature(talPdf, input.mtoSignaturePng);
 
-  const trainingForm = trainingPdf.getForm();
-  trainingForm.updateFieldAppearances();
+  const [renderedTrainingPdf, renderedTalPdf] = await Promise.all([
+    renderTrainingRequestFormNonInteractive(trainingPdf),
+    renderTalFormNonInteractive(talPdf),
+  ]);
 
-  const talForm = talPdf.getForm();
-  talForm.updateFieldAppearances();
-  talForm.flatten();
-
-  // The training request template contains legacy AcroForm widget refs that
-  // pdf-lib cannot flatten directly; copying the rendered page removes the form.
   const mergedPdf = await PDFDocument.create();
-  const [trainingPage] = await mergedPdf.copyPages(trainingPdf, [0]);
-  const [talPage] = await mergedPdf.copyPages(talPdf, [0]);
+  const [trainingPage] = await mergedPdf.copyPages(renderedTrainingPdf, [0]);
+  const [talPage] = await mergedPdf.copyPages(renderedTalPdf, [0]);
   mergedPdf.addPage(trainingPage);
   mergedPdf.addPage(talPage);
 
-  return mergedPdf.save();
+  stripInteractivePdfArtifacts(mergedPdf);
+
+  const mergedBytes = await mergedPdf.save();
+  await validateFinalMergedPacketNonInteractive(mergedBytes);
+
+  return mergedBytes;
 }
 
 export async function inspectTalPopulationForTest(
@@ -332,4 +341,11 @@ export async function loadApprovedPacketTemplatesForTest(): Promise<{
     trainingRequestFormPageCount: trainingPdf.getPageCount(),
     talPageCount: talPdf.getPageCount(),
   };
+}
+
+export async function populateTrainingRequestFormForTest(
+  input: ApprovedPacketGenerationInput,
+): Promise<void> {
+  const trainingPdf = await PDFDocument.load(await readFile(TRAINING_REQUEST_FORM_TEMPLATE));
+  populateTrainingRequestForm(trainingPdf, input);
 }
