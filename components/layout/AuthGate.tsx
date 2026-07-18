@@ -77,7 +77,7 @@ export function AuthGate({ children }: AuthGateProps) {
 }
 
 interface AdminGateProps {
-  children: ReactNode;
+  children: ReactNode | ((personnel: AuthenticatedPersonnel) => ReactNode);
 }
 
 export function AdminGate({ children }: AdminGateProps) {
@@ -108,7 +108,7 @@ export function AdminGate({ children }: AdminGateProps) {
           );
         }
 
-        return children;
+        return typeof children === "function" ? children(personnel) : children;
       }}
     </AuthGate>
   );

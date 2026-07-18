@@ -3,6 +3,7 @@ import type {
   PersonnelRecord,
   PersonnelRole,
   PersonnelRow,
+  PersonnelUpdateInput,
 } from "@/types/personnel";
 
 export function mapPersonnelRow(row: PersonnelRow): PersonnelRecord {
@@ -34,24 +35,53 @@ export function isPersonnelRole(value: string): value is PersonnelRole {
   );
 }
 
-export interface AddUserFormValues {
+export const SELF_ACCOUNT_PROTECTION_MESSAGE =
+  "You cannot deactivate or delete your own signed-in account.";
+
+export interface PersonnelFormValues {
   badgeNumber: string;
   email: string;
   role: PersonnelRole | "";
   active: boolean;
 }
 
-export type AddUserFormErrors = Partial<
-  Record<keyof AddUserFormValues | "submit", string>
+export type AddUserFormValues = PersonnelFormValues;
+
+export type PersonnelFormErrors = Partial<
+  Record<keyof PersonnelFormValues | "submit", string>
 >;
 
-export function validateAddUserForm(
-  values: AddUserFormValues,
+export type AddUserFormErrors = PersonnelFormErrors;
+
+export function personnelRecordToFormValues(
+  user: PersonnelRecord,
+): PersonnelFormValues {
+  return {
+    badgeNumber: user.badgeNumber,
+    email: user.email,
+    role: user.role,
+    active: user.active,
+  };
+}
+
+export function isSamePersonnelRecord(
+  user: PersonnelRecord,
+  currentEmail: string,
+): boolean {
+  return user.email === normalizePersonnelEmail(currentEmail);
+}
+
+export function validatePersonnelForm(
+  values: PersonnelFormValues,
   existingUsers: PersonnelRecord[],
-): AddUserFormErrors {
-  const errors: AddUserFormErrors = {};
+  options?: { excludeUserId?: string },
+): PersonnelFormErrors {
+  const errors: PersonnelFormErrors = {};
   const badgeNumber = values.badgeNumber.trim();
   const email = normalizePersonnelEmail(values.email);
+  const comparableUsers = options?.excludeUserId
+    ? existingUsers.filter((user) => user.id !== options.excludeUserId)
+    : existingUsers;
 
   if (!badgeNumber) {
     errors.badgeNumber = "Badge number is required.";
@@ -63,12 +93,12 @@ export function validateAddUserForm(
     errors.email = "Enter a valid email address.";
   }
 
-  if (!values.role) {
+  if (!values.role || !isPersonnelRole(values.role)) {
     errors.role = "Role is required.";
   }
 
   if (badgeNumber) {
-    const duplicateBadge = existingUsers.some(
+    const duplicateBadge = comparableUsers.some(
       (user) => user.badgeNumber.toLowerCase() === badgeNumber.toLowerCase(),
     );
     if (duplicateBadge) {
@@ -77,7 +107,7 @@ export function validateAddUserForm(
   }
 
   if (email) {
-    const duplicateEmail = existingUsers.some((user) => user.email === email);
+    const duplicateEmail = comparableUsers.some((user) => user.email === email);
     if (duplicateEmail) {
       errors.email = "This email address is already in use.";
     }
@@ -86,8 +116,26 @@ export function validateAddUserForm(
   return errors;
 }
 
+export function validateAddUserForm(
+  values: PersonnelFormValues,
+  existingUsers: PersonnelRecord[],
+): PersonnelFormErrors {
+  return validatePersonnelForm(values, existingUsers);
+}
+
+export function toPersonnelUpdateInput(
+  values: PersonnelFormValues,
+): PersonnelUpdateInput {
+  return {
+    badgeNumber: values.badgeNumber.trim(),
+    email: normalizePersonnelEmail(values.email),
+    role: values.role as PersonnelRole,
+    active: values.active,
+  };
+}
+
 export function toPersonnelInsertInput(
-  values: AddUserFormValues,
+  values: PersonnelFormValues,
 ): PersonnelInsertInput {
   return {
     badgeNumber: values.badgeNumber.trim(),

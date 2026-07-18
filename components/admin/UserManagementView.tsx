@@ -1,21 +1,29 @@
 "use client";
 
 import Link from "next/link";
-import { startTransition, useCallback, useEffect, useState } from "react";
+import { startTransition, useCallback, useEffect, useMemo, useState } from "react";
 import { AddUserForm } from "@/components/admin/AddUserForm";
+import { DeleteUserDialog } from "@/components/admin/DeleteUserDialog";
+import { EditUserModal } from "@/components/admin/EditUserModal";
+import { StatusChangeDialog } from "@/components/admin/StatusChangeDialog";
 import { UsersTable } from "@/components/admin/UsersTable";
 import { SignOutButton } from "@/components/auth/SignOutButton";
 import { AdminGate } from "@/components/layout/AuthGate";
+import type { AuthenticatedPersonnel } from "@/lib/auth/personnel";
 import {
   getPersonnelErrorMessage,
   mapPersonnelRow,
 } from "@/lib/personnel";
+import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import type {
   PersonnelInsertInput,
   PersonnelRecord,
   PersonnelRow,
+  PersonnelUpdateInput,
 } from "@/types/personnel";
+
+type StatusFilter = "all" | "active" | "inactive";
 
 function getSupabaseConfigError(): string | null {
   if (
@@ -28,11 +36,38 @@ function getSupabaseConfigError(): string | null {
   return null;
 }
 
-export function UserManagementView() {
+interface UserManagementContentProps {
+  currentPersonnel: AuthenticatedPersonnel;
+}
+
+function UserManagementContent({ currentPersonnel }: UserManagementContentProps) {
   const [users, setUsers] = useState<PersonnelRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [operationError, setOperationError] = useState<string | null>(null);
+  const [editingUser, setEditingUser] = useState<PersonnelRecord | null>(null);
+  const [deletingUser, setDeletingUser] = useState<PersonnelRecord | null>(
+    null,
+  );
+  const [statusChangeTarget, setStatusChangeTarget] = useState<{
+    user: PersonnelRecord;
+    nextActive: boolean;
+  } | null>(null);
   const configError = getSupabaseConfigError();
+
+  const filteredUsers = useMemo(() => {
+    if (statusFilter === "active") {
+      return users.filter((user) => user.active);
+    }
+
+    if (statusFilter === "inactive") {
+      return users.filter((user) => !user.active);
+    }
+
+    return users;
+  }, [statusFilter, users]);
 
   const loadUsers = useCallback(async () => {
     if (configError) {
@@ -73,6 +108,11 @@ export function UserManagementView() {
     void loadUsers();
   }, [loadUsers]);
 
+  function showSuccess(message: string) {
+    setSuccessMessage(message);
+    setOperationError(null);
+  }
+
   async function handleAddUser(input: PersonnelInsertInput) {
     if (configError) {
       throw new Error(configError);
@@ -97,12 +137,92 @@ export function UserManagementView() {
     const created = mapPersonnelRow(data as PersonnelRow);
     setUsers((current) => [created, ...current]);
     setLoadError(null);
+    showSuccess(`Added ${created.badgeNumber} (${created.email}).`);
+  }
+
+  async function handleEditUser(userId: string, input: PersonnelUpdateInput) {
+    if (configError) {
+      throw new Error(configError);
+    }
+
+    const supabase = createClient();
+    const { data, error } = await supabase
+      .from("personnel")
+      .update({
+        badge_number: input.badgeNumber,
+        email: input.email,
+        role: input.role,
+        active: input.active,
+      })
+      .eq("id", userId)
+      .select("*")
+      .single();
+
+    if (error) {
+      throw new Error(getPersonnelErrorMessage(error));
+    }
+
+    const updated = mapPersonnelRow(data as PersonnelRow);
+    setUsers((current) =>
+      current.map((user) => (user.id === userId ? updated : user)),
+    );
+    showSuccess(`Updated ${updated.badgeNumber} (${updated.email}).`);
+  }
+
+  async function handleChangeActiveStatus(userId: string, active: boolean) {
+    if (configError) {
+      throw new Error(configError);
+    }
+
+    const supabase = createClient();
+    const { data, error } = await supabase
+      .from("personnel")
+      .update({ active })
+      .eq("id", userId)
+      .select("*")
+      .single();
+
+    if (error) {
+      throw new Error(getPersonnelErrorMessage(error));
+    }
+
+    const updated = mapPersonnelRow(data as PersonnelRow);
+    setUsers((current) =>
+      current.map((user) => (user.id === userId ? updated : user)),
+    );
+    showSuccess(
+      active
+        ? `Reactivated ${updated.badgeNumber} (${updated.email}).`
+        : `Moved ${updated.badgeNumber} (${updated.email}) to Inactive.`,
+    );
+  }
+
+  async function handleDeleteUser(userId: string) {
+    if (configError) {
+      throw new Error(configError);
+    }
+
+    const deletedUser = users.find((user) => user.id === userId);
+
+    const supabase = createClient();
+    const { error } = await supabase.from("personnel").delete().eq("id", userId);
+
+    if (error) {
+      throw new Error(getPersonnelErrorMessage(error));
+    }
+
+    setUsers((current) => current.filter((user) => user.id !== userId));
+    showSuccess(
+      deletedUser
+        ? `Permanently deleted ${deletedUser.badgeNumber} (${deletedUser.email}).`
+        : "Personnel record deleted.",
+    );
   }
 
   const dataUnavailable = Boolean(configError || loadError);
 
   return (
-    <AdminGate>
+    <>
       <div className="flex flex-1 flex-col bg-zinc-100">
         <header className="border-b border-zinc-200 bg-white">
           <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 px-4 py-5 sm:flex-row sm:items-start sm:justify-between sm:px-6">
@@ -137,12 +257,30 @@ export function UserManagementView() {
             or Admin personnel record.
           </div>
 
+          {successMessage ? (
+            <div
+              className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-900"
+              role="status"
+            >
+              {successMessage}
+            </div>
+          ) : null}
+
           {loadError ? (
             <div
               className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"
               role="alert"
             >
               {loadError}
+            </div>
+          ) : null}
+
+          {operationError ? (
+            <div
+              className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"
+              role="alert"
+            >
+              {operationError}
             </div>
           ) : null}
 
@@ -153,12 +291,36 @@ export function UserManagementView() {
           />
 
           <section aria-labelledby="existing-users-heading">
-            <h2
-              id="existing-users-heading"
-              className="mb-4 text-sm font-semibold tracking-wide text-zinc-500 uppercase"
-            >
-              Existing users
-            </h2>
+            <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <h2
+                id="existing-users-heading"
+                className="text-sm font-semibold tracking-wide text-zinc-500 uppercase"
+              >
+                Existing users
+              </h2>
+
+              <div className="flex flex-wrap gap-2">
+                {(["all", "active", "inactive"] as const).map((filter) => (
+                  <button
+                    key={filter}
+                    type="button"
+                    onClick={() => setStatusFilter(filter)}
+                    className={cn(
+                      "rounded-full px-3 py-1.5 text-xs font-semibold transition-colors",
+                      statusFilter === filter
+                        ? "bg-red-700 text-white"
+                        : "bg-white text-zinc-700 ring-1 ring-zinc-200 hover:bg-zinc-50",
+                    )}
+                  >
+                    {filter === "all"
+                      ? "All"
+                      : filter === "active"
+                        ? "Active"
+                        : "Inactive"}
+                  </button>
+                ))}
+              </div>
+            </div>
 
             {isLoading ? (
               <p className="text-sm text-zinc-500" role="status">
@@ -171,17 +333,63 @@ export function UserManagementView() {
                 </h3>
                 <p className="mt-2 text-sm leading-6 text-zinc-600">
                   Personnel records visible to your administrative account will
-                  appear here. Additional users can still be inserted manually
-                  through the Supabase SQL editor until broader admin workflows
-                  are added.
+                  appear here.
+                </p>
+              </div>
+            ) : filteredUsers.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-zinc-300 bg-white px-6 py-12 text-center shadow-sm shadow-zinc-200/60">
+                <h3 className="text-lg font-semibold text-zinc-900">
+                  No matching users
+                </h3>
+                <p className="mt-2 text-sm leading-6 text-zinc-600">
+                  Try a different status filter to view other personnel records.
                 </p>
               </div>
             ) : (
-              <UsersTable users={users} />
+              <UsersTable
+                users={filteredUsers}
+                currentUserEmail={currentPersonnel.email}
+                onEdit={setEditingUser}
+                onChangeStatus={(user, nextActive) =>
+                  setStatusChangeTarget({ user, nextActive })
+                }
+                onDelete={setDeletingUser}
+              />
             )}
           </section>
         </div>
       </div>
+
+      <EditUserModal
+        user={editingUser}
+        existingUsers={users}
+        currentUserEmail={currentPersonnel.email}
+        onClose={() => setEditingUser(null)}
+        onSave={handleEditUser}
+      />
+
+      <StatusChangeDialog
+        user={statusChangeTarget?.user ?? null}
+        nextActive={statusChangeTarget?.nextActive ?? null}
+        onClose={() => setStatusChangeTarget(null)}
+        onConfirm={handleChangeActiveStatus}
+      />
+
+      <DeleteUserDialog
+        user={deletingUser}
+        onClose={() => setDeletingUser(null)}
+        onConfirm={handleDeleteUser}
+      />
+    </>
+  );
+}
+
+export function UserManagementView() {
+  return (
+    <AdminGate>
+      {(currentPersonnel) => (
+        <UserManagementContent currentPersonnel={currentPersonnel} />
+      )}
     </AdminGate>
   );
 }

@@ -10,6 +10,13 @@ export interface PersonnelRecord {
   updatedAt: string;
 }
 
+export interface PersonnelUpdateInput {
+  badgeNumber: string;
+  email: string;
+  role: PersonnelRole;
+  active: boolean;
+}
+
 export interface PersonnelInsertInput {
   badgeNumber: string;
   email: string;
