@@ -1,17 +1,10 @@
-import { createClient } from "@/lib/supabase/client";
-import type { AuthenticatedPersonnel } from "@/lib/auth/personnel";
-import { validateSignatureBlob } from "@/lib/personnel-signature-validation";
 import type {
   PersonnelSignatureRecord,
   PersonnelSignatureRow,
 } from "@/types/personnel-signature";
 import {
-  PERSONNEL_SIGNATURE_BUCKET,
-  PERSONNEL_SIGNATURE_MIME_TYPE,
   PERSONNEL_SIGNATURE_OBJECT_NAME,
 } from "@/types/personnel-signature";
-
-const SIGNED_URL_TTL_SECONDS = 300;
 
 export function getPersonnelSignatureStoragePath(personnelId: string): string {
   return `${personnelId}/${PERSONNEL_SIGNATURE_OBJECT_NAME}`;
@@ -37,85 +30,32 @@ export function mapPersonnelSignatureRow(
   };
 }
 
-export async function getOwnPersonnelSignature(
-  personnelId: string,
-): Promise<PersonnelSignatureRecord | null> {
-  const supabase = createClient();
-  const { data, error } = await supabase
-    .from("personnel_signatures")
-    .select("*")
-    .eq("personnel_id", personnelId)
-    .maybeSingle();
-
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  return data ? mapPersonnelSignatureRow(data as PersonnelSignatureRow) : null;
-}
-
-export async function createPersonnelSignaturePreviewUrl(
-  storagePath: string,
-): Promise<string> {
-  const supabase = createClient();
-  const { data, error } = await supabase.storage
-    .from(PERSONNEL_SIGNATURE_BUCKET)
-    .createSignedUrl(storagePath, SIGNED_URL_TTL_SECONDS);
-
-  if (error || !data?.signedUrl) {
-    throw new Error(error?.message ?? "Unable to create signature preview URL.");
-  }
-
-  return data.signedUrl;
-}
-
 export async function savePersonnelSignature(input: {
-  personnel: AuthenticatedPersonnel;
   blob: Blob;
   originalFilename?: string | null;
+  certificationConfirmed: boolean;
 }): Promise<{
   signature: PersonnelSignatureRecord;
   previewUrl: string | null;
 }> {
-  const validation = await validateSignatureBlob(
+  const formData = new FormData();
+  formData.append(
+    "file",
     input.blob,
-    input.originalFilename,
+    input.originalFilename ?? PERSONNEL_SIGNATURE_OBJECT_NAME,
+  );
+  formData.append(
+    "certificationConfirmed",
+    input.certificationConfirmed ? "true" : "false",
   );
 
-  if (!validation.valid) {
-    throw new Error(validation.error ?? "Invalid signature image.");
+  if (input.originalFilename) {
+    formData.append("originalFilename", input.originalFilename);
   }
-
-  const supabase = createClient();
-  const storagePath = getPersonnelSignatureStoragePath(input.personnel.id);
-  let uploadedObject = false;
-
-  const { error: uploadError } = await supabase.storage
-    .from(PERSONNEL_SIGNATURE_BUCKET)
-    .upload(storagePath, input.blob, {
-      upsert: true,
-      contentType: PERSONNEL_SIGNATURE_MIME_TYPE,
-      cacheControl: "3600",
-    });
-
-  if (uploadError) {
-    throw new Error(uploadError.message);
-  }
-
-  uploadedObject = true;
 
   const response = await fetch("/api/settings/signature", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      fileSizeBytes: input.blob.size,
-      imageWidth: validation.width ?? null,
-      imageHeight: validation.height ?? null,
-      originalFilename:
-        input.originalFilename ?? PERSONNEL_SIGNATURE_OBJECT_NAME,
-    }),
+    body: formData,
   });
 
   const payload = (await response.json()) as {
@@ -125,11 +65,7 @@ export async function savePersonnelSignature(input: {
   };
 
   if (!response.ok || !payload.signature) {
-    if (uploadedObject) {
-      await supabase.storage.from(PERSONNEL_SIGNATURE_BUCKET).remove([storagePath]);
-    }
-
-    throw new Error(payload.error ?? "Unable to save signature metadata.");
+    throw new Error(payload.error ?? "Unable to save your signature.");
   }
 
   return {

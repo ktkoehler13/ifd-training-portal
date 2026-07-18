@@ -1,21 +1,25 @@
 import { NextResponse } from "next/server";
 import {
+  CERTIFICATION_REQUIRED_MESSAGE,
+  parseCertificationConfirmedFormValue,
+  sanitizeOriginalFilename,
+} from "@/lib/personnel-signature-png";
+import {
   createOwnPersonnelSignaturePreviewUrl,
   deleteOwnPersonnelSignature,
   getOwnPersonnelSignatureServer,
   PersonnelSignatureAccessError,
-  saveOwnPersonnelSignatureMetadata,
+  PersonnelSignatureCertificationError,
+  PersonnelSignatureValidationError,
+  saveOwnPersonnelSignature,
 } from "@/lib/personnel-signature-server";
-import {
-  PERSONNEL_SIGNATURE_MAX_BYTES,
-  PERSONNEL_SIGNATURE_MAX_HEIGHT,
-  PERSONNEL_SIGNATURE_MAX_WIDTH,
-  PERSONNEL_SIGNATURE_MIN_HEIGHT,
-  PERSONNEL_SIGNATURE_MIN_WIDTH,
-} from "@/types/personnel-signature";
 
 function accessDeniedResponse() {
   return NextResponse.json({ error: "Access denied." }, { status: 403 });
+}
+
+function badRequestResponse(message: string) {
+  return NextResponse.json({ error: message }, { status: 400 });
 }
 
 function serverErrorResponse(error: unknown) {
@@ -28,7 +32,7 @@ export async function GET() {
   try {
     const signature = await getOwnPersonnelSignatureServer();
     const previewUrl = signature
-      ? await createOwnPersonnelSignaturePreviewUrl(signature.storagePath)
+      ? await createOwnPersonnelSignaturePreviewUrl()
       : null;
 
     return NextResponse.json({ signature, previewUrl });
@@ -43,77 +47,44 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const body = (await request.json()) as {
-      fileSizeBytes?: unknown;
-      imageWidth?: unknown;
-      imageHeight?: unknown;
-      originalFilename?: unknown;
-    };
-
-    const fileSizeBytes =
-      typeof body.fileSizeBytes === "number"
-        ? body.fileSizeBytes
-        : Number(body.fileSizeBytes);
-    const imageWidth =
-      typeof body.imageWidth === "number" ? body.imageWidth : null;
-    const imageHeight =
-      typeof body.imageHeight === "number" ? body.imageHeight : null;
-    const originalFilename =
-      typeof body.originalFilename === "string" ? body.originalFilename : null;
-
-    if (!Number.isFinite(fileSizeBytes) || fileSizeBytes <= 0) {
-      return NextResponse.json(
-        { error: "A valid signature file size is required." },
-        { status: 400 },
-      );
-    }
-
-    if (fileSizeBytes > PERSONNEL_SIGNATURE_MAX_BYTES) {
-      return NextResponse.json(
-        { error: "Signature file must be 1 MB or smaller." },
-        { status: 400 },
-      );
-    }
-
-    if (
-      imageWidth !== null &&
-      (!Number.isFinite(imageWidth) ||
-        imageWidth < PERSONNEL_SIGNATURE_MIN_WIDTH ||
-        imageWidth > PERSONNEL_SIGNATURE_MAX_WIDTH)
-    ) {
-      return NextResponse.json(
-        { error: "Signature width is outside the allowed limits." },
-        { status: 400 },
-      );
-    }
-
-    if (
-      imageHeight !== null &&
-      (!Number.isFinite(imageHeight) ||
-        imageHeight < PERSONNEL_SIGNATURE_MIN_HEIGHT ||
-        imageHeight > PERSONNEL_SIGNATURE_MAX_HEIGHT)
-    ) {
-      return NextResponse.json(
-        { error: "Signature height is outside the allowed limits." },
-        { status: 400 },
-      );
-    }
-
-    const signature = await saveOwnPersonnelSignatureMetadata({
-      fileSizeBytes,
-      imageWidth,
-      imageHeight,
-      originalFilename,
-    });
-
-    const previewUrl = await createOwnPersonnelSignaturePreviewUrl(
-      signature.storagePath,
+    const formData = await request.formData();
+    const certificationConfirmed = parseCertificationConfirmedFormValue(
+      formData.get("certificationConfirmed"),
     );
+
+    if (certificationConfirmed !== true) {
+      return badRequestResponse(CERTIFICATION_REQUIRED_MESSAGE);
+    }
+
+    const fileEntry = formData.get("file");
+    if (!(fileEntry instanceof File) || fileEntry.size === 0) {
+      return badRequestResponse("A signature PNG file is required.");
+    }
+
+    const pngBytes = new Uint8Array(await fileEntry.arrayBuffer());
+    const originalFilename = sanitizeOriginalFilename(
+      formData.get("originalFilename") ?? fileEntry.name,
+    );
+
+    const signature = await saveOwnPersonnelSignature({
+      pngBytes,
+      originalFilename,
+      certificationConfirmed: true,
+    });
+    const previewUrl = await createOwnPersonnelSignaturePreviewUrl();
 
     return NextResponse.json({ signature, previewUrl });
   } catch (error) {
     if (error instanceof PersonnelSignatureAccessError) {
       return accessDeniedResponse();
+    }
+
+    if (error instanceof PersonnelSignatureCertificationError) {
+      return badRequestResponse(error.message);
+    }
+
+    if (error instanceof PersonnelSignatureValidationError) {
+      return badRequestResponse(error.message);
     }
 
     return serverErrorResponse(error);

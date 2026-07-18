@@ -65,6 +65,60 @@ as $$
   select target_personnel_id::text || '/signature.png';
 $$;
 
+create or replace function public.is_personnel_signature_pending_object_path(
+  object_name text,
+  owner_id uuid
+)
+returns boolean
+language plpgsql
+immutable
+set search_path = public
+as $$
+declare
+  pending_prefix text;
+  pending_file text;
+begin
+  if object_name is null or owner_id is null then
+    return false;
+  end if;
+
+  pending_prefix := owner_id::text || '/pending/';
+  if left(object_name, length(pending_prefix)) <> pending_prefix then
+    return false;
+  end if;
+
+  pending_file := substring(object_name from length(pending_prefix) + 1);
+  if pending_file is null or pending_file = '' then
+    return false;
+  end if;
+
+  if pending_file ~ '[/\\]' or pending_file ~ '\.\.' then
+    return false;
+  end if;
+
+  return pending_file ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.png$'
+    or pending_file ~* '^backup-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.png$';
+end;
+$$;
+
+create or replace function public.is_personnel_signature_owner_object_path(
+  object_name text,
+  owner_id uuid
+)
+returns boolean
+language sql
+immutable
+set search_path = public
+as $$
+  select
+    object_name is not null
+    and owner_id is not null
+    and (
+      object_name = public.expected_personnel_signature_storage_path(owner_id)
+      or public.is_personnel_signature_pending_object_path(object_name, owner_id)
+    );
+$$;
+
 create or replace function public.validate_personnel_signature_row()
 returns trigger
 language plpgsql
@@ -206,6 +260,20 @@ comment on column public.personnel_signatures.certified_at is
 comment on function public.can_manage_own_personnel_signature() is
   'Returns true when the authenticated active personnel role may manage a personal signature (mto or deputy_chief only).';
 
+revoke all on function public.is_personnel_signature_pending_object_path(text, uuid) from public;
+revoke all on function public.is_personnel_signature_pending_object_path(text, uuid) from anon;
+revoke all on function public.is_personnel_signature_pending_object_path(text, uuid) from authenticated;
+
+revoke all on function public.is_personnel_signature_owner_object_path(text, uuid) from public;
+revoke all on function public.is_personnel_signature_owner_object_path(text, uuid) from anon;
+revoke all on function public.is_personnel_signature_owner_object_path(text, uuid) from authenticated;
+
+comment on function public.is_personnel_signature_pending_object_path(text, uuid) is
+  'Validates owner-scoped staged signature object paths under pending/ without path traversal.';
+
+comment on function public.is_personnel_signature_owner_object_path(text, uuid) is
+  'Validates final signature.png and owner-scoped pending staging paths for storage policies.';
+
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values (
   'personnel-signatures',
@@ -233,6 +301,10 @@ using (
   bucket_id = 'personnel-signatures'
   and public.can_manage_own_personnel_signature()
   and (storage.foldername(name))[1] = public.current_personnel_id()::text
+  and public.is_personnel_signature_owner_object_path(
+    name,
+    public.current_personnel_id()
+  )
 );
 
 create policy "personnel_signatures_storage_insert_own"
@@ -243,7 +315,10 @@ with check (
   bucket_id = 'personnel-signatures'
   and public.can_manage_own_personnel_signature()
   and (storage.foldername(name))[1] = public.current_personnel_id()::text
-  and name = public.expected_personnel_signature_storage_path(public.current_personnel_id())
+  and public.is_personnel_signature_owner_object_path(
+    name,
+    public.current_personnel_id()
+  )
 );
 
 create policy "personnel_signatures_storage_update_own"
@@ -254,12 +329,19 @@ using (
   bucket_id = 'personnel-signatures'
   and public.can_manage_own_personnel_signature()
   and (storage.foldername(name))[1] = public.current_personnel_id()::text
+  and public.is_personnel_signature_owner_object_path(
+    name,
+    public.current_personnel_id()
+  )
 )
 with check (
   bucket_id = 'personnel-signatures'
   and public.can_manage_own_personnel_signature()
   and (storage.foldername(name))[1] = public.current_personnel_id()::text
-  and name = public.expected_personnel_signature_storage_path(public.current_personnel_id())
+  and public.is_personnel_signature_owner_object_path(
+    name,
+    public.current_personnel_id()
+  )
 );
 
 create policy "personnel_signatures_storage_delete_own"
@@ -270,4 +352,8 @@ using (
   bucket_id = 'personnel-signatures'
   and public.can_manage_own_personnel_signature()
   and (storage.foldername(name))[1] = public.current_personnel_id()::text
+  and public.is_personnel_signature_owner_object_path(
+    name,
+    public.current_personnel_id()
+  )
 );

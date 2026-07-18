@@ -400,30 +400,33 @@ Migration `20260718210000_personnel_signatures.sql` adds secure stored signature
 **Private storage bucket:** `personnel-signatures`
 
 - The bucket is private (`public = false`).
-- Each owner stores one normalized object at `<personnel-id>/signature.png`.
-- Storage policies allow an authenticated owner to upload, read, replace, and delete only their own folder object.
+- Each owner stores one normalized final object at `<personnel-id>/signature.png`.
+- Staged replacements upload to `<personnel-id>/pending/<uuid>.png` and only promote to the final path after server-side PNG validation succeeds.
+- If a final signature already exists, the server backs it up under `<personnel-id>/pending/backup-<uuid>.png` before promotion and restores it when promotion or metadata save fails.
+- Storage policies allow an authenticated owner to read, write, replace, and delete only their own final object and owner-scoped pending objects. Path traversal is rejected.
+- All Storage mutations run through protected `/api/settings/signature` route handlers using the authenticated server Supabase client. The browser does not upload directly to Storage.
 - Cross-user access and anonymous access are denied.
-- The browser never receives a permanent public URL. Previews use short-lived signed URLs from protected route handlers.
+- The browser never receives a permanent public URL. Previews use short-lived signed URLs for `<authenticated-personnel-id>/signature.png` only; arbitrary storage paths from the client or metadata are not trusted.
 - Future PDF generation will use the Supabase service role to read signature bytes server-side. Do not add a service-role key to browser code or `NEXT_PUBLIC_*` variables.
 
 **Supported roles:** `mto`, `deputy_chief`
 
 **Upload rules:**
 
-- PNG only (`image/png`)
-- Maximum file size: 1 MB
-- Recommended dimensions: at least 150 × 50 px and no larger than 2000 × 1000 px
-- Rejected formats include JPEG, SVG, GIF, and PDF
+- PNG only (`image/png`), verified from actual file bytes on the server
+- Maximum file size: 1 MB (actual byte length)
+- IHDR dimensions must be at least 150 × 50 px and no larger than 2000 × 1000 px
+- Rejected formats include JPEG, SVG, GIF, and PDF even when mislabeled in the browser
 
 **Certification:** Before saving, the owner must confirm:
 
 “I certify that this is my official signature and authorize the IFD Training Portal to place it on training documents I electronically approve.”
 
-The database trigger assigns `certified_at` on the server. Client-supplied personnel IDs or certification timestamps are not trusted.
+The save API rejects any request where `certificationConfirmed` is not literal `true`. The database trigger requires `certification_confirmed = true` and assigns `certified_at` on the server. Client-supplied personnel IDs or certification timestamps are not trusted.
 
 **Application route:** `/settings/signature`
 
-MTO and Deputy Chief users can draw or upload a signature, preview the stored PNG, replace it, or delete it. Firefighters and admin-only accounts see access denied.
+MTO and Deputy Chief users can draw or upload a signature, preview the stored PNG, replace it, or delete it. Firefighters and admin-only accounts see access denied. Stale metadata can be deleted even when the Storage object is already missing.
 
 **Approval snapshot preparation:** The migration adds nullable snapshot columns on `public.training_request_actions`:
 
@@ -473,6 +476,7 @@ Older prototype requests saved in browser `localStorage` are not migrated automa
 npm run lint
 npx tsc --noEmit
 npm run build
+npm run test
 ```
 
 ## Learn More

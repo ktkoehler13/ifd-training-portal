@@ -141,9 +141,9 @@ function MySignatureContent({ personnel }: { personnel: AuthenticatedPersonnel }
     try {
       const { signature: savedSignature, previewUrl: savedPreviewUrl } =
         await savePersonnelSignature({
-          personnel,
           blob,
           originalFilename,
+          certificationConfirmed,
         });
       setSignature(savedSignature);
       setPreviewUrl(savedPreviewUrl);
