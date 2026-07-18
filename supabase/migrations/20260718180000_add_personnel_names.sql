@@ -72,3 +72,32 @@ $$;
 
 comment on function public.set_training_request_requester_identity() is
   'Assigns trusted requester ownership fields and requester_name snapshot from the authenticated active personnel record on insert.';
+
+create or replace function public.protect_training_request_immutable_fields()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  new.requester_personnel_id := old.requester_personnel_id;
+  new.requester_badge_number := old.requester_badge_number;
+  new.requester_email := old.requester_email;
+  new.requester_name := old.requester_name;
+  new.request_number := old.request_number;
+  new.created_at := old.created_at;
+
+  return new;
+end;
+$$;
+
+revoke all on function public.normalize_personnel_name() from public;
+revoke all on function public.normalize_personnel_name() from anon;
+revoke all on function public.normalize_personnel_name() from authenticated;
+
+revoke all on function public.protect_training_request_immutable_fields() from public;
+revoke all on function public.protect_training_request_immutable_fields() from anon;
+revoke all on function public.protect_training_request_immutable_fields() from authenticated;
+
+comment on function public.protect_training_request_immutable_fields() is
+  'Prevents changes to ownership snapshots, requester_name, request numbers, and created_at after insert, including administrative workflow updates. requester_name is an immutable historical snapshot.';
