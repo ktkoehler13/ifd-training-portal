@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "tsx --test lib/personnel-signature-png.test.ts"
+    "test": "tsx --test lib/personnel-signature-png.test.ts lib/personnel-signature-restore-outcome.test.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.3",

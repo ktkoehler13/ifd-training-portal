@@ -23,6 +23,10 @@ import {
   PERSONNEL_SIGNATURE_MIME_TYPE,
 } from "@/types/personnel-signature";
 import { getPersonnelSignatureFailureCleanupPlan } from "@/lib/personnel-signature-failure-plan";
+import {
+  buildPersonnelSignatureRestoreFailureError,
+  buildPersonnelSignatureRestoreSuccessError,
+} from "@/lib/personnel-signature-restore-outcome";
 
 const SIGNED_URL_TTL_SECONDS = 300;
 
@@ -285,21 +289,23 @@ export async function saveOwnPersonnelSignature(input: {
     }
 
     if (cleanupPlan.restoreFromBackup) {
+      let restoreFailure: unknown = null;
+
       try {
         await restoreFinalSignatureFromBackup(backupPath, finalPath);
-        throw new Error(
-          `${originalMessage} Your previous signature was restored.`,
-        );
       } catch (restoreError) {
-        const restoreMessage =
-          restoreError instanceof Error
-            ? restoreError.message
-            : "Unable to restore the previous signature.";
-
-        throw new Error(
-          `${originalMessage} ${restoreMessage} The temporary backup remains at ${backupPath}.`,
-        );
+        restoreFailure = restoreError;
       }
+
+      if (restoreFailure) {
+        throw buildPersonnelSignatureRestoreFailureError({
+          originalMessage,
+          restoreFailure,
+          backupPath,
+        });
+      }
+
+      throw buildPersonnelSignatureRestoreSuccessError(originalMessage);
     }
 
     if (cleanupPlan.removePromotedFinalPath) {
