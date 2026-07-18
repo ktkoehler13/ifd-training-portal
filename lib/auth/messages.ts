@@ -3,8 +3,8 @@ export const AUTH_MESSAGES = {
     "The badge number and email do not match an active user.",
   accessDenied:
     "Access denied. Your account is not linked to an active personnel record.",
-  adminRequired:
-    "Access denied. Admin privileges are required to manage personnel.",
+  administrativeAccessRequired:
+    "Access denied. Administrative access is required to manage personnel.",
   magicLinkSent:
     "Check your email and click the secure sign-in link.",
   magicLinkSendFailed:

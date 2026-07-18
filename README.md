@@ -61,6 +61,7 @@ Apply these files in order using the Supabase SQL editor:
 
 1. `supabase/migrations/20260718140000_create_personnel.sql`
 2. `supabase/migrations/20260718150000_personnel_login_allowed.sql`
+3. `supabase/migrations/20260718160000_expand_administrative_roles.sql`
 
 ### 5. Insert test personnel manually
 
@@ -141,8 +142,10 @@ Protected routes:
 Authorization:
 
 - `firefighter`, `mto`, `deputy_chief`, and `admin` may use normal request routes
-- Only `admin` may access `/admin/users`
-- The initial test MTO account does not receive admin access automatically
+- Administrative roles (`mto`, `deputy_chief`, `admin`) may access `/admin/users` and manage personnel records through Supabase RLS
+- `firefighter` is the only non-administrative role
+- Workflow routing still uses distinct role values: MTO actions go to `mto`, Deputy Chief actions go to `deputy_chief`, and `admin` remains the system-management role
+- Hard deletion of personnel records is limited to the `admin` role; MTO and Deputy Chief should deactivate users instead
 
 ## Personnel Data Model
 

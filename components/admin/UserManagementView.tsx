@@ -132,8 +132,9 @@ export function UserManagementView() {
             className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
             role="status"
           >
-            Admin access only. Personnel changes are protected by Supabase Row
-            Level Security and require an active admin personnel record.
+            Administrative access only. Personnel changes are protected by
+            Supabase Row Level Security and require an active MTO, Deputy Chief,
+            or Admin personnel record.
           </div>
 
           {loadError ? (
@@ -169,7 +170,7 @@ export function UserManagementView() {
                   No users found
                 </h3>
                 <p className="mt-2 text-sm leading-6 text-zinc-600">
-                  Active personnel records visible to your admin account will
+                  Personnel records visible to your administrative account will
                   appear here. Additional users can still be inserted manually
                   through the Supabase SQL editor until broader admin workflows
                   are added.

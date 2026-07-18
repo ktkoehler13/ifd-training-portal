@@ -120,7 +120,7 @@ export function getPersonnelErrorMessage(error: unknown): string {
     typeof error.message === "string"
   ) {
     if (error.message.includes("permission denied") || error.message.includes("RLS")) {
-      return "Access denied by Supabase Row Level Security. Admin privileges are required to manage personnel records.";
+      return "Access denied by Supabase Row Level Security. Administrative access is required to manage personnel records.";
     }
 
     if (error.message.includes("duplicate key")) {

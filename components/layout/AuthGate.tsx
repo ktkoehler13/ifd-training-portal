@@ -4,6 +4,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { AUTH_MESSAGES } from "@/lib/auth/messages";
+import { isAdministrativeRole } from "@/lib/auth/roles";
 import {
   getClientAuthenticatedPersonnel,
   signOutClientSession,
@@ -83,7 +84,7 @@ export function AdminGate({ children }: AdminGateProps) {
   return (
     <AuthGate>
       {(personnel) => {
-        if (personnel.role !== "admin") {
+        if (!isAdministrativeRole(personnel.role)) {
           return (
             <div className="flex flex-1 flex-col bg-zinc-100">
               <div className="mx-auto flex w-full max-w-2xl flex-1 flex-col justify-center px-4 py-12 sm:px-6">
@@ -92,7 +93,7 @@ export function AdminGate({ children }: AdminGateProps) {
                     Access denied
                   </h1>
                   <p className="mt-2 text-sm leading-6 text-zinc-600">
-                    {AUTH_MESSAGES.adminRequired}
+                    {AUTH_MESSAGES.administrativeAccessRequired}
                   </p>
                   <div className="mt-8">
                     <Link href="/dashboard">
