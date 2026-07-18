@@ -42,6 +42,11 @@ export interface TrainingRequestActionRow {
   signature_name: string | null;
   signed_at: string | null;
   electronic_signature_confirmed: boolean;
+  signature_storage_bucket: string | null;
+  signature_storage_path: string | null;
+  signature_sha256: string | null;
+  signature_mime_type: string | null;
+  signature_file_size_bytes: number | null;
   created_at: string;
 }
 
@@ -57,6 +62,11 @@ export interface TrainingRequestActionRecord {
   signatureName: string | null;
   signedAt: string | null;
   electronicSignatureConfirmed: boolean;
+  signatureStorageBucket: string | null;
+  signatureStoragePath: string | null;
+  signatureSha256: string | null;
+  signatureMimeType: string | null;
+  signatureFileSizeBytes: number | null;
   createdAt: string;
 }
 

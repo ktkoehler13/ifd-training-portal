@@ -66,6 +66,7 @@ Apply these files in order using the Supabase SQL editor:
 5. `supabase/migrations/20260718180000_add_personnel_names.sql`
 6. `supabase/migrations/20260718190000_training_request_approval_workflow.sql`
 7. `supabase/migrations/20260718200000_human_readable_request_numbers.sql`
+8. `supabase/migrations/20260718210000_personnel_signatures.sql`
 
 ### 5. Insert test personnel manually
 
@@ -391,6 +392,48 @@ Email links use:
 8. Confirm a newly submitted 2026 request receives `LastName, F, Course, 2026.1`, the next request receives `.2`, and resubmission does not consume another sequence.
 9. Verify notification rows are created in `public.training_request_notifications`.
 10. Deploy the Edge Function, configure Resend secrets and `APP_BASE_URL`, then trigger the webhook or scheduled job and confirm rows move to `sent`.
+
+### Personnel signatures (Phase 1)
+
+Migration `20260718210000_personnel_signatures.sql` adds secure stored signatures for active **MTO** and **Deputy Chief** personnel only. Admin users do not receive signature access unless their personnel role is exactly `mto` or `deputy_chief`.
+
+**Private storage bucket:** `personnel-signatures`
+
+- The bucket is private (`public = false`).
+- Each owner stores one normalized object at `<personnel-id>/signature.png`.
+- Storage policies allow an authenticated owner to upload, read, replace, and delete only their own folder object.
+- Cross-user access and anonymous access are denied.
+- The browser never receives a permanent public URL. Previews use short-lived signed URLs from protected route handlers.
+- Future PDF generation will use the Supabase service role to read signature bytes server-side. Do not add a service-role key to browser code or `NEXT_PUBLIC_*` variables.
+
+**Supported roles:** `mto`, `deputy_chief`
+
+**Upload rules:**
+
+- PNG only (`image/png`)
+- Maximum file size: 1 MB
+- Recommended dimensions: at least 150 × 50 px and no larger than 2000 × 1000 px
+- Rejected formats include JPEG, SVG, GIF, and PDF
+
+**Certification:** Before saving, the owner must confirm:
+
+“I certify that this is my official signature and authorize the IFD Training Portal to place it on training documents I electronically approve.”
+
+The database trigger assigns `certified_at` on the server. Client-supplied personnel IDs or certification timestamps are not trusted.
+
+**Application route:** `/settings/signature`
+
+MTO and Deputy Chief users can draw or upload a signature, preview the stored PNG, replace it, or delete it. Firefighters and admin-only accounts see access denied.
+
+**Approval snapshot preparation:** The migration adds nullable snapshot columns on `public.training_request_actions`:
+
+- `signature_storage_bucket`
+- `signature_storage_path`
+- `signature_sha256`
+- `signature_mime_type`
+- `signature_file_size_bytes`
+
+These fields will preserve the exact signature image copied at approval time. They are intentionally **not** a live reference to `public.personnel_signatures`, because replacing a signature later must not modify historical approvals. Phase 1 leaves these columns null.
 
 ### Row Level Security
 

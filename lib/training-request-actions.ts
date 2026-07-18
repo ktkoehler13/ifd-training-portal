@@ -32,6 +32,11 @@ export function mapTrainingRequestActionRow(
     signatureName: row.signature_name,
     signedAt: row.signed_at,
     electronicSignatureConfirmed: row.electronic_signature_confirmed,
+    signatureStorageBucket: row.signature_storage_bucket,
+    signatureStoragePath: row.signature_storage_path,
+    signatureSha256: row.signature_sha256,
+    signatureMimeType: row.signature_mime_type,
+    signatureFileSizeBytes: row.signature_file_size_bytes,
     createdAt: row.created_at,
   };
 }

@@ -15,3 +15,7 @@ export function isAdministrativeRole(
     role === "mto" || role === "deputy_chief" || role === "admin"
   );
 }
+
+export function isSignatureEligibleRole(role: PersonnelRole): boolean {
+  return role === "mto" || role === "deputy_chief";
+}

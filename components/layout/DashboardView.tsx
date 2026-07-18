@@ -55,6 +55,12 @@ function getQuickActionCards(
 
   if (personnel.role === "mto" || personnel.role === "deputy_chief") {
     cards.push({
+      title: "My Signature",
+      description:
+        "Draw or upload the PNG signature used when you electronically approve training requests.",
+      href: "/settings/signature",
+    });
+    cards.push({
       title: "Requests Requiring My Action",
       description:
         pendingApprovalCount && pendingApprovalCount > 0
