@@ -2,8 +2,10 @@ import { NextResponse } from "next/server";
 import {
   executeSignatureWorkflowAction,
   TrainingRequestWorkflowAccessError,
+  TrainingRequestWorkflowAmbiguousError,
   TrainingRequestWorkflowValidationError,
 } from "@/lib/training-request-workflow-server";
+import { SIGNATURE_WORKFLOW_AMBIGUOUS_MESSAGE } from "@/lib/training-request-workflow-reconciliation";
 import type { WorkflowActionKind } from "@/lib/training-request-workflow";
 import { isSignatureRequiredWorkflowKind } from "@/lib/training-request-signature-snapshot";
 
@@ -65,6 +67,10 @@ export async function POST(
 
     if (error instanceof TrainingRequestWorkflowValidationError) {
       return badRequestResponse(error.message);
+    }
+
+    if (error instanceof TrainingRequestWorkflowAmbiguousError) {
+      return NextResponse.json({ error: SIGNATURE_WORKFLOW_AMBIGUOUS_MESSAGE }, { status: 409 });
     }
 
     return serverErrorResponse(error);

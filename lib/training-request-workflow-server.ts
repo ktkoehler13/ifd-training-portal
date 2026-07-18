@@ -20,9 +20,13 @@ import {
   verifyUploadedSignatureSnapshot,
 } from "@/lib/training-request-signature-verification";
 import { validateSignatureWorkflowActionInput } from "@/lib/training-request-workflow-policy";
+import {
+  handleSignatureWorkflowCompletionFailure,
+  reconcileSignatureWorkflowCompletion,
+} from "@/lib/training-request-workflow-reconciliation";
 import type { WorkflowActionKind } from "@/lib/training-request-workflow";
 import type { TrainingRequestActionRow } from "@/types/training-request-action";
-import type { TrainingRequestRow } from "@/types/training-request";
+import type { TrainingRequestRow, TrainingRequestRecord } from "@/types/training-request";
 import {
   PERSONNEL_SIGNATURE_MIME_TYPE,
 } from "@/types/personnel-signature";
@@ -39,6 +43,13 @@ export class TrainingRequestWorkflowValidationError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "TrainingRequestWorkflowValidationError";
+  }
+}
+
+export class TrainingRequestWorkflowAmbiguousError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "TrainingRequestWorkflowAmbiguousError";
   }
 }
 
@@ -122,6 +133,89 @@ function findLatestAction(
   }
 
   return null;
+}
+
+function createReconciliationQueries(input: {
+  requestId: string;
+  reservationId: string;
+  snapshotPath: string;
+}) {
+  const service = createServiceRoleClient();
+
+  return {
+    async findMatchingAction() {
+      const { data, error } = await service
+        .from("training_request_actions")
+        .select("id")
+        .eq("id", input.reservationId)
+        .eq("training_request_id", input.requestId)
+        .eq("signature_storage_path", input.snapshotPath)
+        .maybeSingle();
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      return data;
+    },
+    async findReservation() {
+      const { data, error } = await service
+        .from("training_request_signature_action_reservations")
+        .select("consumed_at")
+        .eq("id", input.reservationId)
+        .maybeSingle();
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      return data;
+    },
+    async loadRequest() {
+      const { data, error } = await service
+        .from("training_requests")
+        .select("*")
+        .eq("id", input.requestId)
+        .maybeSingle();
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      return data ? mapTrainingRequestRow(data as TrainingRequestRow) : null;
+    },
+  };
+}
+
+async function tryReturnCommittedSignatureWorkflowAction(input: {
+  requestId: string;
+  reservationId: string;
+  snapshotPath: string;
+  action: WorkflowActionKind;
+}): Promise<TrainingRequestRecord | null> {
+  const reconciliation = await reconcileSignatureWorkflowCompletion({
+    requestId: input.requestId,
+    reservationId: input.reservationId,
+    snapshotPath: input.snapshotPath,
+    ...createReconciliationQueries(input),
+  });
+
+  if (reconciliation.status !== "committed") {
+    return null;
+  }
+
+  if (
+    input.action === "deputy_approve" &&
+    reconciliation.request.status === "approved"
+  ) {
+    try {
+      await generateApprovedTrainingRequestPacket(input.requestId);
+    } catch {
+      // Approval remains successful even when packet generation fails.
+    }
+  }
+
+  return reconciliation.request;
 }
 
 export async function generateApprovedTrainingRequestPacket(
@@ -274,6 +368,7 @@ export async function executeSignatureWorkflowAction(input: {
   }
 
   let snapshotPath: string | null = null;
+  let completionAttempted = false;
 
   try {
     const pngBytes = await loadPersonnelSignaturePng(personnel.id);
@@ -297,6 +392,18 @@ export async function executeSignatureWorkflowAction(input: {
     assertSnapshotMetadataMatchesBucket(snapshotMetadata);
     snapshotPath = snapshotMetadata.storagePath;
 
+    const existingCommittedRequest = await tryReturnCommittedSignatureWorkflowAction({
+      requestId: input.requestId,
+      reservationId,
+      snapshotPath,
+      action: input.action,
+    });
+
+    if (existingCommittedRequest) {
+      return existingCommittedRequest;
+    }
+
+    completionAttempted = true;
     const service = createServiceRoleClient();
     const { data, error: completeError } = await service.rpc(
       "complete_training_request_signature_action",
@@ -332,6 +439,25 @@ export async function executeSignatureWorkflowAction(input: {
 
     return updatedRequest;
   } catch (error) {
+    if (snapshotPath && completionAttempted) {
+      return handleSignatureWorkflowCompletionFailure({
+        requestId: input.requestId,
+        reservationId,
+        snapshotPath,
+        action: input.action,
+        originalError: error,
+        ...createReconciliationQueries({
+          requestId: input.requestId,
+          reservationId,
+          snapshotPath,
+        }),
+        deleteSnapshot: deleteSignatureSnapshot,
+        generateApprovedPacket: generateApprovedTrainingRequestPacket,
+        createAmbiguousError: (message) =>
+          new TrainingRequestWorkflowAmbiguousError(message),
+      });
+    }
+
     if (snapshotPath) {
       await deleteSignatureSnapshot(snapshotPath).catch(() => undefined);
     }

@@ -181,4 +181,10 @@ describe("protected server workflow orchestration", () => {
       /Approval remains successful even when packet generation fails/,
     );
   });
+
+  it("reconciles snapshot cleanup only after the completion RPC is attempted", () => {
+    assert.match(workflowServerSource, /completionAttempted/);
+    assert.match(workflowServerSource, /handleSignatureWorkflowCompletionFailure\(/);
+    assert.match(workflowServerSource, /tryReturnCommittedSignatureWorkflowAction\(/);
+  });
 });
