@@ -1,6 +1,16 @@
-import { addCurrency, roundCurrency } from "@/lib/currency";
-import { calculateMileageReimbursement } from "@/lib/mileage";
-import type { TrainingRequest, TrainingRequestStatus } from "@/types";
+import { roundCurrency } from "@/lib/currency";
+import { calculateExpenseSummary } from "@/lib/expenses";
+import {
+  buildRequestNumberBase,
+  getNextSequenceNumber,
+  matchesRequestNumberSequence,
+  type RequestNumberInput,
+} from "@/lib/requestNumber";
+import {
+  SUPPORTED_TRAINING_REQUEST_STATUSES,
+  type TrainingRequest,
+  type TrainingRequestStatus,
+} from "@/types";
 
 export const PROTOTYPE_REQUESTS_KEY = "ifd_prototype_requests";
 export const PROTOTYPE_REQUESTS_EVENT = "ifd-prototype-requests-changed";
@@ -52,6 +62,39 @@ function asWholeNumber(value: unknown, fallback = 0): number {
   return Math.max(0, Math.trunc(asNumber(value, fallback)));
 }
 
+function asBoolean(value: unknown, fallback = false): boolean {
+  if (typeof value === "boolean") {
+    return value;
+  }
+
+  return fallback;
+}
+
+function parseStatus(value: unknown): TrainingRequestStatus {
+  const status = asString(value);
+
+  if (
+    SUPPORTED_TRAINING_REQUEST_STATUSES.includes(
+      status as TrainingRequestStatus,
+    )
+  ) {
+    return status as TrainingRequestStatus;
+  }
+
+  return "Submitted — Awaiting MTO Review";
+}
+
+export function generateUniqueId(): string {
+  if (
+    typeof crypto !== "undefined" &&
+    typeof crypto.randomUUID === "function"
+  ) {
+    return crypto.randomUUID();
+  }
+
+  return `req-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
+}
+
 export function normalizePrototypeRequest(
   raw: unknown,
 ): TrainingRequest | null {
@@ -95,15 +138,13 @@ export function normalizePrototypeRequest(
     record.courseDescription ?? course?.description,
   ).trim();
 
-  const numberOfDaysOnDuty = asWholeNumber(
-    record.numberOfDaysOnDuty,
-    0,
-  );
+  const numberOfDaysOnDuty = asWholeNumber(record.numberOfDaysOnDuty, 0);
+  const requestDepartmentVehicle = asBoolean(record.requestDepartmentVehicle);
 
   const registrationFee = roundCurrency(
     asNumber(record.registrationFee ?? expenses?.registrationFee),
   );
-  const totalReimbursableMiles = Math.max(
+  const storedMiles = Math.max(
     0,
     asNumber(
       record.totalReimbursableMiles ??
@@ -111,17 +152,16 @@ export function normalizePrototypeRequest(
         expenses?.mileage,
     ),
   );
+  const totalReimbursableMiles = requestDepartmentVehicle ? 0 : storedMiles;
   const gsaMileageRate = Math.max(0, asNumber(record.gsaMileageRate));
-  const storedMileageReimbursement = record.mileageReimbursement;
-  const mileageReimbursement =
-    storedMileageReimbursement === undefined
-      ? calculateMileageReimbursement(totalReimbursableMiles, gsaMileageRate)
-      : roundCurrency(asNumber(storedMileageReimbursement));
 
   const lodging = roundCurrency(asNumber(record.lodging ?? expenses?.lodging));
   const airfare = roundCurrency(asNumber(record.airfare ?? expenses?.airfare));
   const rentalVehicle = roundCurrency(
     asNumber(record.rentalVehicle ?? expenses?.rentalVehicle),
+  );
+  const foodExpenses = roundCurrency(
+    asNumber(record.foodExpenses ?? expenses?.foodExpenses),
   );
   const otherExpenses = roundCurrency(
     asNumber(record.otherExpenses ?? expenses?.otherExpenses),
@@ -130,24 +170,28 @@ export function normalizePrototypeRequest(
     record.transportationNotes ?? expenses?.transportationNotes,
   ).trim();
 
+  const expenseSummary = calculateExpenseSummary({
+    requestDepartmentVehicle,
+    totalReimbursableMiles,
+    gsaMileageRate,
+    registrationFee,
+    lodging,
+    airfare,
+    rentalVehicle,
+    foodExpenses,
+    otherExpenses,
+  });
+
   const storedTotal = record.totalEstimatedExpenses;
   const totalEstimatedExpenses =
     storedTotal === undefined
-      ? addCurrency(
-          registrationFee,
-          mileageReimbursement,
-          lodging,
-          airfare,
-          rentalVehicle,
-          otherExpenses,
-        )
+      ? expenseSummary.totalEstimatedExpenses
       : roundCurrency(asNumber(storedTotal));
 
-  const status =
-    asString(record.status, "Submitted — Awaiting MTO Review") ||
-    "Submitted — Awaiting MTO Review";
+  const id = asString(record.id).trim() || generateUniqueId();
 
   return {
+    id,
     requestNumber,
     requesterName,
     badgeNumber,
@@ -160,17 +204,19 @@ export function normalizePrototypeRequest(
     courseEndDate,
     numberOfDaysOnDuty,
     courseDescription,
+    requestDepartmentVehicle,
     registrationFee,
-    totalReimbursableMiles,
+    totalReimbursableMiles: expenseSummary.totalReimbursableMiles,
     gsaMileageRate,
-    mileageReimbursement,
+    mileageReimbursement: expenseSummary.mileageReimbursement,
     lodging,
     airfare,
     rentalVehicle,
+    foodExpenses,
     otherExpenses,
     transportationNotes,
     totalEstimatedExpenses,
-    status: status as TrainingRequestStatus,
+    status: parseStatus(record.status),
     submittedAt: asString(record.submittedAt, new Date(0).toISOString()),
   };
 }
@@ -213,23 +259,20 @@ export function savePrototypeRequest(request: TrainingRequest): void {
   const existing = getPrototypeRequests();
   const next = [
     request,
-    ...existing.filter((item) => item.requestNumber !== request.requestNumber),
+    ...existing.filter((item) => item.id !== request.id),
   ];
   localStorage.setItem(PROTOTYPE_REQUESTS_KEY, JSON.stringify(next));
   notifyRequestsChanged();
 }
 
-export function generateRequestNumber(now = new Date()): string {
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const day = String(now.getDate()).padStart(2, "0");
-  const dateStamp = `${year}${month}${day}`;
-  const prefix = `IFD-TR-${dateStamp}-`;
-
-  const sameDayCount = getPrototypeRequests().filter((request) =>
-    request.requestNumber.startsWith(prefix),
+export function generateRequestNumber(input: RequestNumberInput): string {
+  const existing = getPrototypeRequests();
+  const matchingCount = existing.filter((request) =>
+    matchesRequestNumberSequence(request, input),
   ).length;
 
-  const sequence = String(sameDayCount + 1).padStart(3, "0");
-  return `${prefix}${sequence}`;
+  const base = buildRequestNumberBase(input);
+  const sequence = getNextSequenceNumber(matchingCount);
+
+  return `${base}-${sequence}`;
 }

@@ -9,7 +9,6 @@ import { Field } from "@/components/ui/Field";
 import { Input } from "@/components/ui/Input";
 import { Textarea } from "@/components/ui/Textarea";
 import {
-  addCurrency,
   formatCurrency,
   formatCurrencyInput,
   formatMileageRate,
@@ -17,15 +16,20 @@ import {
   parseCurrencyInput,
 } from "@/lib/currency";
 import {
-  calculateMileageReimbursement,
+  calculateExpenseSummary,
+  formatDepartmentVehicle,
+} from "@/lib/expenses";
+import {
   getGsaMileageRate,
   isValidMilesInput,
   parseMilesInput,
 } from "@/lib/mileage";
 import {
   generateRequestNumber,
+  generateUniqueId,
   savePrototypeRequest,
 } from "@/lib/prototypeRequests";
+import { buildRequestNumberPreview } from "@/lib/requestNumber";
 import type { TrainingRequest, TrainingRequestDraft } from "@/types";
 import { cn } from "@/lib/utils";
 
@@ -43,11 +47,13 @@ const initialDraft: TrainingRequestDraft = {
   courseEndDate: "",
   numberOfDaysOnDuty: "",
   courseDescription: "",
+  requestDepartmentVehicle: false,
   registrationFee: "",
   totalReimbursableMiles: "",
   lodging: "",
   airfare: "",
   rentalVehicle: "",
+  foodExpenses: "",
   otherExpenses: "",
   transportationNotes: "",
   confirmedAccurate: false,
@@ -82,6 +88,7 @@ export function TrainingRequestWizard() {
   const router = useRouter();
   const [step, setStep] = useState(1);
   const [draft, setDraft] = useState<TrainingRequestDraft>(initialDraft);
+  const [preservedMileage, setPreservedMileage] = useState("");
   const [errors, setErrors] = useState<DraftErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -90,41 +97,47 @@ export function TrainingRequestWizard() {
   const activeRate = gsaMileageRate ?? 0;
 
   const registrationFee = parseCurrencyInput(draft.registrationFee);
-  const totalReimbursableMiles = parseMilesInput(draft.totalReimbursableMiles);
+  const rawMiles = parseMilesInput(draft.totalReimbursableMiles);
   const lodging = parseCurrencyInput(draft.lodging);
   const airfare = parseCurrencyInput(draft.airfare);
   const rentalVehicle = parseCurrencyInput(draft.rentalVehicle);
+  const foodExpenses = parseCurrencyInput(draft.foodExpenses);
   const otherExpenses = parseCurrencyInput(draft.otherExpenses);
-  const mileageReimbursement = calculateMileageReimbursement(
-    totalReimbursableMiles,
-    activeRate,
-  );
-  const totalEstimatedExpenses = addCurrency(
-    registrationFee,
-    mileageReimbursement,
-    lodging,
-    airfare,
-    rentalVehicle,
-    otherExpenses,
-  );
 
-  const expenseSummary = {
-    registrationFee,
-    totalReimbursableMiles,
+  const expenseSummary = calculateExpenseSummary({
+    requestDepartmentVehicle: draft.requestDepartmentVehicle,
+    totalReimbursableMiles: rawMiles,
     gsaMileageRate: activeRate,
-    mileageReimbursement,
+    registrationFee,
     lodging,
     airfare,
     rentalVehicle,
+    foodExpenses,
     otherExpenses,
-    totalEstimatedExpenses,
-  };
+  });
+
+  const requestNumberPreview = buildRequestNumberPreview({
+    requesterName: draft.requesterName,
+    courseName: draft.courseName,
+    courseStartDate: draft.courseStartDate,
+  });
 
   function updateField<K extends keyof TrainingRequestDraft>(
     key: K,
     value: TrainingRequestDraft[K],
   ) {
     setDraft((current) => ({ ...current, [key]: value }));
+  }
+
+  function handleDepartmentVehicleChange(checked: boolean) {
+    if (checked) {
+      setPreservedMileage(draft.totalReimbursableMiles);
+      updateField("requestDepartmentVehicle", true);
+      return;
+    }
+
+    updateField("requestDepartmentVehicle", false);
+    updateField("totalReimbursableMiles", preservedMileage);
   }
 
   function validateStep(currentStep: number): DraftErrors {
@@ -187,6 +200,7 @@ export function TrainingRequestWizard() {
         "lodging",
         "airfare",
         "rentalVehicle",
+        "foodExpenses",
         "otherExpenses",
       ] as const;
 
@@ -196,7 +210,10 @@ export function TrainingRequestWizard() {
         }
       }
 
-      if (!isValidMilesInput(draft.totalReimbursableMiles)) {
+      if (
+        !draft.requestDepartmentVehicle &&
+        !isValidMilesInput(draft.totalReimbursableMiles)
+      ) {
         nextErrors.totalReimbursableMiles =
           "Enter total reimbursable miles of zero or greater.";
       }
@@ -231,6 +248,7 @@ export function TrainingRequestWizard() {
       | "lodging"
       | "airfare"
       | "rentalVehicle"
+      | "foodExpenses"
       | "otherExpenses",
   ) {
     updateField(key, formatCurrencyInput(draft[key]));
@@ -252,8 +270,14 @@ export function TrainingRequestWizard() {
 
     setIsSubmitting(true);
 
-    const requestNumber = generateRequestNumber();
+    const requestNumber = generateRequestNumber({
+      requesterName: draft.requesterName.trim(),
+      courseName: draft.courseName.trim(),
+      courseStartDate: draft.courseStartDate,
+    });
+
     const request: TrainingRequest = {
+      id: generateUniqueId(),
       requestNumber,
       requesterName: draft.requesterName.trim(),
       badgeNumber: draft.badgeNumber.trim(),
@@ -266,16 +290,18 @@ export function TrainingRequestWizard() {
       courseEndDate: draft.courseEndDate,
       numberOfDaysOnDuty: Number.parseInt(draft.numberOfDaysOnDuty, 10),
       courseDescription: draft.courseDescription.trim(),
+      requestDepartmentVehicle: draft.requestDepartmentVehicle,
       registrationFee,
-      totalReimbursableMiles,
+      totalReimbursableMiles: expenseSummary.totalReimbursableMiles,
       gsaMileageRate: activeRate,
-      mileageReimbursement,
+      mileageReimbursement: expenseSummary.mileageReimbursement,
       lodging,
       airfare,
       rentalVehicle,
+      foodExpenses,
       otherExpenses,
       transportationNotes: draft.transportationNotes.trim(),
-      totalEstimatedExpenses,
+      totalEstimatedExpenses: expenseSummary.totalEstimatedExpenses,
       status: "Submitted — Awaiting MTO Review",
       submittedAt: new Date().toISOString(),
     };
@@ -527,7 +553,7 @@ export function TrainingRequestWizard() {
         ) : null}
 
         {step === 3 ? (
-          <section className="space-y-5" aria-labelledby="step-3-heading">
+          <section className="space-y-6" aria-labelledby="step-3-heading">
             <div>
               <h2
                 id="step-3-heading"
@@ -549,103 +575,185 @@ export function TrainingRequestWizard() {
                 <code className="font-mono text-xs">
                   NEXT_PUBLIC_GSA_MILEAGE_RATE
                 </code>{" "}
-                before submitting mileage reimbursement.
+                to a value greater than zero before submitting.
               </div>
-            ) : (
-              <div
-                className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-700"
-                role="status"
-              >
-                Current GSA mileage rate:{" "}
-                <span className="font-semibold">
-                  {formatMileageRate(activeRate)}
-                </span>{" "}
-                per mile. Enter total reimbursable miles for the complete trip,
-                including round-trip miles when applicable.
-              </div>
-            )}
+            ) : null}
 
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field
-                id="registrationFee"
-                label="Registration Fee"
-                error={errors.registrationFee}
-                optional
-              >
-                <CurrencyInput
-                  id="registrationFee"
-                  value={draft.registrationFee}
-                  error={errors.registrationFee}
-                  onChange={(value) => updateField("registrationFee", value)}
-                  onBlur={() => handleCurrencyBlur("registrationFee")}
-                />
-              </Field>
-              <Field
-                id="totalReimbursableMiles"
-                label="Total Reimbursable Miles"
-                error={errors.totalReimbursableMiles}
-                optional
-              >
-                <Input
-                  id="totalReimbursableMiles"
-                  inputMode="decimal"
-                  value={draft.totalReimbursableMiles}
+            <FormSection title="Transportation">
+              <label className="flex items-start gap-3 rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-4 text-sm text-zinc-800">
+                <input
+                  type="checkbox"
+                  className="mt-1 h-4 w-4 rounded border-zinc-300 text-red-700 focus:ring-red-700"
+                  checked={draft.requestDepartmentVehicle}
                   onChange={(event) =>
-                    updateField("totalReimbursableMiles", event.target.value)
-                  }
-                  placeholder="0"
-                  aria-invalid={
-                    errors.totalReimbursableMiles ? true : undefined
-                  }
-                  aria-describedby={
-                    errors.totalReimbursableMiles
-                      ? "totalReimbursableMiles-error"
-                      : undefined
+                    handleDepartmentVehicleChange(event.target.checked)
                   }
                 />
-              </Field>
-              <Field
-                id="lodging"
-                label="Lodging"
-                error={errors.lodging}
-                optional
-              >
-                <CurrencyInput
+                <span>
+                  <span className="font-medium">Request Department Vehicle</span>
+                  <span className="mt-1 block text-zinc-600">
+                    Check this box when a department vehicle will be used and
+                    personal mileage reimbursement does not apply.
+                  </span>
+                </span>
+              </label>
+
+              {draft.requestDepartmentVehicle ? (
+                <p
+                  className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900"
+                  role="status"
+                >
+                  Personal mileage reimbursement does not apply when a
+                  department vehicle is requested.
+                </p>
+              ) : null}
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field
+                  id="totalReimbursableMiles"
+                  label="Total Reimbursable Miles"
+                  error={errors.totalReimbursableMiles}
+                  optional
+                >
+                  <Input
+                    id="totalReimbursableMiles"
+                    inputMode="decimal"
+                    value={
+                      draft.requestDepartmentVehicle
+                        ? "0"
+                        : draft.totalReimbursableMiles
+                    }
+                    onChange={(event) =>
+                      updateField("totalReimbursableMiles", event.target.value)
+                    }
+                    placeholder="0"
+                    disabled={draft.requestDepartmentVehicle}
+                    aria-invalid={
+                      errors.totalReimbursableMiles ? true : undefined
+                    }
+                    aria-describedby={
+                      errors.totalReimbursableMiles
+                        ? "totalReimbursableMiles-error"
+                        : undefined
+                    }
+                  />
+                </Field>
+                <Field id="gsaMileageRateDisplay" label="GSA Mileage Rate">
+                  <Input
+                    id="gsaMileageRateDisplay"
+                    value={
+                      rateAvailable
+                        ? `${formatMileageRate(activeRate)} / mile`
+                        : "Not configured"
+                    }
+                    disabled
+                    readOnly
+                  />
+                </Field>
+                <Field id="mileageReimbursementDisplay" label="Mileage Reimbursement">
+                  <Input
+                    id="mileageReimbursementDisplay"
+                    value={formatCurrency(expenseSummary.mileageReimbursement)}
+                    disabled
+                    readOnly
+                  />
+                </Field>
+                <Field
+                  id="transportationNotes"
+                  label="Transportation Notes"
+                  optional
+                  className="sm:col-span-2"
+                >
+                  <Textarea
+                    id="transportationNotes"
+                    value={draft.transportationNotes}
+                    onChange={(event) =>
+                      updateField("transportationNotes", event.target.value)
+                    }
+                  />
+                </Field>
+              </div>
+            </FormSection>
+
+            <FormSection title="Course and Travel Expenses">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field
+                  id="registrationFee"
+                  label="Registration Fee"
+                  error={errors.registrationFee}
+                  optional
+                >
+                  <CurrencyInput
+                    id="registrationFee"
+                    value={draft.registrationFee}
+                    error={errors.registrationFee}
+                    onChange={(value) => updateField("registrationFee", value)}
+                    onBlur={() => handleCurrencyBlur("registrationFee")}
+                  />
+                </Field>
+                <Field
                   id="lodging"
-                  value={draft.lodging}
+                  label="Lodging"
                   error={errors.lodging}
-                  onChange={(value) => updateField("lodging", value)}
-                  onBlur={() => handleCurrencyBlur("lodging")}
-                />
-              </Field>
-              <Field
-                id="airfare"
-                label="Airfare"
-                error={errors.airfare}
-                optional
-              >
-                <CurrencyInput
+                  optional
+                >
+                  <CurrencyInput
+                    id="lodging"
+                    value={draft.lodging}
+                    error={errors.lodging}
+                    onChange={(value) => updateField("lodging", value)}
+                    onBlur={() => handleCurrencyBlur("lodging")}
+                  />
+                </Field>
+                <Field
                   id="airfare"
-                  value={draft.airfare}
+                  label="Airfare"
                   error={errors.airfare}
-                  onChange={(value) => updateField("airfare", value)}
-                  onBlur={() => handleCurrencyBlur("airfare")}
-                />
-              </Field>
+                  optional
+                >
+                  <CurrencyInput
+                    id="airfare"
+                    value={draft.airfare}
+                    error={errors.airfare}
+                    onChange={(value) => updateField("airfare", value)}
+                    onBlur={() => handleCurrencyBlur("airfare")}
+                  />
+                </Field>
+                <Field
+                  id="rentalVehicle"
+                  label="Rental Vehicle"
+                  error={errors.rentalVehicle}
+                  optional
+                >
+                  <CurrencyInput
+                    id="rentalVehicle"
+                    value={draft.rentalVehicle}
+                    error={errors.rentalVehicle}
+                    onChange={(value) => updateField("rentalVehicle", value)}
+                    onBlur={() => handleCurrencyBlur("rentalVehicle")}
+                  />
+                </Field>
+              </div>
+            </FormSection>
+
+            <FormSection title="Food Expenses">
               <Field
-                id="rentalVehicle"
-                label="Rental Vehicle"
-                error={errors.rentalVehicle}
+                id="foodExpenses"
+                label="Food / Meals"
+                error={errors.foodExpenses}
                 optional
               >
                 <CurrencyInput
-                  id="rentalVehicle"
-                  value={draft.rentalVehicle}
-                  error={errors.rentalVehicle}
-                  onChange={(value) => updateField("rentalVehicle", value)}
-                  onBlur={() => handleCurrencyBlur("rentalVehicle")}
+                  id="foodExpenses"
+                  value={draft.foodExpenses}
+                  error={errors.foodExpenses}
+                  onChange={(value) => updateField("foodExpenses", value)}
+                  onBlur={() => handleCurrencyBlur("foodExpenses")}
                 />
               </Field>
+            </FormSection>
+
+            <FormSection title="Other">
               <Field
                 id="otherExpenses"
                 label="Other Expenses"
@@ -660,21 +768,7 @@ export function TrainingRequestWizard() {
                   onBlur={() => handleCurrencyBlur("otherExpenses")}
                 />
               </Field>
-              <Field
-                id="transportationNotes"
-                label="Transportation Notes"
-                optional
-                className="sm:col-span-2"
-              >
-                <Textarea
-                  id="transportationNotes"
-                  value={draft.transportationNotes}
-                  onChange={(event) =>
-                    updateField("transportationNotes", event.target.value)
-                  }
-                />
-              </Field>
-            </div>
+            </FormSection>
 
             {errors.gsaMileageRate ? (
               <p role="alert" className="text-sm text-red-700">
@@ -700,6 +794,19 @@ export function TrainingRequestWizard() {
               </h2>
               <p className="mt-1 text-sm text-zinc-600">
                 Confirm the details below, then submit your training request.
+              </p>
+            </div>
+
+            <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-4">
+              <p className="text-xs font-medium tracking-wide text-zinc-500 uppercase">
+                Request number preview
+              </p>
+              <p className="mt-1 text-sm font-semibold text-zinc-900">
+                {requestNumberPreview}
+              </p>
+              <p className="mt-1 text-xs text-zinc-500">
+                The final sequence number may change if another matching request
+                is submitted first.
               </p>
             </div>
 
@@ -741,14 +848,15 @@ export function TrainingRequestWizard() {
 
             <ReviewSection title="Travel and Expenses">
               <ReviewItem
-                label="Registration Fee"
-                value={formatCurrency(registrationFee)}
+                label="Department Vehicle Requested"
+                value={formatDepartmentVehicle(draft.requestDepartmentVehicle)}
               />
               <ReviewItem
                 label="Total Reimbursable Miles"
-                value={totalReimbursableMiles.toLocaleString("en-US", {
-                  maximumFractionDigits: 2,
-                })}
+                value={expenseSummary.totalReimbursableMiles.toLocaleString(
+                  "en-US",
+                  { maximumFractionDigits: 2 },
+                )}
               />
               <ReviewItem
                 label="GSA Mileage Rate Used"
@@ -760,13 +868,21 @@ export function TrainingRequestWizard() {
               />
               <ReviewItem
                 label="Mileage Reimbursement"
-                value={formatCurrency(mileageReimbursement)}
+                value={formatCurrency(expenseSummary.mileageReimbursement)}
+              />
+              <ReviewItem
+                label="Registration Fee"
+                value={formatCurrency(registrationFee)}
               />
               <ReviewItem label="Lodging" value={formatCurrency(lodging)} />
               <ReviewItem label="Airfare" value={formatCurrency(airfare)} />
               <ReviewItem
                 label="Rental Vehicle"
                 value={formatCurrency(rentalVehicle)}
+              />
+              <ReviewItem
+                label="Food / Meals"
+                value={formatCurrency(foodExpenses)}
               />
               <ReviewItem
                 label="Other Expenses"
@@ -779,7 +895,7 @@ export function TrainingRequestWizard() {
               />
               <ReviewItem
                 label="Total Estimated Expenses"
-                value={formatCurrency(totalEstimatedExpenses)}
+                value={formatCurrency(expenseSummary.totalEstimatedExpenses)}
               />
             </ReviewSection>
 
@@ -853,6 +969,23 @@ export function TrainingRequestWizard() {
         </div>
       </form>
     </div>
+  );
+}
+
+function FormSection({
+  title,
+  children,
+}: {
+  title: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className="space-y-4">
+      <h3 className="text-sm font-semibold tracking-wide text-zinc-500 uppercase">
+        {title}
+      </h3>
+      {children}
+    </section>
   );
 }
 
