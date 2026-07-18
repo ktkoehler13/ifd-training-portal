@@ -920,9 +920,22 @@ begin
 end;
 $$;
 
-  return request_row;
-end;
-$$;
+alter table public.training_request_notifications
+  add column if not exists next_attempt_at timestamptz,
+  add column if not exists processing_started_at timestamptz;
+
+update public.training_request_notifications
+set next_attempt_at = coalesce(next_attempt_at, created_at, now())
+where next_attempt_at is null;
+
+alter table public.training_request_notifications
+  alter column next_attempt_at set default now();
+
+alter table public.training_request_notifications
+  alter column next_attempt_at set not null;
+
+create index if not exists training_request_notifications_claim_idx
+  on public.training_request_notifications (status, next_attempt_at, created_at);
 
 create or replace function public.claim_pending_training_request_notifications(
   batch_size integer default 25
@@ -935,17 +948,42 @@ as $$
 begin
   return query
   with candidates as (
-    select n.id
+    select
+      n.id,
+      case
+        when n.status = 'processing' then false
+        else true
+      end as should_increment_attempts
     from public.training_request_notifications as n
-    where n.status = 'pending'
-    order by n.created_at
+    where (
+      (
+        n.status = 'pending'
+        and n.next_attempt_at <= now()
+      )
+      or (
+        n.status = 'failed'
+        and n.attempts < 5
+        and n.next_attempt_at <= now()
+      )
+      or (
+        n.status = 'processing'
+        and n.processing_started_at is not null
+        and n.processing_started_at <= now() - interval '15 minutes'
+        and n.attempts < 5
+      )
+    )
+    order by n.next_attempt_at, n.created_at
     limit greatest(batch_size, 1)
     for update skip locked
   )
   update public.training_request_notifications as n
   set
     status = 'processing',
-    attempts = n.attempts + 1
+    processing_started_at = now(),
+    attempts = case
+      when c.should_increment_attempts then n.attempts + 1
+      else n.attempts
+    end
   from candidates as c
   where n.id = c.id
   returning n.*;
@@ -1040,6 +1078,11 @@ revoke all on function public.claim_pending_training_request_notifications(integ
 revoke all on function public.claim_pending_training_request_notifications(integer) from anon;
 revoke all on function public.claim_pending_training_request_notifications(integer) from authenticated;
 
+grant execute on function public.claim_pending_training_request_notifications(integer) to service_role;
+
+grant select, update on table public.training_request_notifications to service_role;
+grant select on table public.training_requests to service_role;
+
 grant execute on function public.submit_training_request(uuid) to authenticated;
 grant execute on function public.resubmit_training_request(uuid) to authenticated;
 grant execute on function public.mto_approve_training_request(uuid, text) to authenticated;
@@ -1069,3 +1112,6 @@ comment on function public.mto_approve_training_request(uuid, text) is
 
 comment on function public.deputy_approve_training_request(uuid, text) is
   'Records an authenticated Deputy Chief electronic signature and marks the request approved.';
+
+comment on function public.claim_pending_training_request_notifications(integer) is
+  'Claims pending, retryable failed, and stale processing notification rows for delivery. Uses FOR UPDATE SKIP LOCKED and increments attempts only for new claims, not stale processing recovery.';
