@@ -25,12 +25,6 @@ export function PersonnelFormFields({
   disabledFields,
   selfEditNotice,
 }: PersonnelFormFieldsProps) {
-  const identityDisabled =
-    disabled ||
-    disabledFields?.badgeNumber ||
-    disabledFields?.email ||
-    disabledFields?.role;
-
   return (
     <>
       {selfEditNotice ? (
@@ -105,7 +99,7 @@ export function PersonnelFormFields({
               onChange={(event) =>
                 onChange({ ...values, active: event.target.checked })
               }
-              disabled={disabled || disabledFields?.active || identityDisabled}
+              disabled={disabled || disabledFields?.active}
             />
             Active user
           </label>

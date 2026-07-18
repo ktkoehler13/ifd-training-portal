@@ -35,7 +35,11 @@ export function LandingGate() {
   const reasonError =
     reason === "access-denied" ? AUTH_MESSAGES.accessDenied : null;
   const reasonStatus =
-    reason === "sign-in-required" ? "Sign in to continue." : null;
+    reason === "sign-in-required"
+      ? "Sign in to continue."
+      : reason === "email-updated"
+        ? AUTH_MESSAGES.emailUpdatedSignInRequired
+        : null;
 
   useEffect(() => {
     if (!resendAvailableAt) {

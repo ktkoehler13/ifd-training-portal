@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { startTransition, useCallback, useEffect, useMemo, useState } from "react";
 import { AddUserForm } from "@/components/admin/AddUserForm";
 import { DeleteUserDialog } from "@/components/admin/DeleteUserDialog";
@@ -9,10 +10,14 @@ import { StatusChangeDialog } from "@/components/admin/StatusChangeDialog";
 import { UsersTable } from "@/components/admin/UsersTable";
 import { SignOutButton } from "@/components/auth/SignOutButton";
 import { AdminGate } from "@/components/layout/AuthGate";
+import { signOutClientSession } from "@/lib/auth/client";
 import type { AuthenticatedPersonnel } from "@/lib/auth/personnel";
 import {
   getPersonnelErrorMessage,
+  isSamePersonnelRecord,
   mapPersonnelRow,
+  normalizePersonnelEmail,
+  SELF_ACCOUNT_PROTECTION_MESSAGE,
 } from "@/lib/personnel";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
@@ -41,6 +46,7 @@ interface UserManagementContentProps {
 }
 
 function UserManagementContent({ currentPersonnel }: UserManagementContentProps) {
+  const router = useRouter();
   const [users, setUsers] = useState<PersonnelRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -145,6 +151,15 @@ function UserManagementContent({ currentPersonnel }: UserManagementContentProps)
       throw new Error(configError);
     }
 
+    const targetUser = users.find((user) => user.id === userId);
+    const isSelfEdit =
+      targetUser !== undefined &&
+      isSamePersonnelRecord(targetUser, currentPersonnel.email);
+
+    if (isSelfEdit && !input.active) {
+      throw new Error(SELF_ACCOUNT_PROTECTION_MESSAGE);
+    }
+
     const supabase = createClient();
     const { data, error } = await supabase
       .from("personnel")
@@ -163,10 +178,24 @@ function UserManagementContent({ currentPersonnel }: UserManagementContentProps)
     }
 
     const updated = mapPersonnelRow(data as PersonnelRow);
+    const emailChangedOnSelf =
+      isSelfEdit &&
+      normalizePersonnelEmail(input.email) !==
+        normalizePersonnelEmail(currentPersonnel.email);
+
+    if (emailChangedOnSelf) {
+      return;
+    }
+
     setUsers((current) =>
       current.map((user) => (user.id === userId ? updated : user)),
     );
     showSuccess(`Updated ${updated.badgeNumber} (${updated.email}).`);
+  }
+
+  async function handleSelfEmailUpdated() {
+    await signOutClientSession();
+    router.replace("/?reason=email-updated");
   }
 
   async function handleChangeActiveStatus(userId: string, active: boolean) {
@@ -366,6 +395,7 @@ function UserManagementContent({ currentPersonnel }: UserManagementContentProps)
         currentUserEmail={currentPersonnel.email}
         onClose={() => setEditingUser(null)}
         onSave={handleEditUser}
+        onSelfEmailUpdated={handleSelfEmailUpdated}
       />
 
       <StatusChangeDialog

@@ -13,6 +13,8 @@ export const AUTH_MESSAGES = {
     `You can request a new link in ${seconds} seconds.`,
   configError:
     "Authentication is temporarily unavailable. Contact the Training Bureau.",
+  emailUpdatedSignInRequired:
+    "Email updated. Sign in again using your new email address.",
 } as const;
 
 export function getSafeAuthErrorMessage(error: unknown): string {

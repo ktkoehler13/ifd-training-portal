@@ -38,6 +38,49 @@ export function isPersonnelRole(value: string): value is PersonnelRole {
 export const SELF_ACCOUNT_PROTECTION_MESSAGE =
   "You cannot deactivate or delete your own signed-in account.";
 
+export const SELF_EDIT_NOTICE =
+  "You cannot deactivate or delete your own signed-in account. Changing your email will sign you out.";
+
+export const SELF_EDIT_EMAIL_CONFIRM_MESSAGE =
+  "Changing your email will sign you out. Future sign-in links will be sent to the new email address.";
+
+export const SELF_EDIT_IDENTITY_CONFIRM_MESSAGE =
+  "Changing your own badge number or role can affect how your account is identified and authorized. Continue only if you intend to make this change.";
+
+export interface SelfEditChanges {
+  emailChanged: boolean;
+  badgeChanged: boolean;
+  roleChanged: boolean;
+  activeChanged: boolean;
+  hasChanges: boolean;
+  requiresEmailSignOut: boolean;
+  requiresIdentityConfirmation: boolean;
+}
+
+export function getSelfEditChanges(
+  user: PersonnelRecord,
+  values: PersonnelFormValues,
+  currentUserEmail: string,
+): SelfEditChanges {
+  const normalizedCurrentEmail = normalizePersonnelEmail(currentUserEmail);
+  const normalizedNextEmail = normalizePersonnelEmail(values.email);
+  const emailChanged = normalizedNextEmail !== normalizedCurrentEmail;
+  const badgeChanged = values.badgeNumber.trim() !== user.badgeNumber;
+  const roleChanged = values.role !== user.role;
+  const activeChanged = values.active !== user.active;
+  const hasChanges = emailChanged || badgeChanged || roleChanged || activeChanged;
+
+  return {
+    emailChanged,
+    badgeChanged,
+    roleChanged,
+    activeChanged,
+    hasChanges,
+    requiresEmailSignOut: emailChanged,
+    requiresIdentityConfirmation: badgeChanged || roleChanged,
+  };
+}
+
 export interface PersonnelFormValues {
   badgeNumber: string;
   email: string;
