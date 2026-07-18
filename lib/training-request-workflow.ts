@@ -3,6 +3,7 @@ import {
   mapTrainingRequestRow,
   getTrainingRequestErrorMessage,
 } from "@/lib/training-requests";
+import { isSignatureRequiredWorkflowKind } from "@/lib/training-request-signature-snapshot";
 import type { TrainingRequestRecord, TrainingRequestRow } from "@/types/training-request";
 
 export type WorkflowActionKind =
@@ -37,6 +38,43 @@ async function callWorkflowRpc(
   return mapWorkflowRow(data);
 }
 
+async function callSignatureWorkflowApi(
+  requestId: string,
+  action: WorkflowActionKind,
+  comments: string | null,
+  electronicSignatureConfirmed: boolean,
+): Promise<TrainingRequestRecord> {
+  const response = await fetch(
+    `/api/training-requests/${encodeURIComponent(requestId)}/workflow`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        action,
+        comments,
+        electronicSignatureConfirmed,
+      }),
+    },
+  );
+
+  const payload = (await response.json()) as {
+    error?: string;
+    request?: TrainingRequestRow;
+  };
+
+  if (!response.ok) {
+    throw new Error(payload.error ?? "Unable to complete this workflow action.");
+  }
+
+  if (!payload.request) {
+    throw new Error("Workflow action did not return an updated request.");
+  }
+
+  return mapWorkflowRow(payload.request);
+}
+
 export async function submitTrainingRequestWorkflow(
   requestId: string,
 ): Promise<TrainingRequestRecord> {
@@ -58,11 +96,12 @@ export async function mtoApproveTrainingRequest(
   comments: string | null | undefined,
   electronicSignatureConfirmed: boolean,
 ): Promise<TrainingRequestRecord> {
-  return callWorkflowRpc("mto_approve_training_request", {
-    p_request_id: requestId,
-    p_comments: comments?.trim() || null,
-    p_electronic_signature_confirmed: electronicSignatureConfirmed,
-  });
+  return callSignatureWorkflowApi(
+    requestId,
+    "mto_approve",
+    comments?.trim() || null,
+    electronicSignatureConfirmed,
+  );
 }
 
 export async function mtoReturnTrainingRequest(
@@ -78,11 +117,14 @@ export async function mtoReturnTrainingRequest(
 export async function mtoDenyTrainingRequest(
   requestId: string,
   comments: string,
+  electronicSignatureConfirmed: boolean,
 ): Promise<TrainingRequestRecord> {
-  return callWorkflowRpc("mto_deny_training_request", {
-    p_request_id: requestId,
-    p_comments: comments.trim(),
-  });
+  return callSignatureWorkflowApi(
+    requestId,
+    "mto_deny",
+    comments.trim(),
+    electronicSignatureConfirmed,
+  );
 }
 
 export async function deputyApproveTrainingRequest(
@@ -90,11 +132,12 @@ export async function deputyApproveTrainingRequest(
   comments: string | null | undefined,
   electronicSignatureConfirmed: boolean,
 ): Promise<TrainingRequestRecord> {
-  return callWorkflowRpc("deputy_approve_training_request", {
-    p_request_id: requestId,
-    p_comments: comments?.trim() || null,
-    p_electronic_signature_confirmed: electronicSignatureConfirmed,
-  });
+  return callSignatureWorkflowApi(
+    requestId,
+    "deputy_approve",
+    comments?.trim() || null,
+    electronicSignatureConfirmed,
+  );
 }
 
 export async function deputyReturnTrainingRequest(
@@ -110,12 +153,17 @@ export async function deputyReturnTrainingRequest(
 export async function deputyDenyTrainingRequest(
   requestId: string,
   comments: string,
+  electronicSignatureConfirmed: boolean,
 ): Promise<TrainingRequestRecord> {
-  return callWorkflowRpc("deputy_deny_training_request", {
-    p_request_id: requestId,
-    p_comments: comments.trim(),
-  });
+  return callSignatureWorkflowApi(
+    requestId,
+    "deputy_deny",
+    comments.trim(),
+    electronicSignatureConfirmed,
+  );
 }
+
+export { isSignatureRequiredWorkflowKind };
 
 export async function countPendingApprovalsForRole(
   role: "mto" | "deputy_chief",

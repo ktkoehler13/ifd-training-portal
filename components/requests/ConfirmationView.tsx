@@ -3,6 +3,7 @@
 import { startTransition, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { RequestActionTimeline } from "@/components/requests/RequestActionTimeline";
+import { ApprovedPacketPanel } from "@/components/requests/ApprovedPacketPanel";
 import { RequestDetailPanel } from "@/components/requests/RequestDetailPanel";
 import { AuthGate } from "@/components/layout/AuthGate";
 import { Button } from "@/components/ui/Button";
@@ -24,7 +25,11 @@ import {
 } from "@/lib/training-requests";
 import type { TrainingRequestActionRecord } from "@/types/training-request-action";
 import type { TrainingRequestNotificationRecord } from "@/types/training-request-action";
+import {
+  getTrainingRequestPacketByRequestId,
+} from "@/lib/training-request-packet";
 import type { TrainingRequestRecord } from "@/types/training-request";
+import type { TrainingRequestPacketRecord } from "@/types/training-request-packet";
 
 interface ConfirmationViewProps {
   requestId: string;
@@ -61,6 +66,7 @@ function ConfirmationContent({
   const [notifications, setNotifications] = useState<
     TrainingRequestNotificationRecord[]
   >([]);
+  const [packet, setPacket] = useState<TrainingRequestPacketRecord | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -79,14 +85,19 @@ function ConfirmationContent({
 
         const loadedActions = await listTrainingRequestActions(found.id);
         let loadedNotifications: TrainingRequestNotificationRecord[] = [];
+        let loadedPacket: TrainingRequestPacketRecord | null = null;
         if (isAdministrativeRole(personnel.role)) {
           loadedNotifications = await listTrainingRequestNotifications(found.id);
+        }
+        if (found.status === "approved") {
+          loadedPacket = await getTrainingRequestPacketByRequestId(found.id);
         }
 
         if (!cancelled) {
           setRequest(found);
           setActions(loadedActions);
           setNotifications(loadedNotifications);
+          setPacket(loadedPacket);
           setIsLoading(false);
         }
       } catch (error) {
@@ -94,6 +105,7 @@ function ConfirmationContent({
           setRequest(null);
           setActions([]);
           setNotifications([]);
+          setPacket(null);
           setLoadError(
             error instanceof Error
               ? error.message
@@ -158,6 +170,14 @@ function ConfirmationContent({
               ) : null}
 
               <RequestDetailPanel request={request} />
+
+              {request.status === "approved" ? (
+                <ApprovedPacketPanel
+                  personnel={personnel}
+                  request={request}
+                  initialPacket={packet}
+                />
+              ) : null}
 
               <section className="mt-8">
                 <h2 className="text-lg font-semibold text-zinc-900">

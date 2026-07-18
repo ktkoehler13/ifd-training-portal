@@ -128,7 +128,11 @@ function ApprovalReviewContent({
         await mtoReturnTrainingRequest(request.id, input.comments);
         break;
       case "mto_deny":
-        await mtoDenyTrainingRequest(request.id, input.comments);
+        await mtoDenyTrainingRequest(
+          request.id,
+          input.comments,
+          input.electronicSignatureConfirmed,
+        );
         break;
       case "deputy_approve":
         await deputyApproveTrainingRequest(
@@ -141,7 +145,11 @@ function ApprovalReviewContent({
         await deputyReturnTrainingRequest(request.id, input.comments);
         break;
       case "deputy_deny":
-        await deputyDenyTrainingRequest(request.id, input.comments);
+        await deputyDenyTrainingRequest(
+          request.id,
+          input.comments,
+          input.electronicSignatureConfirmed,
+        );
         break;
       default:
         throw new Error("Unsupported workflow action.");

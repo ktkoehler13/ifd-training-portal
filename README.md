@@ -15,6 +15,7 @@ Required local variables:
 - `NEXT_PUBLIC_SUPABASE_URL` — Supabase project URL
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY` — Supabase anon/public key
 - `NEXT_PUBLIC_GSA_MILEAGE_RATE` — example mileage rate only; replace it with the approved current GSA rate before calculating real reimbursements
+- `SUPABASE_SERVICE_ROLE_KEY` — server-only secret for immutable approval signature snapshots and approved PDF packet storage. Never prefix with `NEXT_PUBLIC_`.
 
 Never commit `.env.local`. Never add a Supabase service-role key to browser code or to `.env.local.example`.
 
@@ -67,6 +68,7 @@ Apply these files in order using the Supabase SQL editor:
 6. `supabase/migrations/20260718190000_training_request_approval_workflow.sql`
 7. `supabase/migrations/20260718200000_human_readable_request_numbers.sql`
 8. `supabase/migrations/20260718210000_personnel_signatures.sql`
+9. `supabase/migrations/20260718220000_approval_signature_snapshots_and_packets.sql`
 
 ### 5. Insert test personnel manually
 
@@ -430,15 +432,103 @@ Storage policy helper functions (`can_manage_own_personnel_signature`, `expected
 
 MTO and Deputy Chief users can draw or upload a signature, preview the stored PNG, replace it, or delete it. Firefighters and admin-only accounts see access denied. Stale metadata can be deleted even when the Storage object is already missing.
 
-**Approval snapshot preparation:** The migration adds nullable snapshot columns on `public.training_request_actions`:
+**Approval snapshot preparation:** Phase 2 copies the reviewer's stored PNG into immutable approval snapshots and records metadata on `public.training_request_actions`. Replacing a live personnel signature later does not change historical action snapshots.
 
-- `signature_storage_bucket`
-- `signature_storage_path`
-- `signature_sha256`
-- `signature_mime_type`
-- `signature_file_size_bytes`
+### Phase 2 — Approval Snapshots and Approved PDF Packets
 
-These fields will preserve the exact signature image copied at approval time. They are intentionally **not** a live reference to `public.personnel_signatures`, because replacing a signature later must not modify historical approvals. Phase 1 leaves these columns null.
+Apply migration #9 after migration #8.
+
+**Server environment variable**
+
+- `SUPABASE_SERVICE_ROLE_KEY` — required on the Next.js server for snapshot uploads, packet uploads, and protected downloads. Never expose this value in browser code or `NEXT_PUBLIC_*` variables.
+
+**Private storage buckets**
+
+- `training-request-signature-snapshots` — immutable approval PNG copies at `<request-id>/<action-id>/signature.png`
+- `training-request-packets` — approved merged PDF packets at `<request-id>/approved-packet.pdf`
+
+**PDF templates (server-side only)**
+
+- `lib/pdf/templates/training-request-form-2026.pdf`
+- `lib/pdf/templates/tal.pdf`
+
+Inspect AcroForm field names during development:
+
+```bash
+npx tsx scripts/inspect-pdf-fields.ts
+npx tsx scripts/inspect-pdf-field-rects.ts
+```
+
+Field mappings live in `lib/pdf/field-mapping.ts`.
+
+**Signature snapshot workflow**
+
+1. Authenticated reviewer calls `POST /api/training-requests/[id]/workflow`.
+2. Database reserves an action ID through `reserve_training_request_signature_action`.
+3. Server downloads and re-validates the reviewer's current personnel signature PNG.
+4. Server uploads immutable snapshot bytes to the private snapshot bucket.
+5. Database completes the workflow through `complete_training_request_signature_action`, validating bucket/path/hash metadata supplied by the trusted server process.
+6. If database completion fails, the unused snapshot object is deleted.
+
+Approval and denial actions require a stored personnel signature. Return-for-correction does not.
+
+Error when no signature exists:
+
+`You must save your signature before approving a training request.`
+
+**Approved packet generation**
+
+After Deputy Chief approval:
+
+1. Request status becomes `approved`.
+2. A `training_request_packets` row is upserted with status `pending`.
+3. Server-side code generates a two-page PDF (Training Request Form + TAL), uploads it to the private packet bucket, and marks the packet `ready`.
+4. Failed generation leaves the request approved, marks the packet `failed`, stores a safe error message, and allows authorized administrative retry.
+
+Repeated generation replaces `<request-id>/approved-packet.pdf` and reuses the single packet metadata row.
+
+**Protected download**
+
+`GET /api/training-requests/[id]/approved-packet`
+
+Authorized roles:
+
+- request owner
+- `mto`
+- `deputy_chief`
+- `admin`
+
+Requirements:
+
+- request status is `approved`
+- packet status is `ready`
+- response streams the private PDF with `Content-Type: application/pdf`
+- `Content-Disposition` filename uses the exact safe request-number filename such as `Koehler, K, Fire Officer I, 2026.1.pdf`
+
+Administrative retry:
+
+`POST /api/training-requests/[id]/approved-packet/retry`
+
+**Signature placement**
+
+- Training Request Form: MTO snapshot on the MTO line, Deputy Chief snapshot on the Deputy Chief line, with approval dates in `undefined_2` and `undefined_3`
+- TAL agency authorization: same immutable MTO snapshot at the `Signature1` box
+- Firefighter/student TAL signature fields remain blank; the firefighter signs after downloading the approved packet
+
+**Future TAL personnel fields left blank until trusted data exists**
+
+- middle initial
+- address
+- city
+- state
+- ZIP
+- phone
+- NY training ID
+- SCBA clearance
+
+**Phase 3**
+
+Approval email delivery with the saved PDF attached will be implemented in the next phase. Phase 2 does not attach PDFs to approval emails.
 
 ### Row Level Security
 
@@ -458,11 +548,11 @@ Personnel must have both a first and last name before creating a training reques
 
 ### Document filename standard
 
-PDF export is not implemented yet. The planned PDF filename uses the exact submitted request number as its base name:
+Approved packet downloads and packet metadata use the exact submitted request number as the filename base:
 
 `Koehler, K, Fire Officer I, 2026.1.pdf`
 
-The confirmation and request detail pages display this planned filename. Only characters unsafe for the operating system are removed from the filename helper; the visible request number and filename base otherwise match exactly.
+The confirmation and request detail pages display this filename for approved packets. Only characters unsafe for the operating system are removed from the filename helper; the visible request number and filename base otherwise match exactly.
 
 Request detail and confirmation routes use the stable request UUID:
 

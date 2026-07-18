@@ -54,12 +54,12 @@ function getActionCopy(action: WorkflowActionKind) {
     case "mto_deny":
     case "deputy_deny":
       return {
-        title: "Deny Request",
+        title: "Sign and Deny Request",
         description:
-          "Deny this request and provide comments explaining the decision.",
-        confirmLabel: "Deny Request",
+          "Deny this request with your electronic signature and required comments explaining the decision.",
+        confirmLabel: "Sign and Deny Request",
         requireComments: true,
-        requireSignature: false,
+        requireSignature: true,
         destructive: true,
       };
     default:
@@ -178,7 +178,7 @@ function WorkflowActionDialogContent({
                 className="mt-1 h-4 w-4 rounded border-zinc-300 text-red-700 focus:ring-red-700"
               />
               <span>
-                I confirm that I am electronically signing this approval using my
+                I confirm that I am electronically signing this workflow action using my
                 authenticated IFD identity.
               </span>
             </label>
