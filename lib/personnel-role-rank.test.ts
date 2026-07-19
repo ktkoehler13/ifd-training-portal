@@ -26,6 +26,59 @@ const rolesSource = readFileSync(
   path.join(process.cwd(), "lib/auth/roles.ts"),
   "utf8",
 );
+const personnelTitleMigrationSql = readFileSync(
+  path.join(
+    process.cwd(),
+    "supabase/migrations/20260719220000_add_personnel_title.sql",
+  ),
+  "utf8",
+);
+
+describe("personnel title migration", () => {
+  it("adds personnel.title in the migration", () => {
+    assert.match(
+      personnelTitleMigrationSql,
+      /add column if not exists title text not null default 'firefighter'/,
+    );
+  });
+
+  it("defaults title to firefighter for existing and new rows", () => {
+    assert.match(
+      personnelTitleMigrationSql,
+      /default 'firefighter'/,
+    );
+    assert.doesNotMatch(personnelTitleMigrationSql, /update public\.personnel[\s\S]*role/);
+  });
+
+  it("allows firefighter, lieutenant, and assistant_chief titles", () => {
+    assert.match(personnelTitleMigrationSql, /'firefighter'/);
+    assert.match(personnelTitleMigrationSql, /'lieutenant'/);
+    assert.match(personnelTitleMigrationSql, /'assistant_chief'/);
+    assert.match(personnelTitleMigrationSql, /personnel_title_check/);
+  });
+
+  it("rejects invalid title values through personnel_title_check", () => {
+    assert.match(
+      personnelTitleMigrationSql,
+      /check \([\s\S]*title in \([\s\S]*'firefighter'[\s\S]*'lieutenant'[\s\S]*'assistant_chief'/,
+    );
+  });
+
+  it("documents title as separate from application authorization role", () => {
+    assert.match(
+      personnelTitleMigrationSql,
+      /separate from the application authorization role/,
+    );
+    assert.doesNotMatch(personnelTitleMigrationSql, /\brole\b[\s\S]*default/);
+  });
+
+  it("does not map application roles into rank values during backfill", () => {
+    assert.doesNotMatch(personnelTitleMigrationSql, /'mto'/);
+    assert.doesNotMatch(personnelTitleMigrationSql, /'deputy_chief'/);
+    assert.doesNotMatch(personnelTitleMigrationSql, /'admin'/);
+    assert.doesNotMatch(personnelTitleMigrationSql, /update public\.personnel/);
+  });
+});
 
 describe("personnel role and rank labels", () => {
   it("displays stored role firefighter as User", () => {

@@ -73,6 +73,16 @@ Apply these files in order using the Supabase SQL editor:
 11. `supabase/migrations/20260718240000_password_authentication.sql`
 12. `supabase/migrations/20260718250000_personnel_must_change_password.sql`
 13. `supabase/migrations/20260718260000_legacy_password_setup.sql`
+14. `supabase/migrations/20260719200000_add_password_setup_completed_at.sql`
+15. `supabase/migrations/20260719220000_add_personnel_title.sql`
+
+If you apply migrations manually through the Supabase SQL Editor rather than the Supabase CLI, PostgREST may continue serving a stale schema cache and report errors such as `Could not find the 'title' column of 'personnel' in the schema cache`. After applying new migrations, reload the schema cache:
+
+```sql
+notify pgrst, 'reload schema';
+```
+
+Migration `20260719220000_add_personnel_title.sql` adds `personnel.title` for department rank (Firefighter, Lieutenant, Assistant Chief). Existing rows default safely to `firefighter` without changing their application `role`. Administrators can assign the correct rank later in User Management.
 
 ### 5. Create the first administrator manually
 
@@ -87,6 +97,7 @@ insert into public.personnel (
   email,
   first_name,
   last_name,
+  title,
   role,
   active
 )
@@ -95,6 +106,7 @@ values (
   'ifd.mto@gmail.com',
   'Kevin',
   'Koehler',
+  'firefighter',
   'mto',
   true
 );
@@ -143,6 +155,10 @@ Successful first password creation:
 Future sign-ins use badge number and password only.
 
 Migration `20260718260000_legacy_password_setup.sql` adds `password_setup_completed_at` and documents a reviewed one-time backfill for active legacy accounts. Review that commented SQL before applying it in production.
+
+Migration `20260719200000_add_password_setup_completed_at.sql` is a corrective migration that ensures `password_setup_completed_at` exists on environments that applied earlier personnel migrations without that column.
+
+Migration `20260719220000_add_personnel_title.sql` adds `personnel.title` for department rank, separate from application authorization role.
 
 ### Administrator temporary-password alternative
 
