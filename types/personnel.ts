@@ -1,6 +1,11 @@
 export type PersonnelRole = "firefighter" | "mto" | "deputy_chief" | "admin";
 
-export type PersonnelTitle = "firefighter" | "lieutenant" | "assistant_chief";
+export type PersonnelTitle =
+  | "firefighter"
+  | "lieutenant"
+  | "assistant_chief"
+  | "deputy_chief"
+  | "fire_chief";
 
 export interface PersonnelRecord {
   id: string;
@@ -60,12 +65,16 @@ export const PERSONNEL_TITLES: PersonnelTitle[] = [
   "firefighter",
   "lieutenant",
   "assistant_chief",
+  "deputy_chief",
+  "fire_chief",
 ];
 
 export const PERSONNEL_TITLE_LABELS: Record<PersonnelTitle, string> = {
   firefighter: "Firefighter",
   lieutenant: "Lieutenant",
   assistant_chief: "Assistant Chief",
+  deputy_chief: "Deputy Chief",
+  fire_chief: "Fire Chief",
 };
 
 export const PERSONNEL_ROLES: PersonnelRole[] = [

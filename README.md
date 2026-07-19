@@ -75,6 +75,7 @@ Apply these files in order using the Supabase SQL editor:
 13. `supabase/migrations/20260718260000_legacy_password_setup.sql`
 14. `supabase/migrations/20260719200000_add_password_setup_completed_at.sql`
 15. `supabase/migrations/20260719220000_add_personnel_title.sql`
+16. `supabase/migrations/20260719230000_expand_personnel_titles.sql`
 
 If you apply migrations manually through the Supabase SQL Editor rather than the Supabase CLI, PostgREST may continue serving a stale schema cache and report errors such as `Could not find the 'title' column of 'personnel' in the schema cache`. After applying new migrations, reload the schema cache:
 
@@ -82,7 +83,7 @@ If you apply migrations manually through the Supabase SQL Editor rather than the
 notify pgrst, 'reload schema';
 ```
 
-Migration `20260719220000_add_personnel_title.sql` adds `personnel.title` for department rank (Firefighter, Lieutenant, Assistant Chief). Existing rows default safely to `firefighter` without changing their application `role`. Administrators can assign the correct rank later in User Management.
+Migration `20260719220000_add_personnel_title.sql` adds `personnel.title` for department rank. Existing rows default safely to `firefighter` without changing their application `role`. Migration `20260719230000_expand_personnel_titles.sql` expands valid ranks to Firefighter, Lieutenant, Assistant Chief, Deputy Chief, and Fire Chief. Rank remains separate from application authorization role.
 
 ### 5. Create the first administrator manually
 
@@ -159,6 +160,8 @@ Migration `20260718260000_legacy_password_setup.sql` adds `password_setup_comple
 Migration `20260719200000_add_password_setup_completed_at.sql` is a corrective migration that ensures `password_setup_completed_at` exists on environments that applied earlier personnel migrations without that column.
 
 Migration `20260719220000_add_personnel_title.sql` adds `personnel.title` for department rank, separate from application authorization role.
+
+Migration `20260719230000_expand_personnel_titles.sql` adds Deputy Chief and Fire Chief as valid department ranks without changing application roles.
 
 ### Administrator temporary-password alternative
 

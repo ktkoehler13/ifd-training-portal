@@ -3,6 +3,7 @@ import path from "node:path";
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { isAdministrativeRole, isSignatureEligibleRole } from "@/lib/auth/roles";
+import { isPersonnelTitle } from "@/lib/personnel";
 import {
   PERSONNEL_ROLE_LABELS,
   PERSONNEL_ROLES,
@@ -33,6 +34,13 @@ const personnelTitleMigrationSql = readFileSync(
   ),
   "utf8",
 );
+const expandPersonnelTitlesMigrationSql = readFileSync(
+  path.join(
+    process.cwd(),
+    "supabase/migrations/20260719230000_expand_personnel_titles.sql",
+  ),
+  "utf8",
+);
 
 describe("personnel title migration", () => {
   it("adds personnel.title in the migration", () => {
@@ -43,24 +51,10 @@ describe("personnel title migration", () => {
   });
 
   it("defaults title to firefighter for existing and new rows", () => {
-    assert.match(
+    assert.match(personnelTitleMigrationSql, /default 'firefighter'/);
+    assert.doesNotMatch(
       personnelTitleMigrationSql,
-      /default 'firefighter'/,
-    );
-    assert.doesNotMatch(personnelTitleMigrationSql, /update public\.personnel[\s\S]*role/);
-  });
-
-  it("allows firefighter, lieutenant, and assistant_chief titles", () => {
-    assert.match(personnelTitleMigrationSql, /'firefighter'/);
-    assert.match(personnelTitleMigrationSql, /'lieutenant'/);
-    assert.match(personnelTitleMigrationSql, /'assistant_chief'/);
-    assert.match(personnelTitleMigrationSql, /personnel_title_check/);
-  });
-
-  it("rejects invalid title values through personnel_title_check", () => {
-    assert.match(
-      personnelTitleMigrationSql,
-      /check \([\s\S]*title in \([\s\S]*'firefighter'[\s\S]*'lieutenant'[\s\S]*'assistant_chief'/,
+      /update public\.personnel[\s\S]*role/,
     );
   });
 
@@ -74,9 +68,23 @@ describe("personnel title migration", () => {
 
   it("does not map application roles into rank values during backfill", () => {
     assert.doesNotMatch(personnelTitleMigrationSql, /'mto'/);
-    assert.doesNotMatch(personnelTitleMigrationSql, /'deputy_chief'/);
-    assert.doesNotMatch(personnelTitleMigrationSql, /'admin'/);
     assert.doesNotMatch(personnelTitleMigrationSql, /update public\.personnel/);
+  });
+});
+
+describe("expanded personnel title migration", () => {
+  it("includes all five ranks in the database constraint", () => {
+    assert.match(expandPersonnelTitlesMigrationSql, /'firefighter'/);
+    assert.match(expandPersonnelTitlesMigrationSql, /'lieutenant'/);
+    assert.match(expandPersonnelTitlesMigrationSql, /'assistant_chief'/);
+    assert.match(expandPersonnelTitlesMigrationSql, /'deputy_chief'/);
+    assert.match(expandPersonnelTitlesMigrationSql, /'fire_chief'/);
+    assert.match(expandPersonnelTitlesMigrationSql, /personnel_title_check/);
+  });
+
+  it("does not alter existing title or application role values", () => {
+    assert.doesNotMatch(expandPersonnelTitlesMigrationSql, /update public\.personnel/);
+    assert.doesNotMatch(expandPersonnelTitlesMigrationSql, /alter column.*\brole\b/);
   });
 });
 
@@ -97,6 +105,16 @@ describe("personnel role and rank labels", () => {
   it("displays Assistant Chief rank as Assistant Chief", () => {
     assert.equal(PERSONNEL_TITLE_LABELS.assistant_chief, "Assistant Chief");
   });
+
+  it("displays Deputy Chief rank as Deputy Chief", () => {
+    assert.equal(PERSONNEL_TITLE_LABELS.deputy_chief, "Deputy Chief");
+    assert.equal(isPersonnelTitle("deputy_chief"), true);
+  });
+
+  it("displays Fire Chief rank as Fire Chief", () => {
+    assert.equal(PERSONNEL_TITLE_LABELS.fire_chief, "Fire Chief");
+    assert.equal(isPersonnelTitle("fire_chief"), true);
+  });
 });
 
 describe("Add User and Edit User dropdowns", () => {
@@ -106,26 +124,59 @@ describe("Add User and Edit User dropdowns", () => {
     assert.match(typesPersonnelSource, /firefighter: "User"/);
   });
 
-  it("does not include Lieutenant or Assistant Chief in the Application Role dropdown", () => {
+  it("includes Deputy Chief application role separately from rank", () => {
     const applicationRoleBlock = personnelFormFieldsSource.match(
       /label="Application Role"[\s\S]*?<\/Field>/,
     );
     assert.ok(applicationRoleBlock, "application role field should exist");
-    assert.doesNotMatch(applicationRoleBlock[0]!, /Lieutenant/);
-    assert.doesNotMatch(applicationRoleBlock[0]!, /Assistant Chief/);
-    assert.doesNotMatch(applicationRoleBlock[0]!, /PERSONNEL_TITLES/);
+    assert.match(applicationRoleBlock[0]!, /PERSONNEL_ROLES/);
+    assert.match(applicationRoleBlock[0]!, /PERSONNEL_ROLE_LABELS\[role\]/);
+    assert.deepEqual(PERSONNEL_ROLES, [
+      "firefighter",
+      "mto",
+      "deputy_chief",
+      "admin",
+    ]);
   });
 
-  it("does not include User, MTO, Deputy Chief, or Admin in the Rank dropdown", () => {
+  it("does not include rank-only titles in the Application Role dropdown", () => {
+    const applicationRoleBlock = personnelFormFieldsSource.match(
+      /label="Application Role"[\s\S]*?<\/Field>/,
+    );
+    assert.ok(applicationRoleBlock, "application role field should exist");
+    assert.doesNotMatch(applicationRoleBlock[0]!, /PERSONNEL_TITLES/);
+    assert.doesNotMatch(applicationRoleBlock[0]!, /Fire Chief/);
+    assert.doesNotMatch(applicationRoleBlock[0]!, /Lieutenant/);
+    assert.doesNotMatch(applicationRoleBlock[0]!, /Assistant Chief/);
+  });
+
+  it("includes Deputy Chief and Fire Chief in the Rank dropdown", () => {
     const rankBlock = personnelFormFieldsSource.match(
       /label="Rank"[\s\S]*?<\/Field>/,
     );
     assert.ok(rankBlock, "rank field should exist");
     assert.match(rankBlock[0]!, /PERSONNEL_TITLES/);
     assert.match(rankBlock[0]!, /PERSONNEL_TITLE_LABELS/);
+    assert.deepEqual(PERSONNEL_TITLES, [
+      "firefighter",
+      "lieutenant",
+      "assistant_chief",
+      "deputy_chief",
+      "fire_chief",
+    ]);
+    assert.equal(PERSONNEL_TITLE_LABELS.deputy_chief, "Deputy Chief");
+    assert.equal(PERSONNEL_TITLE_LABELS.fire_chief, "Fire Chief");
+    assert.match(rankBlock[0]!, /PERSONNEL_TITLE_LABELS\[title\]/);
+  });
+
+  it("does not use application roles in the Rank dropdown", () => {
+    const rankBlock = personnelFormFieldsSource.match(
+      /label="Rank"[\s\S]*?<\/Field>/,
+    );
+    assert.ok(rankBlock, "rank field should exist");
     assert.doesNotMatch(rankBlock[0]!, /PERSONNEL_ROLES/);
     assert.doesNotMatch(rankBlock[0]!, /"User"/);
-    assert.doesNotMatch(rankBlock[0]!, /Deputy Chief/);
+    assert.doesNotMatch(rankBlock[0]!, />\s*MTO\s*</);
     assert.doesNotMatch(rankBlock[0]!, />\s*Admin\s*</);
   });
 });
@@ -138,7 +189,26 @@ describe("rank and application role independence", () => {
     assert.match(personnelSource, /role: values\.role/);
   });
 
-  it("preserves ordinary-rank firefighter permissions regardless of rank", () => {
+  it("does not change application role when rank changes", () => {
+    assert.match(personnelFormFieldsSource, /title: event\.target\.value/);
+    assert.match(personnelFormFieldsSource, /role: event\.target\.value/);
+    assert.doesNotMatch(
+      personnelFormFieldsSource,
+      /values\.title[\s\S]*values\.role: "firefighter"/,
+    );
+  });
+
+  it("allows Deputy Chief rank with User application role", () => {
+    assert.equal(isPersonnelTitle("deputy_chief"), true);
+    assert.equal(PERSONNEL_ROLE_LABELS.firefighter, "User");
+  });
+
+  it("allows Fire Chief rank with User application role", () => {
+    assert.equal(isPersonnelTitle("fire_chief"), true);
+    assert.equal(PERSONNEL_ROLE_LABELS.firefighter, "User");
+  });
+
+  it("does not grant administrative permissions from rank alone", () => {
     for (const title of PERSONNEL_TITLES) {
       assert.equal(isAdministrativeRole("firefighter"), false);
       assert.equal(isSignatureEligibleRole("firefighter"), false);
@@ -146,6 +216,13 @@ describe("rank and application role independence", () => {
     }
     assert.match(rolesSource, /role === "mto"/);
     assert.doesNotMatch(rolesSource, /title/);
+  });
+
+  it("rejects invalid rank values", () => {
+    assert.equal(isPersonnelTitle("admin"), false);
+    assert.equal(isPersonnelTitle("mto"), false);
+    assert.equal(isPersonnelTitle("chief"), false);
+    assert.equal(isPersonnelTitle(""), false);
   });
 });
 

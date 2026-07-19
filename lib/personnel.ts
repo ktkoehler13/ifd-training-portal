@@ -97,7 +97,9 @@ export function isPersonnelTitle(value: string): value is PersonnelTitle {
   return (
     value === "firefighter" ||
     value === "lieutenant" ||
-    value === "assistant_chief"
+    value === "assistant_chief" ||
+    value === "deputy_chief" ||
+    value === "fire_chief"
   );
 }
 
