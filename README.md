@@ -71,6 +71,8 @@ Apply these files in order using the Supabase SQL editor:
 9. `supabase/migrations/20260718220000_approval_signature_snapshots_and_packets.sql`
 10. `supabase/migrations/20260718230000_delete_own_training_request_drafts.sql`
 11. `supabase/migrations/20260718240000_password_authentication.sql`
+12. `supabase/migrations/20260718250000_personnel_must_change_password.sql`
+13. `supabase/migrations/20260718260000_legacy_password_setup.sql`
 
 ### 5. Create the first administrator manually
 
@@ -112,6 +114,68 @@ Internally, Supabase Auth still uses the personnel email address. The applicatio
 
 Normal login does not send magic links, OTP messages, or sign-in emails.
 
+After an administrator assigns a temporary password, users with `must_change_password = true` are redirected to `/settings/password` before accessing other application pages.
+
+### Legacy magic-link transition
+
+Some existing personnel signed in only through Supabase email magic links and therefore do not have a badge-number password yet.
+
+The login page keeps badge number and password as the normal sign-in method and adds a secondary action:
+
+- **Set up my password** → `/setup-password`
+
+That page accepts badge number only. Trusted server code resolves the department email, confirms a matching Supabase Auth account exists, and sends a one-time password-setup link through Supabase Auth. The browser always receives the same generic response:
+
+`If an active account matches that badge number, a password setup link has been sent to the department email on file.`
+
+Password-setup links redirect to:
+
+`/auth/callback?flow=password-setup`
+
+After the callback establishes a session, the user is forced to create a password at `/settings/password?required=1&setup=legacy` before accessing the rest of the portal.
+
+Successful first password creation:
+
+- clears `must_change_password`
+- sets `personnel.password_setup_completed_at`
+- redirects to `/dashboard`
+
+Future sign-ins use badge number and password only.
+
+Migration `20260718260000_legacy_password_setup.sql` adds `password_setup_completed_at` and documents a reviewed one-time backfill for active legacy accounts. Review that commented SQL before applying it in production.
+
+### Administrator temporary-password alternative
+
+Administrators can still reset passwords from **User Management**. That workflow assigns a temporary password server-side, sets `must_change_password = true`, and shows the temporary password once to the administrator.
+
+Use this when:
+
+- the user cannot access their department email
+- Auth email delivery is rate-limited or unavailable
+- a password-setup email fails
+
+Administrator reset never requires the user's old password.
+
+### Auth email quota warning
+
+The legacy password-setup workflow sends a Supabase Auth email and therefore consumes the project's Auth email quota. Do not treat this workflow as unlimited while using Supabase's default email sender.
+
+For production rollout, configure either:
+
+- custom SMTP in Supabase, or
+- administrator-assigned temporary passwords
+
+Ordinary badge-number and password login does not send email after setup is complete.
+
+### Required Supabase callback URLs
+
+Add these redirect URLs in **Authentication -> URL Configuration**:
+
+- `http://localhost:3000/auth/callback`
+- your production application URL, for example `https://training.example.gov/auth/callback`
+
+Set `APP_BASE_URL` in server environment configuration so password-setup links use the correct production origin.
+
 ### Enable email/password authentication
 
 In the Supabase dashboard:
@@ -136,34 +200,45 @@ The application does not reveal whether a badge exists, whether an account is ac
 
 ### Password requirements
 
-Passwords must be at least 12 characters and include upper- and lowercase letters, a number, and a special character.
+**Permanent passwords** (forced first-login setup and ordinary Change Password) must be at least 12 characters and include upper- and lowercase letters, a number, and a special character.
 
-Administrators assign temporary passwords when creating or resetting accounts. Users should change temporary passwords from **Settings -> Change Password** after first sign-in.
+**Initial passwords** (Add User and administrator reset) require only at least 6 characters and cannot be entirely whitespace. They are temporary credentials meant to be easy to remember, communicate, and enter.
+
+After first sign-in, users with `must_change_password = true` must replace an initial password with a permanent password that meets the stronger rules.
 
 ### Administrator account provisioning
 
 Administrators with `mto`, `deputy_chief`, or `admin` roles can create personnel from `/admin/users`.
 
+The Add User form assigns an **initial password** of at least 6 characters. Initial passwords are intentionally easy to remember and enter. They are temporary credentials only.
+
 The protected server route `/api/admin/personnel`:
 
 1. Verifies the signed-in administrator.
-2. Creates the Supabase Auth user with the personnel email and a generated temporary password.
-3. Creates the matching `public.personnel` row.
-4. Reconciles partial failures so an Auth user is not left behind without a personnel row.
+2. Validates the administrator-assigned initial password server-side.
+3. Creates the Supabase Auth user with the personnel email and that initial password.
+4. Creates the matching `public.personnel` row with `must_change_password = true`.
+5. Reconciles partial failures so an Auth user is not left behind without a personnel row.
 
-Administrators must communicate temporary passwords securely outside the portal.
+Passwords are stored only in Supabase Auth. They are never saved to `public.personnel`, returned in the API response, or displayed after account creation.
 
-Administrators can also reset a user's password from User Management. This assigns a new temporary password server-side; users should change it after signing in.
+Administrators must communicate the initial password to the user securely outside the portal. After first sign-in, the user must choose a stronger permanent password before accessing the rest of the application.
+
+Administrator password reset uses the same relaxed initial-password policy and generates memorable temporary passwords such as `Cedar7` or `Ladder4`.
 
 ### Change password
 
 Authenticated users can update their password at `/settings/password`.
 
-The page verifies the current password, validates the new password against the same strength rules, and updates the Supabase Auth password through a protected server route.
+When `must_change_password` is true, the page shows only **New Password** and **Confirm New Password**. The server decides whether Current Password is required from the personnel record; the browser cannot bypass that check.
+
+When `must_change_password` is false, the page verifies the current password, validates the new password against the same strength rules, and updates the Supabase Auth password through a protected server route.
 
 ### Email confirmation and recovery callback
 
-`/auth/callback` remains available for Supabase email confirmation, invitation, and password-recovery flows. It is not used for ordinary badge-number sign-in.
+`/auth/callback` handles Supabase email confirmation, invitation, recovery, and legacy password-setup links. It is not used for ordinary badge-number sign-in.
+
+Password-setup links use `flow=password-setup` and redirect to forced password creation.
 
 Recovery links may redirect to `/settings/password`.
 

@@ -9,49 +9,88 @@ export const PASSWORD_MISMATCH_MESSAGE =
 export const CURRENT_PASSWORD_INCORRECT_MESSAGE =
   "Current password is incorrect.";
 
-const PASSWORD_PATTERN =
+export const INITIAL_PASSWORD_TOO_SHORT_MESSAGE =
+  "Initial password must be at least 6 characters.";
+
+export const INITIAL_PASSWORD_WHITESPACE_ONLY_MESSAGE =
+  "Initial password cannot contain only spaces.";
+
+export const INITIAL_PASSWORD_MISMATCH_MESSAGE =
+  "Initial passwords do not match.";
+
+export const INITIAL_PASSWORD_INVALID_SERVER_MESSAGE =
+  "Initial password must be at least 6 characters and cannot contain only spaces.";
+
+const PERMANENT_PASSWORD_PATTERN =
   /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{12,}$/;
 
-export function validatePasswordStrength(password: string): string | null {
+export function validatePermanentPassword(password: string): string | null {
   if (password.length < 12) {
     return "Password must be at least 12 characters.";
   }
 
-  if (!PASSWORD_PATTERN.test(password)) {
+  if (!PERMANENT_PASSWORD_PATTERN.test(password)) {
     return "Password must include upper- and lowercase letters, a number, and a special character.";
   }
 
   return null;
 }
 
-export function generateTemporaryPassword(): string {
-  const uppercase = "ABCDEFGHJKLMNPQRSTUVWXYZ";
-  const lowercase = "abcdefghijkmnopqrstuvwxyz";
-  const numbers = "23456789";
-  const specials = "!@#$%^&*-_+=.";
-  const all = uppercase + lowercase + numbers + specials;
+/** @deprecated Use validatePermanentPassword */
+export const validatePasswordStrength = validatePermanentPassword;
 
-  const randomIndex = (max: number) => {
-    const bytes = new Uint32Array(1);
-    crypto.getRandomValues(bytes);
-    return bytes[0]! % max;
-  };
-
-  const required = [
-    uppercase[randomIndex(uppercase.length)]!,
-    lowercase[randomIndex(lowercase.length)]!,
-    numbers[randomIndex(numbers.length)]!,
-    specials[randomIndex(specials.length)]!,
-  ];
-
-  while (required.length < 16) {
-    required.push(all[randomIndex(all.length)]!);
+export function validateInitialPassword(password: string): string | null {
+  if (password.length < 6) {
+    return INITIAL_PASSWORD_TOO_SHORT_MESSAGE;
   }
 
-  for (let index = required.length - 1; index > 0; index -= 1) {
-    const swapIndex = randomIndex(index + 1);
-    [required[index], required[swapIndex]] = [required[swapIndex]!, required[index]!];
+  if (password.trim().length === 0) {
+    return INITIAL_PASSWORD_WHITESPACE_ONLY_MESSAGE;
   }
 
-  return required.join("");
+  return null;
 }
+
+const MEMORABLE_PASSWORD_WORDS = [
+  "Cedar",
+  "Ladder",
+  "Rescue",
+  "Engine",
+  "Truck",
+  "Station",
+  "Ithaca",
+  "Maple",
+  "Summit",
+  "Harbor",
+  "Forest",
+  "Bridge",
+  "Beacon",
+  "River",
+  "Bronze",
+  "Copper",
+  "Timber",
+  "Valley",
+  "Spring",
+  "North",
+  "South",
+  "East",
+  "West",
+  "Chief",
+  "Crew",
+];
+
+function secureRandomIndex(max: number): number {
+  const bytes = new Uint32Array(1);
+  crypto.getRandomValues(bytes);
+  return bytes[0]! % max;
+}
+
+export function generateMemorableInitialPassword(): string {
+  const word =
+    MEMORABLE_PASSWORD_WORDS[secureRandomIndex(MEMORABLE_PASSWORD_WORDS.length)]!;
+  const digit = String(secureRandomIndex(10));
+  return `${word}${digit}`;
+}
+
+/** @deprecated Use generateMemorableInitialPassword */
+export const generateTemporaryPassword = generateMemorableInitialPassword;

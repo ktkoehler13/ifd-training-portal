@@ -7,7 +7,11 @@ import {
   PASSWORD_RESET_INACTIVE_MESSAGE,
   PASSWORD_RESET_NO_AUTH_ACCOUNT_MESSAGE,
 } from "./password-reset-messages";
-import { generateTemporaryPassword, validatePasswordStrength } from "./password";
+import {
+  generateMemorableInitialPassword,
+  validateInitialPassword,
+  validatePermanentPassword,
+} from "./password";
 import { isAdministrativeRole } from "./roles";
 
 const migrationPath = path.join(
@@ -136,7 +140,7 @@ describe("administrator reset server behavior", () => {
   });
 
   it("can replace an existing password", () => {
-    assert.match(adminPersonnelSource, /password: temporaryPassword/);
+    assert.match(adminPersonnelSource, /password: initialPassword/);
   });
 
   it("can assign the first password to a legacy account through updateUserById", () => {
@@ -266,7 +270,7 @@ describe("self-service password change", () => {
 
 describe("forced password setup", () => {
   it("allows legacy users to receive a temporary password from admin reset", () => {
-    assert.match(adminPersonnelSource, /generateTemporaryPassword/);
+    assert.match(adminPersonnelSource, /generateMemorableInitialPassword/);
     assert.match(adminPersonnelSource, /auth\.admin\.updateUserById/);
     assert.match(adminPersonnelSource, /markPersonnelMustChangePassword/);
   });
@@ -320,10 +324,14 @@ describe("forced password setup", () => {
     assert.doesNotMatch(updateFailureBlock[0], /clearPersonnelMustChangePassword/);
   });
 
-  it("enters forced mode from personnel.mustChangePassword without the query parameter", () => {
+  it("enters forced mode from personnel.mustChangePassword without relying on the query parameter", () => {
     assert.match(changePasswordViewSource, /personnel\.mustChangePassword/);
-    assert.doesNotMatch(changePasswordViewSource, /useSearchParams/);
+    assert.match(changePasswordViewSource, /forcedPasswordSetup = personnel\.mustChangePassword/);
     assert.match(authGateSource, /personnel\?\.mustChangePassword/);
+    assert.match(
+      changePasswordViewSource,
+      /isLegacyEmailSetup[\s\S]*searchParams\.get\("setup"\)/,
+    );
   });
 
   it("redirects forced users away from protected pages in middleware", () => {
@@ -347,9 +355,10 @@ describe("must_change_password redirect behavior", () => {
 });
 
 describe("temporary password generation", () => {
-  it("generates secure passwords with required character classes", () => {
-    const password = generateTemporaryPassword();
-    assert.ok(password.length >= 16);
-    assert.equal(validatePasswordStrength(password), null);
+  it("generates memorable initial passwords that meet the relaxed policy", () => {
+    const password = generateMemorableInitialPassword();
+    assert.ok(password.length >= 6);
+    assert.equal(validateInitialPassword(password), null);
+    assert.notEqual(validatePermanentPassword(password), null);
   });
 });

@@ -1,8 +1,9 @@
 import "server-only";
 
 import {
-  generateTemporaryPassword,
-  validatePasswordStrength,
+  generateMemorableInitialPassword,
+  INITIAL_PASSWORD_INVALID_SERVER_MESSAGE,
+  validateInitialPassword,
 } from "@/lib/auth/password";
 import {
   PasswordResetError,
@@ -102,7 +103,7 @@ async function deleteAuthUserById(userId: string): Promise<void> {
   await service.auth.admin.deleteUser(userId);
 }
 
-async function markPersonnelMustChangePassword(
+export async function markPersonnelMustChangePassword(
   personnelId: string,
 ): Promise<void> {
   const service = createServiceRoleClient();
@@ -127,7 +128,10 @@ export async function clearPersonnelMustChangePassword(
   const service = createServiceRoleClient();
   const { error } = await service
     .from("personnel")
-    .update({ must_change_password: false })
+    .update({
+      must_change_password: false,
+      password_setup_completed_at: new Date().toISOString(),
+    })
     .eq("id", personnelId);
 
   if (error) {
@@ -147,14 +151,14 @@ export async function requireAdministrativePersonnel(): Promise<PersonnelRecord>
 
 export async function createPersonnelAuthAccount(input: {
   personnel: PersonnelInsertInput;
-}): Promise<{ personnel: PersonnelRecord; temporaryPassword: string }> {
+  initialPassword: string;
+}): Promise<{ personnel: PersonnelRecord }> {
   await requireAdministrativePersonnel();
 
-  const temporaryPassword = generateTemporaryPassword();
-  const passwordError = validatePasswordStrength(temporaryPassword);
+  const passwordError = validateInitialPassword(input.initialPassword);
 
   if (passwordError) {
-    throw new Error("Unable to generate a valid temporary password.");
+    throw new Error(INITIAL_PASSWORD_INVALID_SERVER_MESSAGE);
   }
 
   const service = createServiceRoleClient();
@@ -164,7 +168,7 @@ export async function createPersonnelAuthAccount(input: {
     const { data: authData, error: authError } =
       await service.auth.admin.createUser({
         email: normalizePersonnelEmail(input.personnel.email),
-        password: temporaryPassword,
+        password: input.initialPassword,
         email_confirm: true,
       });
 
@@ -197,7 +201,6 @@ export async function createPersonnelAuthAccount(input: {
 
     return {
       personnel: mapPersonnelRow(data as PersonnelRow),
-      temporaryPassword,
     };
   } catch (error) {
     if (createdAuthUserId) {
@@ -245,8 +248,8 @@ export async function resetPersonnelAuthPassword(input: {
     throw new PasswordResetError(PASSWORD_RESET_AMBIGUOUS_AUTH_ACCOUNT_MESSAGE);
   }
 
-  const temporaryPassword = generateTemporaryPassword();
-  const passwordError = validatePasswordStrength(temporaryPassword);
+  const initialPassword = generateMemorableInitialPassword();
+  const passwordError = validateInitialPassword(initialPassword);
 
   if (passwordError) {
     throw new PasswordResetError(PASSWORD_RESET_FAILED_MESSAGE);
@@ -255,7 +258,7 @@ export async function resetPersonnelAuthPassword(input: {
   const { error: updateError } = await service.auth.admin.updateUserById(
     authLookup.authUserId,
     {
-      password: temporaryPassword,
+      password: initialPassword,
     },
   );
 
@@ -270,7 +273,7 @@ export async function resetPersonnelAuthPassword(input: {
 
   await markPersonnelMustChangePassword(personnel.id);
 
-  return { temporaryPassword };
+  return { temporaryPassword: initialPassword };
 }
 
 export { PasswordResetError } from "@/lib/auth/password-reset-messages";

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { FormEvent, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/Button";
@@ -187,6 +188,19 @@ export function LandingGate() {
             {isSubmitting ? "Signing In…" : "Sign In"}
           </Button>
         </form>
+
+        <div className="mt-6 space-y-2 border-t border-zinc-200 pt-6 text-center">
+          <Link
+            href="/setup-password"
+            className="text-sm font-semibold text-zinc-800 hover:text-zinc-950"
+          >
+            Set up my password
+          </Link>
+          <p className="text-sm text-zinc-600">
+            Previously signed in by email link? Create a password for your
+            account.
+          </p>
+        </div>
       </div>
     </div>
   );

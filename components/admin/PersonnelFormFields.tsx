@@ -6,6 +6,23 @@ import { Select } from "@/components/ui/Select";
 import type { PersonnelFormErrors, PersonnelFormValues } from "@/lib/personnel";
 import { PERSONNEL_ROLE_LABELS, PERSONNEL_ROLES } from "@/types/personnel";
 
+interface InitialPasswordFieldProps {
+  idPrefix: string;
+  initialPassword: string;
+  confirmInitialPassword: string;
+  errors: {
+    initialPassword?: string;
+    confirmInitialPassword?: string;
+  };
+  showInitialPassword: boolean;
+  showConfirmInitialPassword: boolean;
+  onInitialPasswordChange: (value: string) => void;
+  onConfirmInitialPasswordChange: (value: string) => void;
+  onToggleShowInitialPassword: () => void;
+  onToggleShowConfirmInitialPassword: () => void;
+  disabled?: boolean;
+}
+
 interface PersonnelFormFieldsProps {
   idPrefix: string;
   values: PersonnelFormValues;
@@ -14,6 +31,7 @@ interface PersonnelFormFieldsProps {
   disabled?: boolean;
   disabledFields?: Partial<Record<keyof PersonnelFormValues, boolean>>;
   selfEditNotice?: string | null;
+  initialPasswordFields?: InitialPasswordFieldProps;
 }
 
 export function PersonnelFormFields({
@@ -24,6 +42,7 @@ export function PersonnelFormFields({
   disabled = false,
   disabledFields,
   selfEditNotice,
+  initialPasswordFields,
 }: PersonnelFormFieldsProps) {
   return (
     <>
@@ -100,6 +119,90 @@ export function PersonnelFormFields({
             aria-invalid={errors.email ? true : undefined}
           />
         </Field>
+
+        {initialPasswordFields ? (
+          <>
+            <Field
+              id={`${initialPasswordFields.idPrefix}-initialPassword`}
+              label="Initial Password"
+              error={initialPasswordFields.errors.initialPassword}
+            >
+              <div className="relative">
+                <Input
+                  id={`${initialPasswordFields.idPrefix}-initialPassword`}
+                  type={
+                    initialPasswordFields.showInitialPassword
+                      ? "text"
+                      : "password"
+                  }
+                  value={initialPasswordFields.initialPassword}
+                  onChange={(event) =>
+                    initialPasswordFields.onInitialPasswordChange(
+                      event.target.value,
+                    )
+                  }
+                  disabled={disabled || initialPasswordFields.disabled}
+                  autoComplete="new-password"
+                  className="pr-24"
+                  aria-invalid={
+                    initialPasswordFields.errors.initialPassword ? true : undefined
+                  }
+                />
+                <button
+                  type="button"
+                  className="absolute top-1/2 right-3 -translate-y-1/2 text-xs font-semibold text-zinc-600 hover:text-zinc-900"
+                  onClick={initialPasswordFields.onToggleShowInitialPassword}
+                  disabled={disabled || initialPasswordFields.disabled}
+                >
+                  {initialPasswordFields.showInitialPassword ? "Hide" : "Show"}
+                </button>
+              </div>
+            </Field>
+
+            <Field
+              id={`${initialPasswordFields.idPrefix}-confirmInitialPassword`}
+              label="Confirm Initial Password"
+              error={initialPasswordFields.errors.confirmInitialPassword}
+            >
+              <div className="relative">
+                <Input
+                  id={`${initialPasswordFields.idPrefix}-confirmInitialPassword`}
+                  type={
+                    initialPasswordFields.showConfirmInitialPassword
+                      ? "text"
+                      : "password"
+                  }
+                  value={initialPasswordFields.confirmInitialPassword}
+                  onChange={(event) =>
+                    initialPasswordFields.onConfirmInitialPasswordChange(
+                      event.target.value,
+                    )
+                  }
+                  disabled={disabled || initialPasswordFields.disabled}
+                  autoComplete="new-password"
+                  className="pr-24"
+                  aria-invalid={
+                    initialPasswordFields.errors.confirmInitialPassword
+                      ? true
+                      : undefined
+                  }
+                />
+                <button
+                  type="button"
+                  className="absolute top-1/2 right-3 -translate-y-1/2 text-xs font-semibold text-zinc-600 hover:text-zinc-900"
+                  onClick={
+                    initialPasswordFields.onToggleShowConfirmInitialPassword
+                  }
+                  disabled={disabled || initialPasswordFields.disabled}
+                >
+                  {initialPasswordFields.showConfirmInitialPassword
+                    ? "Hide"
+                    : "Show"}
+                </button>
+              </div>
+            </Field>
+          </>
+        ) : null}
 
         <Field id={`${idPrefix}-role`} label="Role" error={errors.role}>
           <Select

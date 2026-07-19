@@ -4,25 +4,27 @@ import { FormEvent, useState } from "react";
 import { PersonnelFormFields } from "@/components/admin/PersonnelFormFields";
 import { Button } from "@/components/ui/Button";
 import {
-  toPersonnelInsertInput,
+  toCreatePersonnelAccountInput,
   validateAddUserForm,
-  type PersonnelFormErrors,
-  type PersonnelFormValues,
+  type AddUserFormErrors,
+  type AddUserFormValues,
 } from "@/lib/personnel";
-import type { PersonnelInsertInput, PersonnelRecord } from "@/types/personnel";
+import type { CreatePersonnelAccountInput, PersonnelRecord } from "@/types/personnel";
 
-const initialValues: PersonnelFormValues = {
+const initialValues: AddUserFormValues = {
   firstName: "",
   lastName: "",
   badgeNumber: "",
   email: "",
   role: "",
   active: true,
+  initialPassword: "",
+  confirmInitialPassword: "",
 };
 
 interface AddUserFormProps {
   existingUsers: PersonnelRecord[];
-  onSubmit: (input: PersonnelInsertInput) => Promise<void>;
+  onSubmit: (input: CreatePersonnelAccountInput) => Promise<void>;
   disabled?: boolean;
 }
 
@@ -31,13 +33,22 @@ export function AddUserForm({
   onSubmit,
   disabled = false,
 }: AddUserFormProps) {
-  const [values, setValues] = useState<PersonnelFormValues>(initialValues);
-  const [errors, setErrors] = useState<PersonnelFormErrors>({});
+  const [values, setValues] = useState<AddUserFormValues>(initialValues);
+  const [errors, setErrors] = useState<AddUserFormErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showInitialPassword, setShowInitialPassword] = useState(false);
+  const [showConfirmInitialPassword, setShowConfirmInitialPassword] =
+    useState(false);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
+    if (isSubmitting) {
+      return;
+    }
+
+    setSuccessMessage(null);
     const nextErrors = validateAddUserForm(values, existingUsers);
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) {
@@ -48,8 +59,13 @@ export function AddUserForm({
     setErrors({});
 
     try {
-      await onSubmit(toPersonnelInsertInput(values));
+      await onSubmit(toCreatePersonnelAccountInput(values));
       setValues(initialValues);
+      setShowInitialPassword(false);
+      setShowConfirmInitialPassword(false);
+      setSuccessMessage(
+        "User created successfully. Provide the initial password to the user securely.",
+      );
     } catch (error) {
       setErrors({
         submit:
@@ -70,8 +86,9 @@ export function AddUserForm({
     >
       <h2 className="text-lg font-semibold text-zinc-900">Add User</h2>
       <p className="mt-1 text-sm text-zinc-600">
-        Create a personnel record and Supabase Auth account. Communicate the
-        generated temporary password securely outside the portal.
+        Create the personnel account and assign an initial password of at least 6
+        characters. The user will be required to choose a stronger personal
+        password after signing in.
       </p>
 
       <div className="mt-6 space-y-4">
@@ -79,9 +96,49 @@ export function AddUserForm({
           idPrefix="add-user"
           values={values}
           errors={errors}
-          onChange={setValues}
+          onChange={(nextValues) =>
+            setValues((current) => ({
+              ...nextValues,
+              initialPassword: current.initialPassword,
+              confirmInitialPassword: current.confirmInitialPassword,
+            }))
+          }
           disabled={disabled || isSubmitting}
+          initialPasswordFields={{
+            idPrefix: "add-user",
+            initialPassword: values.initialPassword,
+            confirmInitialPassword: values.confirmInitialPassword,
+            errors,
+            showInitialPassword,
+            showConfirmInitialPassword,
+            onInitialPasswordChange: (initialPassword) => {
+              setValues((current) => ({ ...current, initialPassword }));
+              if (errors.initialPassword) {
+                setErrors((current) => ({ ...current, initialPassword: undefined }));
+              }
+            },
+            onConfirmInitialPasswordChange: (confirmInitialPassword) => {
+              setValues((current) => ({ ...current, confirmInitialPassword }));
+              if (errors.confirmInitialPassword) {
+                setErrors((current) => ({
+                  ...current,
+                  confirmInitialPassword: undefined,
+                }));
+              }
+            },
+            onToggleShowInitialPassword: () =>
+              setShowInitialPassword((current) => !current),
+            onToggleShowConfirmInitialPassword: () =>
+              setShowConfirmInitialPassword((current) => !current),
+            disabled: disabled || isSubmitting,
+          }}
         />
+
+        {successMessage ? (
+          <p className="text-sm text-green-800" role="status">
+            {successMessage}
+          </p>
+        ) : null}
 
         {errors.submit ? (
           <p role="alert" className="text-sm text-red-700">

@@ -7,12 +7,12 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "tsx --test lib/personnel-signature-png.test.ts lib/personnel-signature-restore-outcome.test.ts lib/personnel-signature-normalize.test.ts lib/training-request-signature-snapshot.test.ts lib/training-request-packet-access.test.ts lib/training-request-workflow-security.test.ts lib/training-request-workflow-reconciliation.test.ts lib/training-request-actions.test.ts lib/training-request-draft-deletion.test.ts lib/auth/password-auth.test.ts lib/auth/password-reset.test.ts lib/pdf/generate-approved-packet.test.ts"
+    "test": "tsx --test lib/personnel-signature-png.test.ts lib/personnel-signature-restore-outcome.test.ts lib/personnel-signature-normalize.test.ts lib/training-request-signature-snapshot.test.ts lib/training-request-packet-access.test.ts lib/training-request-workflow-security.test.ts lib/training-request-workflow-reconciliation.test.ts lib/training-request-actions.test.ts lib/training-request-draft-deletion.test.ts lib/auth/password-auth.test.ts lib/auth/password-reset.test.ts lib/auth/password-setup.test.ts lib/auth/initial-password.test.ts lib/pdf/generate-approved-packet.test.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.3",
     "@supabase/supabase-js": "^2.110.7",
-    "next": "16.2.10",
+    "next": "^9.3.3",
     "pdf-lib": "^1.17.1",
     "react": "19.2.4",
     "react-dom": "19.2.4"
@@ -22,6 +22,7 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "dotenv": "^17.4.2",
     "eslint": "^9",
     "eslint-config-next": "16.2.10",
     "tailwindcss": "^4",

@@ -2,11 +2,13 @@
 
 import Link from "next/link";
 import { FormEvent, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { AuthGate } from "@/components/layout/AuthGate";
 import { SignOutButton } from "@/components/auth/SignOutButton";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { PASSWORD_CHANGE_SUCCESS_MESSAGE } from "@/lib/auth/password";
+import { PASSWORD_SETUP_COMPLETE_SUCCESS_MESSAGE } from "@/lib/auth/password-setup-messages";
 import type { AuthenticatedPersonnel } from "@/lib/auth/personnel";
 
 interface ChangePasswordContentProps {
@@ -14,7 +16,20 @@ interface ChangePasswordContentProps {
 }
 
 function ChangePasswordContent({ personnel }: ChangePasswordContentProps) {
+  const searchParams = useSearchParams();
   const forcedPasswordSetup = personnel.mustChangePassword;
+  const isLegacyEmailSetup =
+    forcedPasswordSetup && searchParams.get("setup") === "legacy";
+  const pageTitle = isLegacyEmailSetup
+    ? "Create Your Password"
+    : forcedPasswordSetup
+      ? "Choose a New Password"
+      : "Change Password";
+  const pageDescription = isLegacyEmailSetup
+    ? "You previously signed in using an email link. Create a password for future badge-number sign-ins."
+    : forcedPasswordSetup
+      ? "Your account is using a temporary password. Choose a new password before continuing."
+      : "Update your account password. You sign in with badge number and password; your department email remains linked to Supabase Auth internally.";
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -59,7 +74,11 @@ function ChangePasswordContent({ personnel }: ChangePasswordContentProps) {
         return;
       }
 
-      setSuccessMessage(payload.message ?? PASSWORD_CHANGE_SUCCESS_MESSAGE);
+      setSuccessMessage(
+        isLegacyEmailSetup
+          ? PASSWORD_SETUP_COMPLETE_SUCCESS_MESSAGE
+          : payload.message ?? PASSWORD_CHANGE_SUCCESS_MESSAGE,
+      );
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
@@ -80,13 +99,9 @@ function ChangePasswordContent({ personnel }: ChangePasswordContentProps) {
         <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 px-4 py-5 sm:flex-row sm:items-start sm:justify-between sm:px-6">
           <div>
             <h1 className="text-xl font-semibold tracking-tight text-zinc-900 sm:text-2xl">
-              {forcedPasswordSetup ? "Choose a New Password" : "Change Password"}
+              {pageTitle}
             </h1>
-            <p className="mt-1 text-sm text-zinc-600">
-              {forcedPasswordSetup
-                ? "Your account is using a temporary password. Choose a new password before continuing."
-                : "Update your account password. You sign in with badge number and password; your department email remains linked to Supabase Auth internally."}
-            </p>
+            <p className="mt-1 text-sm text-zinc-600">{pageDescription}</p>
           </div>
           {!forcedPasswordSetup ? (
             <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
@@ -215,9 +230,11 @@ function ChangePasswordContent({ personnel }: ChangePasswordContentProps) {
             <Button type="submit" disabled={isSubmitting}>
               {isSubmitting
                 ? "Updating…"
-                : forcedPasswordSetup
-                  ? "Save New Password"
-                  : "Update Password"}
+                : isLegacyEmailSetup
+                  ? "Create Password"
+                  : forcedPasswordSetup
+                    ? "Save New Password"
+                    : "Update Password"}
             </Button>
           </div>
         </form>

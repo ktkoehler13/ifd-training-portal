@@ -9,6 +9,7 @@ export interface PersonnelRecord {
   role: PersonnelRole;
   active: boolean;
   mustChangePassword: boolean;
+  passwordSetupCompletedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -31,6 +32,10 @@ export interface PersonnelInsertInput {
   active: boolean;
 }
 
+export interface CreatePersonnelAccountInput extends PersonnelInsertInput {
+  initialPassword: string;
+}
+
 export interface PersonnelRow {
   id: string;
   badge_number: string;
@@ -40,6 +45,7 @@ export interface PersonnelRow {
   role: PersonnelRole;
   active: boolean;
   must_change_password: boolean;
+  password_setup_completed_at: string | null;
   created_at: string;
   updated_at: string;
 }

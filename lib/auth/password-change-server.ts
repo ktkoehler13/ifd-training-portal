@@ -2,8 +2,8 @@ import "server-only";
 
 import { clearPersonnelMustChangePassword } from "@/lib/auth/admin-personnel-server";
 import {
-  generateTemporaryPassword,
-  validatePasswordStrength,
+  generateMemorableInitialPassword,
+  validatePermanentPassword,
   CURRENT_PASSWORD_INCORRECT_MESSAGE,
   PASSWORD_MISMATCH_MESSAGE,
   PASSWORD_CHANGE_SUCCESS_MESSAGE,
@@ -32,7 +32,7 @@ export async function changeAuthenticatedUserPassword(
     return { ok: false, error: PASSWORD_MISMATCH_MESSAGE };
   }
 
-  const passwordError = validatePasswordStrength(input.newPassword);
+  const passwordError = validatePermanentPassword(input.newPassword);
   if (passwordError) {
     return { ok: false, error: passwordError };
   }
@@ -95,4 +95,4 @@ export async function verifyAuthenticatedSessionMatchesPersonnel(): Promise<bool
   );
 }
 
-export { generateTemporaryPassword, validatePasswordStrength };
+export { generateMemorableInitialPassword, validatePermanentPassword };

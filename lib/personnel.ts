@@ -4,8 +4,13 @@ import type {
   PersonnelRole,
   PersonnelRow,
   PersonnelUpdateInput,
+  CreatePersonnelAccountInput,
 } from "@/types/personnel";
 import { PERSONNEL_ROLE_LABELS } from "@/types/personnel";
+import {
+  INITIAL_PASSWORD_MISMATCH_MESSAGE,
+  validateInitialPassword,
+} from "@/lib/auth/password";
 
 export function mapPersonnelRow(row: PersonnelRow): PersonnelRecord {
   return {
@@ -17,6 +22,7 @@ export function mapPersonnelRow(row: PersonnelRow): PersonnelRecord {
     role: row.role,
     active: row.active,
     mustChangePassword: row.must_change_password ?? false,
+    passwordSetupCompletedAt: row.password_setup_completed_at ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -140,13 +146,18 @@ export interface PersonnelFormValues {
   active: boolean;
 }
 
-export type AddUserFormValues = PersonnelFormValues;
+export interface AddUserFormValues extends PersonnelFormValues {
+  initialPassword: string;
+  confirmInitialPassword: string;
+}
 
 export type PersonnelFormErrors = Partial<
   Record<keyof PersonnelFormValues | "submit", string>
 >;
 
-export type AddUserFormErrors = PersonnelFormErrors;
+export type AddUserFormErrors = Partial<
+  Record<keyof AddUserFormValues | "submit", string>
+>;
 
 export function personnelRecordToFormValues(
   user: PersonnelRecord,
@@ -229,10 +240,33 @@ export function validatePersonnelForm(
 }
 
 export function validateAddUserForm(
-  values: PersonnelFormValues,
+  values: AddUserFormValues,
   existingUsers: PersonnelRecord[],
-): PersonnelFormErrors {
-  return validatePersonnelForm(values, existingUsers);
+): AddUserFormErrors {
+  const errors: AddUserFormErrors = validatePersonnelForm(values, existingUsers);
+  const initialPasswordError = validateInitialPassword(values.initialPassword);
+
+  if (initialPasswordError) {
+    errors.initialPassword = initialPasswordError;
+  }
+
+  if (
+    values.initialPassword !== values.confirmInitialPassword &&
+    !errors.confirmInitialPassword
+  ) {
+    errors.confirmInitialPassword = INITIAL_PASSWORD_MISMATCH_MESSAGE;
+  }
+
+  return errors;
+}
+
+export function toCreatePersonnelAccountInput(
+  values: AddUserFormValues,
+): CreatePersonnelAccountInput {
+  return {
+    ...toPersonnelInsertInput(values),
+    initialPassword: values.initialPassword,
+  };
 }
 
 export function toPersonnelUpdateInput(

@@ -4,8 +4,9 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
   INVALID_CREDENTIALS_MESSAGE,
-  generateTemporaryPassword,
-  validatePasswordStrength,
+  validateInitialPassword,
+  generateMemorableInitialPassword,
+  validatePermanentPassword,
 } from "./password";
 import {
   isLoginRateLimited,
@@ -63,15 +64,15 @@ describe("password authentication migration", () => {
 });
 
 describe("password validation", () => {
-  it("accepts a strong generated temporary password", () => {
-    const password = generateTemporaryPassword();
-    assert.equal(validatePasswordStrength(password), null);
-    assert.ok(password.length >= 12);
+  it("accepts memorable initial passwords for administrator reset", () => {
+    const password = generateMemorableInitialPassword();
+    assert.equal(validateInitialPassword(password), null);
+    assert.ok(password.length >= 6);
   });
 
-  it("rejects weak passwords", () => {
+  it("rejects weak permanent passwords", () => {
     assert.match(
-      validatePasswordStrength("short") ?? "",
+      validatePermanentPassword("short") ?? "",
       /at least 12 characters/,
     );
   });
@@ -165,7 +166,7 @@ describe("badge lookup normalization", () => {
 describe("admin personnel provisioning", () => {
   it("creates password-based Auth accounts for admin-created users", () => {
     assert.match(adminPersonnelSource, /auth\.admin\.createUser\(/);
-    assert.match(adminPersonnelSource, /password: temporaryPassword/);
+    assert.match(adminPersonnelSource, /password: input\.initialPassword/);
     assert.match(adminPersonnelSource, /email_confirm: true/);
   });
 

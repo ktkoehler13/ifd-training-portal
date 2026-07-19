@@ -24,7 +24,7 @@ import {
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import type {
-  PersonnelInsertInput,
+  CreatePersonnelAccountInput,
   PersonnelRecord,
   PersonnelRow,
   PersonnelUpdateInput,
@@ -126,7 +126,7 @@ function UserManagementContent({ currentPersonnel }: UserManagementContentProps)
     setOperationError(null);
   }
 
-  async function handleAddUser(input: PersonnelInsertInput) {
+  async function handleAddUser(input: CreatePersonnelAccountInput) {
     if (configError) {
       throw new Error(configError);
     }
@@ -142,7 +142,6 @@ function UserManagementContent({ currentPersonnel }: UserManagementContentProps)
     const payload = (await response.json()) as {
       error?: string;
       personnel?: PersonnelRecord;
-      temporaryPassword?: string;
     };
 
     if (!response.ok || !payload.personnel) {
@@ -151,9 +150,6 @@ function UserManagementContent({ currentPersonnel }: UserManagementContentProps)
 
     setUsers((current) => [payload.personnel!, ...current]);
     setLoadError(null);
-    showSuccess(
-      `Added ${payload.personnel.badgeNumber} (${payload.personnel.email}). Temporary password: ${payload.temporaryPassword}. Provide it securely and require the user to change it after first sign-in.`,
-    );
   }
 
   async function handleConfirmResetPassword(userId: string) {
