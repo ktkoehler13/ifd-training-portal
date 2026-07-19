@@ -135,6 +135,11 @@ export async function clearPersonnelMustChangePassword(
     .eq("id", personnelId);
 
   if (error) {
+    console.error("Password update personnel flag clear failed", {
+      personnelId,
+      code: error.code,
+      message: error.message,
+    });
     throw new Error("Unable to clear the required password change flag.");
   }
 }

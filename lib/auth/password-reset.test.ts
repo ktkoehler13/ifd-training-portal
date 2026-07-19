@@ -64,6 +64,14 @@ const middlewareSource = readFileSync(
   "utf8",
 );
 
+function extractForcedSetupBlock(source: string): string {
+  const match = source.match(
+    /if \(personnel\.mustChangePassword\) \{[\s\S]*?return \{ ok: true, message: PASSWORD_CHANGE_SUCCESS_MESSAGE \};\s*\}/,
+  );
+  assert.ok(match, "forced setup block should exist");
+  return match[0]!;
+}
+
 describe("administrator password reset authorization", () => {
   it("allows MTO personnel to reset passwords", () => {
     assert.equal(isAdministrativeRole("mto"), true);
@@ -251,12 +259,11 @@ describe("administrator reset server behavior", () => {
 
 describe("self-service password change", () => {
   it("still requires the current password for normal changes", () => {
+    const forcedSetupBlock = extractForcedSetupBlock(changePasswordServerSource);
     assert.match(changePasswordViewSource, /Current Password/);
-    assert.match(changePasswordServerSource, /signInWithPassword/);
-    assert.match(
-      changePasswordServerSource,
-      /requiresCurrentPassword = !personnel\.mustChangePassword/,
-    );
+    assert.match(changePasswordServerSource, /current_password: currentPassword/);
+    assert.doesNotMatch(forcedSetupBlock, /current_password/);
+    assert.doesNotMatch(forcedSetupBlock, /currentPassword/);
   });
 
   it("allows required first-login changes without the current password", () => {
@@ -264,6 +271,7 @@ describe("self-service password change", () => {
     assert.match(changePasswordViewSource, /forcedPasswordSetup/);
     assert.match(changePasswordViewSource, /Choose a New Password/);
     assert.doesNotMatch(changePasswordViewSource, /searchParams\.get\("required"\)/);
+    assert.match(changePasswordServerSource, /auth\.admin\.updateUserById/);
     assert.match(changePasswordServerSource, /clearPersonnelMustChangePassword/);
   });
 });
@@ -294,14 +302,10 @@ describe("forced password setup", () => {
   });
 
   it("does not require Current Password in the forced password API", () => {
-    assert.match(
-      changePasswordServerSource,
-      /if \(requiresCurrentPassword\)[\s\S]*signInWithPassword/,
-    );
-    assert.match(
-      changePasswordServerSource,
-      /requiresCurrentPassword = !personnel\.mustChangePassword/,
-    );
+    const forcedSetupBlock = extractForcedSetupBlock(changePasswordServerSource);
+    assert.match(forcedSetupBlock, /auth\.admin\.updateUserById/);
+    assert.doesNotMatch(forcedSetupBlock, /current_password/);
+    assert.doesNotMatch(forcedSetupBlock, /currentPassword/);
   });
 
   it("does not trust forged requiredPasswordChange from the request body", () => {
@@ -309,19 +313,18 @@ describe("forced password setup", () => {
     assert.doesNotMatch(changePasswordRouteSource, /requiredPasswordChange/);
   });
 
-  it("clears must_change_password only after a successful forced update", () => {
+  it("clears must_change_password only after a successful forced Auth update", () => {
     assert.match(
       changePasswordServerSource,
-      /if \(updateError\)[\s\S]*return[\s\S]*if \(personnel\.mustChangePassword\)[\s\S]*clearPersonnelMustChangePassword/,
+      /if \(updateError\)[\s\S]*return[\s\S]*clearPersonnelMustChangePassword\(personnel\.id\)/,
     );
   });
 
-  it("does not clear must_change_password when the update fails", () => {
-    const updateFailureBlock = changePasswordServerSource.match(
-      /if \(updateError\) \{[\s\S]*?\n  \}/,
-    );
-    assert.ok(updateFailureBlock, "updateError block should exist");
-    assert.doesNotMatch(updateFailureBlock[0], /clearPersonnelMustChangePassword/);
+  it("does not clear must_change_password when the forced Auth update fails", () => {
+    const forcedSetupBlock = extractForcedSetupBlock(changePasswordServerSource);
+    const updateErrorBlock = forcedSetupBlock.match(/if \(updateError\) \{[\s\S]*?\n    \}/);
+    assert.ok(updateErrorBlock, "forced updateError block should exist");
+    assert.doesNotMatch(updateErrorBlock[0]!, /clearPersonnelMustChangePassword/);
   });
 
   it("enters forced mode from personnel.mustChangePassword without relying on the query parameter", () => {

@@ -9,9 +9,9 @@ import {
   PASSWORD_CHANGE_SUCCESS_MESSAGE,
 } from "@/lib/auth/password";
 import { resolvePersonnelByEmail } from "@/lib/auth/personnel-lookup-server";
-import { getAuthenticatedPersonnel } from "@/lib/auth/personnel";
 import { normalizePersonnelEmail } from "@/lib/personnel";
 import { createClient } from "@/lib/supabase/server";
+import { createServiceRoleClient } from "@/lib/supabase/service";
 
 export interface ChangePasswordInput {
   currentPassword?: string;
@@ -19,15 +19,15 @@ export interface ChangePasswordInput {
   confirmPassword: string;
 }
 
+const FORCED_PASSWORD_UPDATE_FAILED_MESSAGE =
+  "Unable to update password right now. Try again later.";
+
+const FORCED_PASSWORD_SETUP_FAILED_MESSAGE =
+  "Unable to complete password setup right now. Try again later.";
+
 export async function changeAuthenticatedUserPassword(
   input: ChangePasswordInput,
 ): Promise<{ ok: true; message: string } | { ok: false; error: string }> {
-  const personnel = await getAuthenticatedPersonnel();
-
-  if (!personnel) {
-    return { ok: false, error: "Sign in to change your password." };
-  }
-
   if (input.newPassword !== input.confirmPassword) {
     return { ok: false, error: PASSWORD_MISMATCH_MESSAGE };
   }
@@ -38,38 +38,75 @@ export async function changeAuthenticatedUserPassword(
   }
 
   const supabase = await createClient();
-  const requiresCurrentPassword = !personnel.mustChangePassword;
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
 
-  if (requiresCurrentPassword) {
-    const currentPassword = input.currentPassword?.trim() ?? "";
+  if (userError || !user?.id || !user.email) {
+    return { ok: false, error: "Sign in to change your password." };
+  }
 
-    if (!currentPassword) {
-      return { ok: false, error: CURRENT_PASSWORD_INCORRECT_MESSAGE };
+  const personnel = await resolvePersonnelByEmail(user.email);
+
+  if (!personnel?.active) {
+    return { ok: false, error: "Sign in to change your password." };
+  }
+
+  if (
+    normalizePersonnelEmail(user.email) !==
+    normalizePersonnelEmail(personnel.email)
+  ) {
+    return { ok: false, error: "Sign in to change your password." };
+  }
+
+  if (personnel.mustChangePassword) {
+    const service = createServiceRoleClient();
+    const { error: updateError } = await service.auth.admin.updateUserById(
+      user.id,
+      {
+        password: input.newPassword,
+      },
+    );
+
+    if (updateError) {
+      console.error("Password update failed", {
+        mode: "forced-setup",
+        personnelId: personnel.id,
+        code: updateError.code,
+        message: updateError.message,
+      });
+      return { ok: false, error: FORCED_PASSWORD_UPDATE_FAILED_MESSAGE };
     }
 
-    const { error: verifyError } = await supabase.auth.signInWithPassword({
-      email: personnel.email,
-      password: currentPassword,
-    });
-
-    if (verifyError) {
-      return { ok: false, error: CURRENT_PASSWORD_INCORRECT_MESSAGE };
+    try {
+      await clearPersonnelMustChangePassword(personnel.id);
+    } catch {
+      return { ok: false, error: FORCED_PASSWORD_SETUP_FAILED_MESSAGE };
     }
+
+    return { ok: true, message: PASSWORD_CHANGE_SUCCESS_MESSAGE };
+  }
+
+  const currentPassword = input.currentPassword ?? "";
+
+  if (!currentPassword || currentPassword.trim().length === 0) {
+    return { ok: false, error: CURRENT_PASSWORD_INCORRECT_MESSAGE };
   }
 
   const { error: updateError } = await supabase.auth.updateUser({
     password: input.newPassword,
+    current_password: currentPassword,
   });
 
   if (updateError) {
-    return {
-      ok: false,
-      error: "Unable to update password right now. Try again later.",
-    };
-  }
-
-  if (personnel.mustChangePassword) {
-    await clearPersonnelMustChangePassword(personnel.id);
+    console.error("Password update failed", {
+      mode: "ordinary-change",
+      personnelId: personnel.id,
+      code: updateError.code,
+      message: updateError.message,
+    });
+    return { ok: false, error: CURRENT_PASSWORD_INCORRECT_MESSAGE };
   }
 
   return { ok: true, message: PASSWORD_CHANGE_SUCCESS_MESSAGE };

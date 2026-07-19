@@ -195,6 +195,7 @@ describe("forced permanent password policy", () => {
 
   it("keeps ordinary Change Password on the strong permanent policy", () => {
     assert.doesNotMatch(changePasswordServerSource, /validateInitialPassword/);
+    assert.match(changePasswordServerSource, /validatePermanentPassword/);
   });
 });
 

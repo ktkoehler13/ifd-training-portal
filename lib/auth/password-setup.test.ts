@@ -54,6 +54,14 @@ const personnelLookupSource = readFileSync(
   "utf8",
 );
 
+function extractForcedSetupBlock(source: string): string {
+  const match = source.match(
+    /if \(personnel\.mustChangePassword\) \{[\s\S]*?return \{ ok: true, message: PASSWORD_CHANGE_SUCCESS_MESSAGE \};\s*\}/,
+  );
+  assert.ok(match, "forced setup block should exist");
+  return match[0]!;
+}
+
 describe("legacy password setup login page", () => {
   it("still uses badge number and password for sign in", () => {
     assert.match(landingGateSource, /Badge Number/);
@@ -154,16 +162,16 @@ describe("forced password setup page and API", () => {
   });
 
   it("does not require Current Password in the forced password API", () => {
-    assert.match(
-      changePasswordServerSource,
-      /requiresCurrentPassword = !personnel\.mustChangePassword/,
-    );
+    const forcedSetupBlock = extractForcedSetupBlock(changePasswordServerSource);
+    assert.match(forcedSetupBlock, /auth\.admin\.updateUserById/);
+    assert.doesNotMatch(forcedSetupBlock, /current_password/);
+    assert.doesNotMatch(forcedSetupBlock, /currentPassword/);
     assert.doesNotMatch(changePasswordServerSource, /requiredPasswordChange/);
   });
 
   it("still requires Current Password for ordinary password changes", () => {
     assert.match(changePasswordViewSource, /Current Password/);
-    assert.match(changePasswordServerSource, /signInWithPassword/);
+    assert.match(changePasswordServerSource, /current_password: currentPassword/);
   });
 
   it("clears must_change_password after successful setup", () => {
@@ -172,11 +180,10 @@ describe("forced password setup page and API", () => {
   });
 
   it("does not clear must_change_password when the password update fails", () => {
-    const updateFailureBlock = changePasswordServerSource.match(
-      /if \(updateError\) \{[\s\S]*?\n  \}/,
-    );
-    assert.ok(updateFailureBlock, "updateError block should exist");
-    assert.doesNotMatch(updateFailureBlock[0], /clearPersonnelMustChangePassword/);
+    const forcedSetupBlock = extractForcedSetupBlock(changePasswordServerSource);
+    const updateErrorBlock = forcedSetupBlock.match(/if \(updateError\) \{[\s\S]*?\n    \}/);
+    assert.ok(updateErrorBlock, "forced updateError block should exist");
+    assert.doesNotMatch(updateErrorBlock[0]!, /clearPersonnelMustChangePassword/);
   });
 
   it("shows legacy setup messaging without using the query parameter as authorization", () => {

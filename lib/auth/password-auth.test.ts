@@ -192,7 +192,7 @@ describe("admin personnel provisioning", () => {
 describe("password change", () => {
   it("works for authenticated users through a protected route", () => {
     assert.match(changePasswordRouteSource, /changeAuthenticatedUserPassword/);
-    assert.match(changePasswordServerSource, /getAuthenticatedPersonnel/);
+    assert.match(changePasswordServerSource, /supabase\.auth\.getUser\(\)/);
   });
 });
 

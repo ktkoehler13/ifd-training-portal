@@ -85,9 +85,15 @@ function secureRandomIndex(max: number): number {
   return bytes[0]! % max;
 }
 
+const MEMORABLE_INITIAL_PASSWORD_WORDS = MEMORABLE_PASSWORD_WORDS.filter(
+  (word) => word.length >= 5,
+);
+
 export function generateMemorableInitialPassword(): string {
   const word =
-    MEMORABLE_PASSWORD_WORDS[secureRandomIndex(MEMORABLE_PASSWORD_WORDS.length)]!;
+    MEMORABLE_INITIAL_PASSWORD_WORDS[
+      secureRandomIndex(MEMORABLE_INITIAL_PASSWORD_WORDS.length)
+    ]!;
   const digit = String(secureRandomIndex(10));
   return `${word}${digit}`;
 }
