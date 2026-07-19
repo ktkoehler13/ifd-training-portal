@@ -16,6 +16,7 @@ const initialValues: AddUserFormValues = {
   lastName: "",
   badgeNumber: "",
   email: "",
+  title: "",
   role: "",
   active: true,
   initialPassword: "",

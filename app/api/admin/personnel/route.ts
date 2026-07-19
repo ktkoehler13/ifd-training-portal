@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createPersonnelAuthAccount } from "@/lib/auth/admin-personnel-server";
 import { INITIAL_PASSWORD_INVALID_SERVER_MESSAGE, validateInitialPassword } from "@/lib/auth/password";
-import { getPersonnelErrorMessage, isPersonnelRole } from "@/lib/personnel";
+import { getPersonnelErrorMessage, isPersonnelRole, isPersonnelTitle } from "@/lib/personnel";
 import type { CreatePersonnelAccountInput } from "@/types/personnel";
 
 function parseCreatePersonnelAccountInput(
@@ -18,10 +18,15 @@ function parseCreatePersonnelAccountInput(
     typeof value.lastName !== "string" ||
     typeof value.badgeNumber !== "string" ||
     typeof value.email !== "string" ||
+    typeof value.title !== "string" ||
     typeof value.role !== "string" ||
     typeof value.active !== "boolean" ||
     typeof value.initialPassword !== "string"
   ) {
+    return null;
+  }
+
+  if (!isPersonnelTitle(value.title)) {
     return null;
   }
 
@@ -34,6 +39,7 @@ function parseCreatePersonnelAccountInput(
     lastName: value.lastName,
     badgeNumber: value.badgeNumber,
     email: value.email,
+    title: value.title,
     role: value.role,
     active: value.active,
     initialPassword: value.initialPassword,

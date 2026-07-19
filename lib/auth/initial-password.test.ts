@@ -83,6 +83,7 @@ describe("initial password validation", () => {
         lastName: "Smith",
         badgeNumber: "101",
         email: "pat.smith@example.gov",
+        title: "firefighter",
         role: "firefighter",
         active: true,
         initialPassword: "Truck7",

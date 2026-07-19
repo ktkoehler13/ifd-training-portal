@@ -204,6 +204,7 @@ export async function createPersonnelAuthAccount(input: {
         last_name: input.personnel.lastName,
         badge_number: input.personnel.badgeNumber,
         email: normalizePersonnelEmail(input.personnel.email),
+        title: input.personnel.title,
         role: input.personnel.role,
         active: input.personnel.active,
         must_change_password: true,

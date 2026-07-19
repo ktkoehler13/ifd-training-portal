@@ -3,6 +3,7 @@ import type {
   PersonnelRecord,
   PersonnelRole,
   PersonnelRow,
+  PersonnelTitle,
   PersonnelUpdateInput,
   CreatePersonnelAccountInput,
 } from "@/types/personnel";
@@ -19,6 +20,7 @@ export function mapPersonnelRow(row: PersonnelRow): PersonnelRecord {
     email: row.email,
     firstName: row.first_name,
     lastName: row.last_name,
+    title: row.title,
     role: row.role,
     active: row.active,
     mustChangePassword: row.must_change_password ?? false,
@@ -91,6 +93,14 @@ export function isPersonnelRole(value: string): value is PersonnelRole {
   );
 }
 
+export function isPersonnelTitle(value: string): value is PersonnelTitle {
+  return (
+    value === "firefighter" ||
+    value === "lieutenant" ||
+    value === "assistant_chief"
+  );
+}
+
 export const SELF_ACCOUNT_PROTECTION_MESSAGE =
   "You cannot deactivate or delete your own signed-in account.";
 
@@ -106,6 +116,7 @@ export const SELF_EDIT_IDENTITY_CONFIRM_MESSAGE =
 export interface SelfEditChanges {
   emailChanged: boolean;
   badgeChanged: boolean;
+  titleChanged: boolean;
   roleChanged: boolean;
   activeChanged: boolean;
   hasChanges: boolean;
@@ -122,18 +133,21 @@ export function getSelfEditChanges(
   const normalizedNextEmail = normalizePersonnelEmail(values.email);
   const emailChanged = normalizedNextEmail !== normalizedCurrentEmail;
   const badgeChanged = values.badgeNumber.trim() !== user.badgeNumber;
+  const titleChanged = values.title !== user.title;
   const roleChanged = values.role !== user.role;
   const activeChanged = values.active !== user.active;
-  const hasChanges = emailChanged || badgeChanged || roleChanged || activeChanged;
+  const hasChanges =
+    emailChanged || badgeChanged || titleChanged || roleChanged || activeChanged;
 
   return {
     emailChanged,
     badgeChanged,
+    titleChanged,
     roleChanged,
     activeChanged,
     hasChanges,
     requiresEmailSignOut: emailChanged,
-    requiresIdentityConfirmation: badgeChanged || roleChanged,
+    requiresIdentityConfirmation: badgeChanged || titleChanged || roleChanged,
   };
 }
 
@@ -142,6 +156,7 @@ export interface PersonnelFormValues {
   lastName: string;
   badgeNumber: string;
   email: string;
+  title: PersonnelTitle | "";
   role: PersonnelRole | "";
   active: boolean;
 }
@@ -167,6 +182,7 @@ export function personnelRecordToFormValues(
     lastName: user.lastName ?? "",
     badgeNumber: user.badgeNumber,
     email: user.email,
+    title: user.title,
     role: user.role,
     active: user.active,
   };
@@ -211,8 +227,12 @@ export function validatePersonnelForm(
     errors.email = "Enter a valid email address.";
   }
 
+  if (!values.title || !isPersonnelTitle(values.title)) {
+    errors.title = "Rank is required.";
+  }
+
   if (!values.role || !isPersonnelRole(values.role)) {
-    errors.role = "Role is required.";
+    errors.role = "Application role is required.";
   }
 
   if (badgeNumber) {
@@ -277,6 +297,7 @@ export function toPersonnelUpdateInput(
     lastName: normalizePersonnelName(values.lastName),
     badgeNumber: values.badgeNumber.trim(),
     email: normalizePersonnelEmail(values.email),
+    title: values.title as PersonnelTitle,
     role: values.role as PersonnelRole,
     active: values.active,
   };
@@ -290,6 +311,7 @@ export function toPersonnelInsertInput(
     lastName: normalizePersonnelName(values.lastName),
     badgeNumber: values.badgeNumber.trim(),
     email: normalizePersonnelEmail(values.email),
+    title: values.title as PersonnelTitle,
     role: values.role as PersonnelRole,
     active: values.active,
   };

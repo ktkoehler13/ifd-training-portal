@@ -18,7 +18,7 @@ import {
 } from "@/lib/personnel-signature-normalize";
 import { validateSignatureFileForUpload } from "@/lib/personnel-signature-validation";
 import type { PersonnelSignatureRecord } from "@/types/personnel-signature";
-import { PERSONNEL_ROLE_LABELS } from "@/types/personnel";
+import { PERSONNEL_ROLE_LABELS, PERSONNEL_TITLE_LABELS } from "@/types/personnel";
 import type { SignatureInputMethod, SignatureUploadState } from "@/types/personnel-signature";
 
 const CERTIFICATION_TEXT =
@@ -284,7 +284,11 @@ function MySignatureContent({ personnel }: { personnel: AuthenticatedPersonnel }
               <dd className="mt-1">{personnel.badgeNumber}</dd>
             </div>
             <div>
-              <dt className="font-medium text-zinc-500">Role</dt>
+              <dt className="font-medium text-zinc-500">Rank</dt>
+              <dd className="mt-1">{PERSONNEL_TITLE_LABELS[personnel.title]}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-zinc-500">Application Role</dt>
               <dd className="mt-1">{PERSONNEL_ROLE_LABELS[personnel.role]}</dd>
             </div>
           </dl>

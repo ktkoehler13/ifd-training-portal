@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "tsx --test lib/personnel-signature-png.test.ts lib/personnel-signature-restore-outcome.test.ts lib/personnel-signature-normalize.test.ts lib/training-request-signature-snapshot.test.ts lib/training-request-packet-access.test.ts lib/training-request-workflow-security.test.ts lib/training-request-workflow-reconciliation.test.ts lib/training-request-actions.test.ts lib/training-request-draft-deletion.test.ts lib/auth/password-auth.test.ts lib/auth/password-reset.test.ts lib/auth/password-setup.test.ts lib/auth/initial-password.test.ts lib/auth/password-change.test.ts lib/pdf/generate-approved-packet.test.ts"
+    "test": "tsx --test lib/personnel-signature-png.test.ts lib/personnel-signature-restore-outcome.test.ts lib/personnel-signature-normalize.test.ts lib/training-request-signature-snapshot.test.ts lib/training-request-packet-access.test.ts lib/training-request-workflow-security.test.ts lib/training-request-workflow-reconciliation.test.ts lib/training-request-actions.test.ts lib/training-request-draft-deletion.test.ts lib/personnel-role-rank.test.ts lib/auth/password-auth.test.ts lib/auth/password-reset.test.ts lib/auth/password-setup.test.ts lib/auth/initial-password.test.ts lib/auth/password-change.test.ts lib/pdf/generate-approved-packet.test.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.3",

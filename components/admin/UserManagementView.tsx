@@ -206,6 +206,7 @@ function UserManagementContent({ currentPersonnel }: UserManagementContentProps)
         last_name: input.lastName,
         badge_number: input.badgeNumber,
         email: input.email,
+        title: input.title,
         role: input.role,
         active: input.active,
       })

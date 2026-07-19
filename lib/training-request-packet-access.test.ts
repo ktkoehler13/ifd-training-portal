@@ -14,8 +14,11 @@ const owner: AuthenticatedPersonnel = {
   email: "owner@ifd.example",
   firstName: "Kevin",
   lastName: "Koehler",
+  title: "firefighter",
   role: "firefighter",
   active: true,
+  mustChangePassword: false,
+  passwordSetupCompletedAt: null,
   createdAt: "2026-01-01T00:00:00.000Z",
   updatedAt: "2026-01-01T00:00:00.000Z",
 };

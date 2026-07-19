@@ -9,7 +9,10 @@ import {
 } from "@/lib/personnel";
 import { cn } from "@/lib/utils";
 import type { PersonnelRecord } from "@/types/personnel";
-import { PERSONNEL_ROLE_LABELS } from "@/types/personnel";
+import {
+  PERSONNEL_ROLE_LABELS,
+  PERSONNEL_TITLE_LABELS,
+} from "@/types/personnel";
 
 interface UsersTableProps {
   users: PersonnelRecord[];
@@ -52,7 +55,8 @@ export function UsersTable({
               <th className="px-4 py-3 font-semibold">Name</th>
               <th className="px-4 py-3 font-semibold">Badge Number</th>
               <th className="px-4 py-3 font-semibold">Email</th>
-              <th className="px-4 py-3 font-semibold">Role</th>
+              <th className="px-4 py-3 font-semibold">Rank</th>
+              <th className="px-4 py-3 font-semibold">Application Role</th>
               <th className="px-4 py-3 font-semibold">Status</th>
               <th className="px-4 py-3 font-semibold">Created</th>
               <th className="px-4 py-3 font-semibold">Actions</th>
@@ -77,6 +81,9 @@ export function UsersTable({
                     {user.badgeNumber}
                   </td>
                   <td className="px-4 py-4 align-top">{user.email}</td>
+                  <td className="px-4 py-4 align-top">
+                    {PERSONNEL_TITLE_LABELS[user.title]}
+                  </td>
                   <td className="px-4 py-4 align-top">
                     {PERSONNEL_ROLE_LABELS[user.role]}
                   </td>

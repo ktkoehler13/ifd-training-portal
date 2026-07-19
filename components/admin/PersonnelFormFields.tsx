@@ -4,7 +4,12 @@ import { Field } from "@/components/ui/Field";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import type { PersonnelFormErrors, PersonnelFormValues } from "@/lib/personnel";
-import { PERSONNEL_ROLE_LABELS, PERSONNEL_ROLES } from "@/types/personnel";
+import {
+  PERSONNEL_ROLE_LABELS,
+  PERSONNEL_ROLES,
+  PERSONNEL_TITLE_LABELS,
+  PERSONNEL_TITLES,
+} from "@/types/personnel";
 
 interface InitialPasswordFieldProps {
   idPrefix: string;
@@ -204,7 +209,33 @@ export function PersonnelFormFields({
           </>
         ) : null}
 
-        <Field id={`${idPrefix}-role`} label="Role" error={errors.role}>
+        <Field id={`${idPrefix}-title`} label="Rank" error={errors.title}>
+          <Select
+            id={`${idPrefix}-title`}
+            value={values.title}
+            onChange={(event) =>
+              onChange({
+                ...values,
+                title: event.target.value as PersonnelFormValues["title"],
+              })
+            }
+            disabled={disabled || disabledFields?.title}
+            aria-invalid={errors.title ? true : undefined}
+          >
+            <option value="">Select a rank</option>
+            {PERSONNEL_TITLES.map((title) => (
+              <option key={title} value={title}>
+                {PERSONNEL_TITLE_LABELS[title]}
+              </option>
+            ))}
+          </Select>
+        </Field>
+
+        <Field
+          id={`${idPrefix}-role`}
+          label="Application Role"
+          error={errors.role}
+        >
           <Select
             id={`${idPrefix}-role`}
             value={values.role}
@@ -217,7 +248,7 @@ export function PersonnelFormFields({
             disabled={disabled || disabledFields?.role}
             aria-invalid={errors.role ? true : undefined}
           >
-            <option value="">Select a role</option>
+            <option value="">Select an application role</option>
             {PERSONNEL_ROLES.map((role) => (
               <option key={role} value={role}>
                 {PERSONNEL_ROLE_LABELS[role]}

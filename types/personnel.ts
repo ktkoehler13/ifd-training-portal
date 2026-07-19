@@ -1,11 +1,14 @@
 export type PersonnelRole = "firefighter" | "mto" | "deputy_chief" | "admin";
 
+export type PersonnelTitle = "firefighter" | "lieutenant" | "assistant_chief";
+
 export interface PersonnelRecord {
   id: string;
   badgeNumber: string;
   email: string;
   firstName: string | null;
   lastName: string | null;
+  title: PersonnelTitle;
   role: PersonnelRole;
   active: boolean;
   mustChangePassword: boolean;
@@ -19,6 +22,7 @@ export interface PersonnelUpdateInput {
   lastName: string;
   badgeNumber: string;
   email: string;
+  title: PersonnelTitle;
   role: PersonnelRole;
   active: boolean;
 }
@@ -28,6 +32,7 @@ export interface PersonnelInsertInput {
   lastName: string;
   badgeNumber: string;
   email: string;
+  title: PersonnelTitle;
   role: PersonnelRole;
   active: boolean;
 }
@@ -42,6 +47,7 @@ export interface PersonnelRow {
   email: string;
   first_name: string | null;
   last_name: string | null;
+  title: PersonnelTitle;
   role: PersonnelRole;
   active: boolean;
   must_change_password: boolean;
@@ -49,6 +55,18 @@ export interface PersonnelRow {
   created_at: string;
   updated_at: string;
 }
+
+export const PERSONNEL_TITLES: PersonnelTitle[] = [
+  "firefighter",
+  "lieutenant",
+  "assistant_chief",
+];
+
+export const PERSONNEL_TITLE_LABELS: Record<PersonnelTitle, string> = {
+  firefighter: "Firefighter",
+  lieutenant: "Lieutenant",
+  assistant_chief: "Assistant Chief",
+};
 
 export const PERSONNEL_ROLES: PersonnelRole[] = [
   "firefighter",
@@ -58,7 +76,7 @@ export const PERSONNEL_ROLES: PersonnelRole[] = [
 ];
 
 export const PERSONNEL_ROLE_LABELS: Record<PersonnelRole, string> = {
-  firefighter: "Firefighter",
+  firefighter: "User",
   mto: "MTO",
   deputy_chief: "Deputy Chief",
   admin: "Admin",
