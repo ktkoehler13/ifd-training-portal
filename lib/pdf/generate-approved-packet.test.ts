@@ -2,18 +2,25 @@ import { readFile } from "node:fs/promises";
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { PDFDocument } from "pdf-lib";
+import { APPROVED_PACKET_VISUAL_FIXTURE_INPUT, APPROVED_PACKET_VISUAL_FIXTURE_REQUEST } from "./approved-packet-visual-fixture";
+import {
+  getApprovedPacketStampPlan,
+  inspectApprovedPacketGeometry,
+} from "./build-stamp-values";
 import {
   generateApprovedPacketBytes,
   inspectTalPopulationForTest,
   PdfFormFieldError,
   populateTrainingRequestFormForTest,
 } from "./generate-approved-packet";
+import { renderPdfBytesToPngPages } from "./render-pdf-pages-for-test";
 import {
   countWidgetAnnotations,
   validateFinalMergedPacketNonInteractive,
 } from "./validate-merged-packet";
 import { setOptionalTextField, setRequiredTextField } from "./pdf-form-fields";
 import { TAL_FORM_FIELDS } from "./field-mapping";
+import { formatTrainingDatesIncludingTravel } from "./format-pdf-values";
 import type { TrainingRequestActionRecord } from "@/types/training-request-action";
 import type { TrainingRequestRecord } from "@/types/training-request";
 import { VALID_TEST_PNG } from "@/lib/test-utils/valid-test-png";
@@ -86,6 +93,8 @@ const packetInput = {
     actorRole: "deputy_chief",
     actorName: "Deputy Chief Reviewer",
     signatureName: "Deputy Chief Reviewer",
+    signedAt: "2026-07-02T10:00:00.000Z",
+    createdAt: "2026-07-02T10:00:00.000Z",
     signatureStoragePath: `${sampleRequest.id}/55555555-5555-5555-5555-555555555555/signature.png`,
   }),
   mtoSignaturePng: VALID_TEST_PNG,
@@ -112,10 +121,12 @@ describe("generateApprovedPacketBytes", () => {
     assert.equal(countWidgetAnnotations(pdf), 0);
   });
 
-  it("leaves firefighter TAL signature fields blank", async () => {
+  it("leaves firefighter TAL signature fields blank and checks authorization boxes", async () => {
     const populated = await inspectTalPopulationForTest(packetInput);
     assert.equal(populated.studentPrintName, "");
     assert.equal(populated.studentSignatureDate, "");
+    assert.equal(populated.studentAuthorizedChecked, true);
+    assert.equal(populated.scbaClearanceChecked, true);
   });
 
   it("fails generation when a required training request field is missing", async () => {
@@ -127,7 +138,7 @@ describe("generateApprovedPacketBytes", () => {
         }),
       (error: unknown) => {
         assert.ok(error instanceof PdfFormFieldError);
-        assert.match(error.message, /"Name"/i);
+        assert.match(error.message, /requester name/i);
         return true;
       },
     );
@@ -143,6 +154,68 @@ describe("generateApprovedPacketBytes", () => {
       setRequiredTextField(form, TAL_FORM_FIELDS.courseName, "Fire Officer I", "TAL");
       setOptionalTextField(form, TAL_FORM_FIELDS.courseNumber, "");
     });
+  });
+});
+
+describe("approved packet visual fixture", () => {
+  it("stamps page-one request data, approval dates, and signatures with separate vertical placement", async () => {
+    const plan = getApprovedPacketStampPlan(APPROVED_PACKET_VISUAL_FIXTURE_INPUT);
+    const geometry = inspectApprovedPacketGeometry(plan);
+    const bytes = await generateApprovedPacketBytes(APPROVED_PACKET_VISUAL_FIXTURE_INPUT);
+
+    assert.match(plan.trainingRequestText.requesterName, /Fire Fighter/);
+    assert.match(plan.trainingRequestText.badge, /207/);
+    assert.match(plan.trainingRequestText.applicationDate, /07\/10\/2026/);
+    assert.match(plan.trainingRequestText.trainingName, /Testing Sig/);
+    assert.match(plan.trainingRequestText.trainingLocation, /Where ever/);
+    assert.equal(
+      plan.trainingRequestText.trainingDatesIncludingTravel,
+      formatTrainingDatesIncludingTravel(
+        APPROVED_PACKET_VISUAL_FIXTURE_REQUEST.courseStartDate,
+        APPROVED_PACKET_VISUAL_FIXTURE_REQUEST.courseEndDate,
+      ),
+    );
+    assert.match(plan.trainingRequestApprovalDates.mtoApprovalDate, /07\/10\/2026/);
+    assert.match(plan.trainingRequestApprovalDates.deputyApprovalDate, /07\/11\/2026/);
+    assert.equal(plan.trainingRequestText.onDutyDatePrimary, "");
+    assert.equal(plan.trainingRequestText.onDutyDateSecondary, "");
+
+    assert.equal(geometry.mtoSignatureAboveDeputySignature, true);
+    assert.equal(geometry.mtoSignatureDoesNotOverlapMtoDate, true);
+    assert.equal(geometry.deputySignatureDoesNotOverlapDeputyDate, true);
+    assert.notEqual(
+      plan.signaturePlacements.mtoSignature.y,
+      plan.signaturePlacements.deputySignature.y,
+    );
+    assert.ok(bytes.byteLength > 0);
+  });
+
+  it("stamps both TAL Original Initial boxes with committed MTO initials", async () => {
+    const plan = getApprovedPacketStampPlan(APPROVED_PACKET_VISUAL_FIXTURE_INPUT);
+    await generateApprovedPacketBytes(APPROVED_PACKET_VISUAL_FIXTURE_INPUT);
+
+    assert.equal(plan.talOriginalInitials.studentAuthorization, "KK");
+    assert.equal(plan.talOriginalInitials.scbaClearance, "KK");
+
+    const talPopulation = await inspectTalPopulationForTest(
+      APPROVED_PACKET_VISUAL_FIXTURE_INPUT,
+    );
+    assert.equal(talPopulation.studentAuthorizedChecked, true);
+    assert.equal(talPopulation.scbaClearanceChecked, true);
+  });
+
+  it("renders both pages to PNG when pdftoppm is available", async () => {
+    const bytes = await generateApprovedPacketBytes(APPROVED_PACKET_VISUAL_FIXTURE_INPUT);
+    const rendered = await renderPdfBytesToPngPages(bytes);
+
+    if (!rendered) {
+      return;
+    }
+
+    for (const pngPath of rendered.pngPaths) {
+      const pngBytes = await readFile(pngPath);
+      assert.ok(pngBytes.byteLength > 0);
+    }
   });
 });
 

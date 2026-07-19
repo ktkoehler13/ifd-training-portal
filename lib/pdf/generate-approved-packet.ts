@@ -2,18 +2,24 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { PDFDocument, type PDFPage } from "pdf-lib";
 import {
+  buildTalOriginalInitialStampValues,
+  buildTrainingRequestApprovalStampValues,
+  buildTrainingRequestFormStampValues,
+  getApprovedPacketStampPlan,
+} from "@/lib/pdf/build-stamp-values";
+import { cropSignaturePngTransparentMargins } from "@/lib/pdf/crop-signature-png";
+import {
   TAL_CONSTANTS,
   TAL_FORM_FIELDS,
+  TAL_ORIGINAL_INITIAL_PLACEMENTS,
   TAL_SIGNATURE_PLACEMENTS,
   TRAINING_REQUEST_FORM_FIELDS,
   TRAINING_REQUEST_FORM_SIGNATURE_PLACEMENTS,
+  TRAINING_REQUEST_FORM_TEXT_PLACEMENTS,
+  type PdfImageBoxPlacement,
 } from "@/lib/pdf/field-mapping";
 import {
-  formatPdfCurrency,
   formatPdfDate,
-  formatPdfNumber,
-  formatTrainingDatesIncludingTravel,
-  formatTransportationSelection,
   splitRequesterNameForTal,
 } from "@/lib/pdf/format-pdf-values";
 import {
@@ -24,6 +30,10 @@ import {
   setRequiredTextField,
   uncheckOptionalCheckbox,
 } from "@/lib/pdf/pdf-form-fields";
+import {
+  stampCenteredTextInBox,
+  stampTextInBox,
+} from "@/lib/pdf/stamp-pdf-text";
 import {
   stripInteractivePdfArtifacts,
   validateFinalMergedPacketNonInteractive,
@@ -46,15 +56,16 @@ export interface ApprovedPacketGenerationInput {
   deputySignaturePng: Uint8Array;
 }
 
-export { PdfFormFieldError };
+export { PdfFormFieldError, getApprovedPacketStampPlan };
 
 async function drawSignatureInBox(
   page: PDFPage,
   pdf: PDFDocument,
   pngBytes: Uint8Array,
-  placement: { x: number; y: number; width: number; height: number },
+  placement: PdfImageBoxPlacement,
 ): Promise<void> {
-  const image = await pdf.embedPng(pngBytes);
+  const cropped = cropSignaturePngTransparentMargins(pngBytes);
+  const image = await pdf.embedPng(cropped);
   const scale = Math.min(
     placement.width / image.width,
     placement.height / image.height,
@@ -67,107 +78,16 @@ async function drawSignatureInBox(
   page.drawImage(image, { x, y, width, height });
 }
 
-function populateTrainingRequestForm(
-  pdf: PDFDocument,
-  input: ApprovedPacketGenerationInput,
-): void {
+function populateTrainingRequestCheckboxes(pdf: PDFDocument): void {
   const form = pdf.getForm();
-  const { request, mtoAction, deputyAction } = input;
   const fields = TRAINING_REQUEST_FORM_FIELDS;
   const context = "Training Request Form";
-  const trainingDates = formatTrainingDatesIncludingTravel(
-    request.courseStartDate,
-    request.courseEndDate,
-  );
-
-  setRequiredTextField(form, fields.requesterName, request.requesterName, context);
-  setRequiredTextField(form, fields.badge, request.requesterBadgeNumber, context);
-  setRequiredTextField(
-    form,
-    fields.applicationDate,
-    formatPdfDate(request.submittedAt ?? request.createdAt),
-    context,
-  );
-  setRequiredTextField(form, fields.trainingName, request.courseName, context);
-  setRequiredTextField(form, fields.trainingLocation, request.location, context);
-  setRequiredTextField(form, fields.trainingDatesIncludingTravel, trainingDates, context);
-
-  setOptionalTextField(
-    form,
-    fields.totalDaysIncludingTravel,
-    formatPdfNumber(request.numberOfDaysOnDuty),
-  );
-  setOptionalTextField(
-    form,
-    fields.transportation,
-    formatTransportationSelection({
-      requestDepartmentVehicle: request.requestDepartmentVehicle,
-      transportationNotes: request.transportationNotes,
-    }),
-  );
-  setOptionalTextField(
-    form,
-    fields.registrationFees,
-    formatPdfCurrency(request.registrationFee),
-  );
-  setOptionalTextField(
-    form,
-    fields.mileage,
-    formatPdfNumber(request.totalReimbursableMiles),
-  );
-  setOptionalTextField(
-    form,
-    fields.mileageRate,
-    formatPdfCurrency(request.gsaMileageRate),
-  );
-  setOptionalTextField(
-    form,
-    fields.mileageTotal,
-    formatPdfCurrency(request.mileageReimbursement),
-  );
-  setOptionalTextField(form, fields.mealFoodTotal, formatPdfCurrency(request.foodExpenses));
-  setOptionalTextField(form, fields.lodgingTotal, formatPdfCurrency(request.lodging));
-  setOptionalTextField(form, fields.otherTotal, formatPdfCurrency(request.otherExpenses));
-  setOptionalTextField(form, fields.airfareTotal, formatPdfCurrency(request.airfare));
-  setOptionalTextField(
-    form,
-    fields.rentalVehicleTotal,
-    formatPdfCurrency(request.rentalVehicle),
-  );
-  setOptionalTextField(
-    form,
-    fields.totalEstimatedExpenses,
-    formatPdfCurrency(request.totalEstimatedExpenses),
-  );
-  setOptionalTextField(
-    form,
-    fields.onDutyDatePrimary,
-    trainingDates,
-  );
-  setOptionalTextField(
-    form,
-    fields.onDutyDateSecondary,
-    formatPdfNumber(request.numberOfDaysOnDuty),
-  );
 
   checkRequiredCheckbox(form, fields.approvedCheckbox, context);
   uncheckOptionalCheckbox(form, fields.deniedCheckbox);
-  setOptionalTextField(form, fields.denialReason, "");
-
   checkOptionalCheckbox(form, fields.mtoApprovalCheckbox);
   checkOptionalCheckbox(form, fields.deputyApprovalCheckbox);
-  setRequiredTextField(
-    form,
-    fields.mtoApprovalDate,
-    formatPdfDate(mtoAction.signedAt ?? mtoAction.createdAt),
-    context,
-  );
-  setRequiredTextField(
-    form,
-    fields.deputyApprovalDate,
-    formatPdfDate(deputyAction.signedAt ?? deputyAction.createdAt),
-    context,
-  );
+  setOptionalTextField(form, fields.denialReason, "");
 }
 
 function populateTalForm(pdf: PDFDocument, input: ApprovedPacketGenerationInput): void {
@@ -195,9 +115,41 @@ function populateTalForm(pdf: PDFDocument, input: ApprovedPacketGenerationInput)
     context,
   );
   checkRequiredCheckbox(form, fields.studentAuthorized, context);
+  checkRequiredCheckbox(form, fields.scbaClearance, context);
   setRequiredTextField(form, fields.lastName, student.lastName, context);
   setRequiredTextField(form, fields.firstName, student.firstName, context);
   setRequiredTextField(form, fields.email, request.requesterEmail, context);
+}
+
+async function stampTrainingRequestFormText(
+  pdf: PDFDocument,
+  input: ApprovedPacketGenerationInput,
+): Promise<void> {
+  const page = pdf.getPage(0);
+  const textValues = buildTrainingRequestFormStampValues(input);
+  const approvalDates = buildTrainingRequestApprovalStampValues(input);
+
+  for (const [key, placement] of Object.entries(TRAINING_REQUEST_FORM_TEXT_PLACEMENTS)) {
+    const value = textValues[key as keyof typeof TRAINING_REQUEST_FORM_TEXT_PLACEMENTS];
+    if (!value.trim()) {
+      continue;
+    }
+
+    await stampTextInBox(pdf, page, value, placement);
+  }
+
+  await stampTextInBox(
+    pdf,
+    page,
+    approvalDates.mtoApprovalDate,
+    TRAINING_REQUEST_FORM_SIGNATURE_PLACEMENTS.mtoApprovalDate,
+  );
+  await stampTextInBox(
+    pdf,
+    page,
+    approvalDates.deputyApprovalDate,
+    TRAINING_REQUEST_FORM_SIGNATURE_PLACEMENTS.deputyApprovalDate,
+  );
 }
 
 async function stampTrainingRequestSignatures(
@@ -220,6 +172,23 @@ async function stampTrainingRequestSignatures(
   );
 }
 
+async function stampTalOriginalInitials(
+  pdf: PDFDocument,
+  input: ApprovedPacketGenerationInput,
+): Promise<void> {
+  const page = pdf.getPage(0);
+  const initialsByBox = buildTalOriginalInitialStampValues(input);
+
+  for (const [key, placement] of Object.entries(TAL_ORIGINAL_INITIAL_PLACEMENTS)) {
+    await stampCenteredTextInBox(
+      pdf,
+      page,
+      initialsByBox[key as keyof typeof TAL_ORIGINAL_INITIAL_PLACEMENTS],
+      placement,
+    );
+  }
+}
+
 async function stampTalAgencySignature(
   pdf: PDFDocument,
   mtoSignaturePng: Uint8Array,
@@ -234,24 +203,25 @@ async function stampTalAgencySignature(
   );
 }
 
-async function renderTrainingRequestFormNonInteractive(
-  trainingPdf: PDFDocument,
-): Promise<PDFDocument> {
-  const form = trainingPdf.getForm();
+async function flattenPdfForm(pdf: PDFDocument, context: string): Promise<PDFDocument> {
+  const form = pdf.getForm();
   form.updateFieldAppearances();
 
   try {
     form.flatten();
-    return trainingPdf;
+    return pdf;
   } catch {
     const rendered = await PDFDocument.create();
-    const [page] = await rendered.copyPages(trainingPdf, [0]);
-    rendered.addPage(page);
+    const pageIndexes = Array.from({ length: pdf.getPageCount() }, (_, index) => index);
+    const pages = await rendered.copyPages(pdf, pageIndexes);
+    for (const page of pages) {
+      rendered.addPage(page);
+    }
 
     const remainingFields = rendered.getForm().getFields();
     if (remainingFields.length > 0) {
       throw new PdfFormFieldError(
-        `Training Request Form could not be flattened and still contains ${remainingFields.length} AcroForm field(s).`,
+        `${context} could not be flattened and still contains ${remainingFields.length} AcroForm field(s).`,
       );
     }
 
@@ -259,16 +229,11 @@ async function renderTrainingRequestFormNonInteractive(
   }
 }
 
-async function renderTalFormNonInteractive(talPdf: PDFDocument): Promise<PDFDocument> {
-  const form = talPdf.getForm();
-  form.updateFieldAppearances();
-  form.flatten();
-  return talPdf;
-}
-
 export async function generateApprovedPacketBytes(
   input: ApprovedPacketGenerationInput,
 ): Promise<Uint8Array> {
+  getApprovedPacketStampPlan(input);
+
   const [trainingTemplateBytes, talTemplateBytes] = await Promise.all([
     readFile(TRAINING_REQUEST_FORM_TEMPLATE),
     readFile(TAL_TEMPLATE),
@@ -277,20 +242,22 @@ export async function generateApprovedPacketBytes(
   const trainingPdf = await PDFDocument.load(trainingTemplateBytes);
   const talPdf = await PDFDocument.load(talTemplateBytes);
 
-  populateTrainingRequestForm(trainingPdf, input);
+  populateTrainingRequestCheckboxes(trainingPdf);
   populateTalForm(talPdf, input);
 
-  await stampTrainingRequestSignatures(trainingPdf, input);
-  await stampTalAgencySignature(talPdf, input.mtoSignaturePng);
-
-  const [renderedTrainingPdf, renderedTalPdf] = await Promise.all([
-    renderTrainingRequestFormNonInteractive(trainingPdf),
-    renderTalFormNonInteractive(talPdf),
+  const [flattenedTrainingPdf, flattenedTalPdf] = await Promise.all([
+    flattenPdfForm(trainingPdf, "Training Request Form"),
+    flattenPdfForm(talPdf, "TAL"),
   ]);
 
+  await stampTrainingRequestFormText(flattenedTrainingPdf, input);
+  await stampTrainingRequestSignatures(flattenedTrainingPdf, input);
+  await stampTalOriginalInitials(flattenedTalPdf, input);
+  await stampTalAgencySignature(flattenedTalPdf, input.mtoSignaturePng);
+
   const mergedPdf = await PDFDocument.create();
-  const [trainingPage] = await mergedPdf.copyPages(renderedTrainingPdf, [0]);
-  const [talPage] = await mergedPdf.copyPages(renderedTalPdf, [0]);
+  const [trainingPage] = await mergedPdf.copyPages(flattenedTrainingPdf, [0]);
+  const [talPage] = await mergedPdf.copyPages(flattenedTalPdf, [0]);
   mergedPdf.addPage(trainingPage);
   mergedPdf.addPage(talPage);
 
@@ -307,6 +274,8 @@ export async function inspectTalPopulationForTest(
 ): Promise<{
   studentPrintName: string;
   studentSignatureDate: string;
+  studentAuthorizedChecked: boolean;
+  scbaClearanceChecked: boolean;
 }> {
   const talPdf = await PDFDocument.load(await readFile(TAL_TEMPLATE));
   populateTalForm(talPdf, input);
@@ -320,9 +289,19 @@ export async function inspectTalPopulationForTest(
     }
   }
 
+  function safeIsChecked(fieldName: string): boolean {
+    try {
+      return form.getCheckBox(fieldName).isChecked();
+    } catch {
+      return false;
+    }
+  }
+
   return {
     studentPrintName: safeGetText(TAL_FORM_FIELDS.studentPrintName),
     studentSignatureDate: safeGetText(TAL_FORM_FIELDS.studentSignatureDate),
+    studentAuthorizedChecked: safeIsChecked(TAL_FORM_FIELDS.studentAuthorized),
+    scbaClearanceChecked: safeIsChecked(TAL_FORM_FIELDS.scbaClearance),
   };
 }
 
@@ -346,6 +325,6 @@ export async function loadApprovedPacketTemplatesForTest(): Promise<{
 export async function populateTrainingRequestFormForTest(
   input: ApprovedPacketGenerationInput,
 ): Promise<void> {
-  const trainingPdf = await PDFDocument.load(await readFile(TRAINING_REQUEST_FORM_TEMPLATE));
-  populateTrainingRequestForm(trainingPdf, input);
+  buildTrainingRequestFormStampValues(input);
+  buildTrainingRequestApprovalStampValues(input);
 }
