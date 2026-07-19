@@ -346,8 +346,7 @@ export const TAL_PERSONNEL_FIELDS_NOT_YET_AVAILABLE = [
 ] as const;
 
 /**
- * Individual on-duty dates are not stored separately in the portal schema.
- * Only `numberOfDaysOnDuty` is available, so the on-duty date boxes remain blank.
+ * On-duty dates are stored separately from total training/travel days.
+ * Page 1 includes the first two dates; additional dates continue on the audit trail page.
  */
-export const TRAINING_REQUEST_ON_DUTY_DATE_LIMITATION =
-  "Individual on-duty dates are not stored; only the total day count is available." as const;
+export const TRAINING_REQUEST_ON_DUTY_DATE_PAGE_ONE_CAPACITY = 2;

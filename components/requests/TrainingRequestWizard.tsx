@@ -7,6 +7,7 @@ import {
   CorrectionRequiredAlert,
   shouldShowWizardCorrectionAlert,
 } from "@/components/requests/CorrectionRequiredAlert";
+import { TrainingDayDetailsFields } from "@/components/requests/TrainingDayDetailsFields";
 import { WizardProgress } from "@/components/requests/WizardProgress";
 import { Button } from "@/components/ui/Button";
 import { Field } from "@/components/ui/Field";
@@ -41,6 +42,9 @@ import {
 } from "@/lib/training-request-actions";
 import { DRAFT_NO_LONGER_EXISTS_MESSAGE } from "@/lib/training-request-draft-deletion";
 import {
+  validateTrainingDayDetails,
+} from "@/lib/training-day-details";
+import {
   buildTrainingRequestInput,
   createAndSubmitTrainingRequest,
   createTrainingRequestDraft,
@@ -67,7 +71,9 @@ const initialDraft: TrainingRequestDraft = {
   location: "",
   courseStartDate: "",
   courseEndDate: "",
+  totalDaysIncludingTravel: "",
   numberOfDaysOnDuty: "",
+  onDutyDates: [],
   courseDescription: "",
   requestDepartmentVehicle: false,
   registrationFee: "",
@@ -310,13 +316,16 @@ export function TrainingRequestWizard({
           "Course end date cannot be before the course start date.";
       }
 
-      const days = draft.numberOfDaysOnDuty.trim();
-      if (!days) {
-        nextErrors.numberOfDaysOnDuty = "Number of Days on Duty is required.";
-      } else if (!/^\d+$/.test(days) || Number.parseInt(days, 10) < 1) {
-        nextErrors.numberOfDaysOnDuty =
-          "Enter a whole number greater than 0.";
-      }
+      const dayErrors = validateTrainingDayDetails({
+        totalDaysIncludingTravel: draft.totalDaysIncludingTravel,
+        numberOfDaysOnDuty: draft.numberOfDaysOnDuty,
+        onDutyDates: draft.onDutyDates,
+        courseStartDate: draft.courseStartDate,
+        courseEndDate: draft.courseEndDate,
+        requireComplete: true,
+      });
+
+      Object.assign(nextErrors, dayErrors);
     }
 
     if (currentStep === 3) {
@@ -390,6 +399,7 @@ export function TrainingRequestWizard({
       personnel,
       draft,
       expenseSummary,
+      requireComplete: false,
     });
 
     if (draftRequestId) {
@@ -474,7 +484,10 @@ export function TrainingRequestWizard({
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    const nextErrors = validateStep(4);
+    const nextErrors = {
+      ...validateStep(2),
+      ...validateStep(4),
+    };
     if (!rateAvailable) {
       nextErrors.gsaMileageRate =
         "GSA mileage rate is not configured. Contact the Training Bureau.";
@@ -493,6 +506,7 @@ export function TrainingRequestWizard({
         personnel,
         draft,
         expenseSummary,
+        requireComplete: true,
       });
 
       const submitted = draftRequestId
@@ -757,27 +771,11 @@ export function TrainingRequestWizard({
                   }
                 />
               </Field>
-              <Field
-                id="numberOfDaysOnDuty"
-                label="Number of Days on Duty"
-                error={errors.numberOfDaysOnDuty}
-                className="sm:col-span-2"
-              >
-                <Input
-                  id="numberOfDaysOnDuty"
-                  inputMode="numeric"
-                  value={draft.numberOfDaysOnDuty}
-                  onChange={(event) =>
-                    updateField("numberOfDaysOnDuty", event.target.value)
-                  }
-                  aria-invalid={errors.numberOfDaysOnDuty ? true : undefined}
-                  aria-describedby={
-                    errors.numberOfDaysOnDuty
-                      ? "numberOfDaysOnDuty-error"
-                      : undefined
-                  }
-                />
-              </Field>
+              <TrainingDayDetailsFields
+                draft={draft}
+                errors={errors}
+                onDraftChange={setDraft}
+              />
               <Field
                 id="courseDescription"
                 label="Course Description or Purpose"
@@ -1098,8 +1096,24 @@ export function TrainingRequestWizard({
                 value={formatDisplayDate(draft.courseEndDate)}
               />
               <ReviewItem
-                label="Number of Days on Duty"
-                value={draft.numberOfDaysOnDuty}
+                label="Total Days Including Travel"
+                value={draft.totalDaysIncludingTravel || "—"}
+              />
+              <ReviewItem
+                label="Days On Duty"
+                value={draft.numberOfDaysOnDuty || "0"}
+              />
+              <ReviewItem
+                label="On-Duty Dates"
+                value={
+                  draft.onDutyDates.filter((value) => value.trim()).length > 0
+                    ? draft.onDutyDates
+                        .filter((value) => value.trim())
+                        .map((value) => formatDisplayDate(value))
+                        .join(", ")
+                    : "—"
+                }
+                wide
               />
               <ReviewItem
                 label="Course Description or Purpose"

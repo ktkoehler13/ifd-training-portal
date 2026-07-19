@@ -12,6 +12,10 @@ import {
   type ApprovedTrainingScheduleViewModel,
   type ApprovedTrainingTimeFilter,
 } from "@/lib/approved-training-schedule";
+import {
+  formatDaysOnDutyDisplay,
+  formatTotalDaysIncludingTravelDisplay,
+} from "@/lib/training-day-details";
 import { cn } from "@/lib/utils";
 
 interface ApprovedTrainingScheduleViewProps {
@@ -286,6 +290,8 @@ function ApprovedTrainingScheduleContent({
                           <th className="px-4 py-3 font-semibold">Badge</th>
                           <th className="px-4 py-3 font-semibold">Course</th>
                           <th className="px-4 py-3 font-semibold">Location</th>
+                          <th className="px-4 py-3 font-semibold">Total Days</th>
+                          <th className="px-4 py-3 font-semibold">Days On Duty</th>
                           <th className="px-4 py-3 font-semibold">
                             Request Number
                           </th>
@@ -297,7 +303,7 @@ function ApprovedTrainingScheduleContent({
                           ? monthGroups.flatMap((group) => [
                               <tr key={`${group.monthKey}-header`}>
                                 <td
-                                  colSpan={8}
+                                  colSpan={10}
                                   className="bg-zinc-50 px-4 py-3 text-xs font-semibold tracking-[0.18em] text-zinc-500 uppercase"
                                 >
                                   {group.monthLabel}
@@ -410,6 +416,12 @@ function ApprovedTrainingTableRow({
       <td className="px-4 py-4 align-top text-zinc-700">{record.courseName}</td>
       <td className="px-4 py-4 align-top text-zinc-700">{record.location}</td>
       <td className="px-4 py-4 align-top text-zinc-700">
+        {formatTotalDaysIncludingTravelDisplay(record.totalDaysIncludingTravel)}
+      </td>
+      <td className="px-4 py-4 align-top text-zinc-700">
+        {formatDaysOnDutyDisplay(record.numberOfDaysOnDuty)}
+      </td>
+      <td className="px-4 py-4 align-top text-zinc-700">
         {record.requestNumber}
       </td>
       <td className="px-4 py-4 align-top">
@@ -443,6 +455,18 @@ function ApprovedTrainingCard({
           <dt>Rank</dt>
           <dd className="text-right text-zinc-800">
             {formatApprovedTrainingRequesterRank(record)}
+          </dd>
+        </div>
+        <div className="flex justify-between gap-4">
+          <dt>Total Days</dt>
+          <dd className="text-right text-zinc-800">
+            {formatTotalDaysIncludingTravelDisplay(record.totalDaysIncludingTravel)}
+          </dd>
+        </div>
+        <div className="flex justify-between gap-4">
+          <dt>Days On Duty</dt>
+          <dd className="text-right text-zinc-800">
+            {formatDaysOnDutyDisplay(record.numberOfDaysOnDuty)}
           </dd>
         </div>
         <div className="flex justify-between gap-4">

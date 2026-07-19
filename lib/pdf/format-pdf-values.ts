@@ -5,9 +5,15 @@ export function formatPdfDate(value: string | null | undefined): string {
     return "";
   }
 
-  const date = new Date(value);
+  const trimmed = value.trim();
+  const isoDateMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(trimmed);
+  if (isoDateMatch) {
+    return `${isoDateMatch[2]}/${isoDateMatch[3]}/${isoDateMatch[1]}`;
+  }
+
+  const date = new Date(trimmed);
   if (Number.isNaN(date.getTime())) {
-    return value.trim();
+    return trimmed;
   }
 
   return date.toLocaleDateString("en-US", {

@@ -3,6 +3,11 @@
 import { ExpenseSummary } from "@/components/requests/ExpenseSummary";
 import { formatCurrency, formatMileageRate } from "@/lib/currency";
 import { formatDepartmentVehicle } from "@/lib/expenses";
+import {
+  formatDaysOnDutyDisplay,
+  formatOnDutyDatesForDisplay,
+  formatTotalDaysIncludingTravelDisplay,
+} from "@/lib/training-day-details";
 import { buildTrainingRequestFilename } from "@/lib/training-request-filename";
 import {
   formatCurrentActionRole,
@@ -101,12 +106,19 @@ export function RequestDetailPanel({
           value={`${formatDisplayDate(request.courseStartDate)} – ${formatDisplayDate(request.courseEndDate)}`}
         />
         <DetailItem
-          label="Number of days on duty"
-          value={
-            request.numberOfDaysOnDuty > 0
-              ? String(request.numberOfDaysOnDuty)
-              : "—"
-          }
+          label="Total Days Including Travel"
+          value={formatTotalDaysIncludingTravelDisplay(
+            request.totalDaysIncludingTravel,
+          )}
+        />
+        <DetailItem
+          label="Days On Duty"
+          value={formatDaysOnDutyDisplay(request.numberOfDaysOnDuty)}
+        />
+        <DetailItem
+          label="On-Duty Dates"
+          value={formatOnDutyDatesForDisplay(request.onDutyDates)}
+          className="sm:col-span-2"
         />
         <DetailItem
           label="Description"

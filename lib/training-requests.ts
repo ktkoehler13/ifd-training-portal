@@ -1,6 +1,7 @@
 import { roundCurrency } from "@/lib/currency";
 import { calculateExpenseSummary } from "@/lib/expenses";
 import { normalizePersonnelEmail } from "@/lib/personnel";
+import { buildTrainingDayDetailsFromDraft, normalizeOnDutyDatesForCount } from "@/lib/training-day-details";
 import { createClient } from "@/lib/supabase/client";
 import { submitTrainingRequestWorkflow, resubmitTrainingRequestWorkflow } from "@/lib/training-request-workflow";
 import type { AuthenticatedPersonnel } from "@/lib/auth/personnel";
@@ -42,6 +43,35 @@ function parseStatus(value: unknown): TrainingRequestStatus {
   return "pending_mto";
 }
 
+function mapOnDutyDates(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map((entry) => (typeof entry === "string" ? entry.trim() : ""))
+    .filter(Boolean);
+}
+
+function asNullableInteger(value: unknown): number | null {
+  if (value == null) {
+    return null;
+  }
+
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number.parseInt(value, 10);
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+
+  return null;
+}
+
 export function formatTrainingRequestStatus(status: TrainingRequestStatus): string {
   return TRAINING_REQUEST_STATUS_LABELS[status];
 }
@@ -77,7 +107,9 @@ export function mapTrainingRequestRow(row: TrainingRequestRow): TrainingRequestR
     location: row.location,
     courseStartDate: row.start_date ?? "",
     courseEndDate: row.end_date ?? "",
+    totalDaysIncludingTravel: asNullableInteger(row.total_days_including_travel),
     numberOfDaysOnDuty: row.number_of_days_on_duty,
+    onDutyDates: mapOnDutyDates(row.on_duty_dates),
     registrationFee: roundCurrency(asNumber(row.registration_cost)),
     lodging: roundCurrency(asNumber(row.lodging_cost)),
     foodExpenses: roundCurrency(asNumber(row.food_cost)),
@@ -110,8 +142,16 @@ export function trainingRequestRecordToDraft(
     location: request.location,
     courseStartDate: request.courseStartDate,
     courseEndDate: request.courseEndDate,
-    numberOfDaysOnDuty:
-      request.numberOfDaysOnDuty > 0 ? String(request.numberOfDaysOnDuty) : "",
+    totalDaysIncludingTravel:
+      request.totalDaysIncludingTravel != null &&
+      request.totalDaysIncludingTravel > 0
+        ? String(request.totalDaysIncludingTravel)
+        : "",
+    numberOfDaysOnDuty: String(request.numberOfDaysOnDuty),
+    onDutyDates: normalizeOnDutyDatesForCount(
+      request.onDutyDates,
+      request.numberOfDaysOnDuty,
+    ),
     courseDescription: request.courseDescription,
     requestDepartmentVehicle: request.requestDepartmentVehicle,
     registrationFee: request.registrationFee.toFixed(2),
@@ -130,8 +170,12 @@ export function buildTrainingRequestInput(input: {
   personnel: AuthenticatedPersonnel;
   draft: TrainingRequestDraft;
   expenseSummary: ReturnType<typeof calculateExpenseSummary>;
+  requireComplete?: boolean;
 }): TrainingRequestInsertInput {
   const normalizedEmail = normalizePersonnelEmail(input.draft.departmentEmail);
+  const dayDetails = buildTrainingDayDetailsFromDraft(input.draft, {
+    requireComplete: input.requireComplete ?? false,
+  });
 
   return {
     requesterPersonnelId: input.personnel.id,
@@ -144,10 +188,9 @@ export function buildTrainingRequestInput(input: {
     location: input.draft.location.trim(),
     courseStartDate: input.draft.courseStartDate,
     courseEndDate: input.draft.courseEndDate,
-    numberOfDaysOnDuty: Math.max(
-      0,
-      Number.parseInt(input.draft.numberOfDaysOnDuty, 10) || 0,
-    ),
+    totalDaysIncludingTravel: dayDetails.totalDaysIncludingTravel,
+    numberOfDaysOnDuty: dayDetails.numberOfDaysOnDuty,
+    onDutyDates: dayDetails.onDutyDates,
     registrationFee: input.expenseSummary.registrationFee,
     lodging: input.expenseSummary.lodging,
     foodExpenses: input.expenseSummary.foodExpenses,
@@ -177,7 +220,9 @@ function toDatabasePayload(
     location: input.location,
     start_date: input.courseStartDate || null,
     end_date: input.courseEndDate || null,
+    total_days_including_travel: input.totalDaysIncludingTravel,
     number_of_days_on_duty: input.numberOfDaysOnDuty,
+    on_duty_dates: input.onDutyDates,
     registration_cost: input.registrationFee,
     lodging_cost: input.lodging,
     food_cost: input.foodExpenses,
@@ -217,6 +262,18 @@ export function getTrainingRequestErrorMessage(error: unknown): string {
 
     if (error.message.includes("training_requests_date_range_check")) {
       return "Course end date cannot be before the course start date.";
+    }
+
+    if (error.message.includes("training_requests_on_duty_within_total_check")) {
+      return "Days on duty cannot exceed total days including travel.";
+    }
+
+    if (error.message.includes("training_requests_on_duty_dates_length_check")) {
+      return "Enter all on-duty dates before saving.";
+    }
+
+    if (error.message.includes("training_requests_total_days_including_travel_check")) {
+      return "Enter the total number of training and travel days.";
     }
 
     if (error.message.includes("duplicate key")) {

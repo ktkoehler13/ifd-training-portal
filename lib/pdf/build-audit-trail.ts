@@ -6,6 +6,8 @@ import {
   type PDFPage,
 } from "pdf-lib";
 import { warnApprovedPacketFieldUnavailable } from "@/lib/pdf/warn-approved-packet-fields";
+import { getOnDutyDatesPdfOverflow } from "@/lib/pdf/build-stamp-values";
+import { formatOnDutyDatesForDisplay } from "@/lib/training-day-details";
 import { TRAINING_REQUEST_STATUS_LABELS } from "@/types/training-request";
 import type { TrainingRequestActionRecord, TrainingRequestActionType } from "@/types/training-request-action";
 import type { TrainingRequestRecord } from "@/types/training-request";
@@ -382,6 +384,45 @@ function drawSummaryBlock(
       });
     }
 
+    cursorY -= SUMMARY_LINE_HEIGHT;
+  }
+
+  const overflowDates = getOnDutyDatesPdfOverflow(request);
+  if (overflowDates.length > 0) {
+    page.drawText("Additional On-Duty Dates:", {
+      x: MARGIN_LEFT,
+      y: cursorY,
+      size: FONT_SIZE_SUMMARY_LABEL,
+      font: boldFont,
+      color: rgb(0, 0, 0),
+    });
+    cursorY -= SUMMARY_LINE_HEIGHT;
+    page.drawText(overflowDates.join(", "), {
+      x: MARGIN_LEFT,
+      y: cursorY,
+      size: FONT_SIZE_SUMMARY_VALUE,
+      font: regularFont,
+      color: rgb(0, 0, 0),
+      maxWidth: CONTENT_WIDTH,
+    });
+    cursorY -= SUMMARY_LINE_HEIGHT;
+  } else if (request.onDutyDates.length > 0) {
+    page.drawText("On-Duty Dates:", {
+      x: MARGIN_LEFT,
+      y: cursorY,
+      size: FONT_SIZE_SUMMARY_LABEL,
+      font: boldFont,
+      color: rgb(0, 0, 0),
+    });
+    cursorY -= SUMMARY_LINE_HEIGHT;
+    page.drawText(formatOnDutyDatesForDisplay(request.onDutyDates), {
+      x: MARGIN_LEFT,
+      y: cursorY,
+      size: FONT_SIZE_SUMMARY_VALUE,
+      font: regularFont,
+      color: rgb(0, 0, 0),
+      maxWidth: CONTENT_WIDTH,
+    });
     cursorY -= SUMMARY_LINE_HEIGHT;
   }
 

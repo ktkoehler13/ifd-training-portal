@@ -1,3 +1,4 @@
+import { formatOnDutyDatesForCsv } from "@/lib/training-day-details";
 import { isPersonnelTitle } from "@/lib/personnel";
 import type { PersonnelTitle } from "@/types/personnel";
 import { PERSONNEL_TITLE_LABELS } from "@/types/personnel";
@@ -22,6 +23,9 @@ export interface ApprovedTrainingScheduleRecord {
   location: string;
   courseStartDate: string;
   courseEndDate: string;
+  totalDaysIncludingTravel: number | null;
+  numberOfDaysOnDuty: number;
+  onDutyDates: string[];
   totalEstimatedExpenses: number;
   approvedAt: string | null;
 }
@@ -548,6 +552,9 @@ export function buildApprovedTrainingCsv(
     "Location",
     "Request Number",
     "Approved Date",
+    "Total Days Including Travel",
+    "Number of Days On Duty",
+    "On-Duty Dates",
     "Total Estimated Expenses",
   ];
 
@@ -562,6 +569,9 @@ export function buildApprovedTrainingCsv(
     record.location,
     record.requestNumber,
     formatApprovedDateForCsv(record.approvedAt),
+    record.totalDaysIncludingTravel?.toString() ?? "",
+    String(record.numberOfDaysOnDuty),
+    formatOnDutyDatesForCsv(record.onDutyDates),
     record.totalEstimatedExpenses.toFixed(2),
   ]);
 

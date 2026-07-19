@@ -35,6 +35,7 @@ const sampleRequest: TrainingRequestRecord = {
   requesterBadgeNumber: "207",
   requesterEmail: "firefighter@ifd.example",
   requesterName: "Kevin Koehler",
+  requesterTitleSnapshot: "firefighter",
   courseName: "Fire Officer I",
   courseNumber: "FO-1",
   trainingProvider: "NYS Fire Academy",
@@ -42,7 +43,9 @@ const sampleRequest: TrainingRequestRecord = {
   location: "Montour Falls, NY",
   courseStartDate: "2026-08-01",
   courseEndDate: "2026-08-05",
-  numberOfDaysOnDuty: 5,
+  totalDaysIncludingTravel: 5,
+  numberOfDaysOnDuty: 1,
+  onDutyDates: ["2026-08-03"],
   registrationFee: 250,
   lodging: 400,
   foodExpenses: 150,
@@ -164,7 +167,9 @@ describe("approved packet missing data policy", () => {
     totalReimbursableMiles: 0,
     gsaMileageRate: 0,
     totalEstimatedExpenses: 0,
+    totalDaysIncludingTravel: null,
     numberOfDaysOnDuty: 0,
+    onDutyDates: [],
     transportationNotes: "",
     requestDepartmentVehicle: false,
   };
@@ -327,8 +332,13 @@ describe("approved packet visual fixture", () => {
     );
     assert.match(plan.trainingRequestApprovalDates.mtoApprovalDate, /07\/08\/2026/);
     assert.match(plan.trainingRequestApprovalDates.deputyApprovalDate, /07\/08\/2026/);
-    assert.equal(plan.trainingRequestText.onDutyDatePrimary, "");
-    assert.equal(plan.trainingRequestText.onDutyDateSecondary, "");
+    assert.equal(plan.trainingRequestText.totalDaysIncludingTravel, "3");
+    assert.equal(plan.trainingRequestText.onDutyDatePrimary, "08/10/2026");
+    assert.equal(plan.trainingRequestText.onDutyDateSecondary, "08/11/2026");
+    assert.doesNotMatch(
+      plan.trainingRequestText.onDutyDatePrimary,
+      /07\/08\/2026/,
+    );
 
     assert.equal(geometry.mtoSignatureAboveDeputySignature, true);
     assert.equal(geometry.mtoSignatureDoesNotOverlapMtoDate, true);

@@ -48,7 +48,9 @@ export interface TrainingRequestRow {
   location: string;
   start_date: string | null;
   end_date: string | null;
+  total_days_including_travel: number | null;
   number_of_days_on_duty: number;
+  on_duty_dates: string[];
   registration_cost: number;
   lodging_cost: number;
   food_cost: number;
@@ -83,7 +85,9 @@ export interface TrainingRequestRecord {
   location: string;
   courseStartDate: string;
   courseEndDate: string;
+  totalDaysIncludingTravel: number | null;
   numberOfDaysOnDuty: number;
+  onDutyDates: string[];
   registrationFee: number;
   lodging: number;
   foodExpenses: number;
@@ -114,7 +118,9 @@ export interface TrainingRequestInsertInput {
   location: string;
   courseStartDate: string;
   courseEndDate: string;
+  totalDaysIncludingTravel: number | null;
   numberOfDaysOnDuty: number;
+  onDutyDates: string[];
   registrationFee: number;
   lodging: number;
   foodExpenses: number;
@@ -140,7 +146,9 @@ export interface TrainingRequestDraft {
   location: string;
   courseStartDate: string;
   courseEndDate: string;
+  totalDaysIncludingTravel: string;
   numberOfDaysOnDuty: string;
+  onDutyDates: string[];
   courseDescription: string;
   requestDepartmentVehicle: boolean;
   registrationFee: string;

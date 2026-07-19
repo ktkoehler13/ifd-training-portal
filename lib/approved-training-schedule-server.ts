@@ -125,6 +125,9 @@ async function loadApprovedTrainingRecords(): Promise<
       location: mapped.location,
       courseStartDate: mapped.courseStartDate,
       courseEndDate: mapped.courseEndDate,
+      totalDaysIncludingTravel: mapped.totalDaysIncludingTravel,
+      numberOfDaysOnDuty: mapped.numberOfDaysOnDuty,
+      onDutyDates: mapped.onDutyDates,
       totalEstimatedExpenses: roundCurrency(mapped.totalEstimatedExpenses),
       approvedAt: approvedAtByRequestId.get(mapped.id) ?? null,
     };

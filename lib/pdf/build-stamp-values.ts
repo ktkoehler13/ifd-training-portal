@@ -11,6 +11,7 @@ import {
   formatTrainingDatesIncludingTravel,
   formatTransportationSelection,
 } from "@/lib/pdf/format-pdf-values";
+import { partitionOnDutyDatesForPdf } from "@/lib/training-day-details";
 import { warnApprovedPacketFieldUnavailable } from "@/lib/pdf/warn-approved-packet-fields";
 import type { TrainingRequestActionRecord } from "@/types/training-request-action";
 import type { TrainingRequestRecord } from "@/types/training-request";
@@ -42,6 +43,7 @@ export function buildTrainingRequestFormStampValues(
     request.courseStartDate,
     request.courseEndDate,
   );
+  const onDutyDates = partitionOnDutyDatesForPdf(request.onDutyDates);
 
   return {
     requesterName: optionalText(request.requesterName),
@@ -50,7 +52,9 @@ export function buildTrainingRequestFormStampValues(
     trainingName: optionalText(request.courseName),
     trainingLocation: optionalText(request.location),
     trainingDatesIncludingTravel: trainingDates,
-    totalDaysIncludingTravel: formatOptionalPdfNumber(request.numberOfDaysOnDuty),
+    totalDaysIncludingTravel: formatOptionalPdfNumber(
+      request.totalDaysIncludingTravel,
+    ),
     transportation: formatTransportationSelection({
       requestDepartmentVehicle: request.requestDepartmentVehicle,
       transportationNotes: request.transportationNotes,
@@ -65,9 +69,15 @@ export function buildTrainingRequestFormStampValues(
     airfareTotal: formatOptionalPdfCurrency(request.airfare),
     rentalVehicleTotal: formatOptionalPdfCurrency(request.rentalVehicle),
     totalEstimatedExpenses: formatOptionalPdfCurrency(request.totalEstimatedExpenses),
-    onDutyDatePrimary: "",
-    onDutyDateSecondary: "",
+    onDutyDatePrimary: onDutyDates.primary,
+    onDutyDateSecondary: onDutyDates.secondary,
   };
+}
+
+export function getOnDutyDatesPdfOverflow(
+  request: TrainingRequestRecord,
+): string[] {
+  return partitionOnDutyDatesForPdf(request.onDutyDates).overflow;
 }
 
 export function buildTrainingRequestApprovalStampValues(
