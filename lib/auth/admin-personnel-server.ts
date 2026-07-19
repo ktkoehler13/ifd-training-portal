@@ -32,7 +32,10 @@ type AuthUserLookupResult =
   | { kind: "missing" }
   | { kind: "ambiguous" };
 
-async function findAuthUserMatchesByEmail(email: string): Promise<string[]> {
+async function findAuthUserMatchesByEmail(
+  email: string,
+  personnelId?: string,
+): Promise<string[]> {
   const service = createServiceRoleClient();
   const normalizedEmail = normalizePersonnelEmail(email);
   const matches: string[] = [];
@@ -44,7 +47,17 @@ async function findAuthUserMatchesByEmail(email: string): Promise<string[]> {
       perPage: 200,
     });
 
-    if (error || !data.users.length) {
+    if (error) {
+      console.error("Administrator password reset Auth user lookup failed", {
+        operation: "auth.admin.listUsers",
+        personnelId,
+        code: error.code,
+        message: error.message,
+      });
+      throw new PasswordResetError(PASSWORD_RESET_FAILED_MESSAGE);
+    }
+
+    if (!data.users.length) {
       break;
     }
 
@@ -69,8 +82,9 @@ async function findAuthUserMatchesByEmail(email: string): Promise<string[]> {
 
 async function resolveAuthUserIdByPersonnelEmail(
   email: string,
+  personnelId?: string,
 ): Promise<AuthUserLookupResult> {
-  const matches = await findAuthUserMatchesByEmail(email);
+  const matches = await findAuthUserMatchesByEmail(email, personnelId);
 
   if (matches.length === 0) {
     return { kind: "missing" };
@@ -98,6 +112,11 @@ async function markPersonnelMustChangePassword(
     .eq("id", personnelId);
 
   if (error) {
+    console.error("Administrator password reset personnel flag update failed", {
+      personnelId,
+      code: error.code,
+      message: error.message,
+    });
     throw new PasswordResetError(PASSWORD_RESET_FAILED_MESSAGE);
   }
 }
@@ -213,7 +232,10 @@ export async function resetPersonnelAuthPassword(input: {
     throw new PasswordResetError(PASSWORD_RESET_INACTIVE_MESSAGE);
   }
 
-  const authLookup = await resolveAuthUserIdByPersonnelEmail(personnel.email);
+  const authLookup = await resolveAuthUserIdByPersonnelEmail(
+    personnel.email,
+    personnel.id,
+  );
 
   if (authLookup.kind === "missing") {
     throw new PasswordResetError(PASSWORD_RESET_NO_AUTH_ACCOUNT_MESSAGE);
@@ -238,6 +260,11 @@ export async function resetPersonnelAuthPassword(input: {
   );
 
   if (updateError) {
+    console.error("Administrator password reset Auth update failed", {
+      personnelId: personnel.id,
+      code: updateError.code,
+      message: updateError.message,
+    });
     throw new PasswordResetError(PASSWORD_RESET_FAILED_MESSAGE);
   }
 

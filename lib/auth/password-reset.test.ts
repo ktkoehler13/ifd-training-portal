@@ -3,6 +3,7 @@ import path from "node:path";
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
+  PASSWORD_RESET_FAILED_MESSAGE,
   PASSWORD_RESET_INACTIVE_MESSAGE,
   PASSWORD_RESET_NO_AUTH_ACCOUNT_MESSAGE,
 } from "./password-reset-messages";
@@ -184,6 +185,51 @@ describe("administrator reset server behavior", () => {
       /\.update\([\s\S]*temporaryPassword/,
     );
     assert.doesNotMatch(adminPersonnelSource, /console\.log/);
+  });
+
+  it("logs safe server-side diagnostics without exposing secrets", () => {
+    assert.match(
+      adminPersonnelSource,
+      /Administrator password reset Auth user lookup failed/,
+    );
+    assert.match(
+      adminPersonnelSource,
+      /Administrator password reset Auth update failed/,
+    );
+    assert.match(
+      adminPersonnelSource,
+      /Administrator password reset personnel flag update failed/,
+    );
+    assert.match(adminPersonnelSource, /operation: "auth\.admin\.listUsers"/);
+    const diagnosticBlocks = adminPersonnelSource.match(
+      /console\.error\([\s\S]*?\}\);/g,
+    );
+    assert.ok(diagnosticBlocks, "console.error diagnostic blocks should exist");
+    for (const block of diagnosticBlocks) {
+      assert.doesNotMatch(block, /temporaryPassword/);
+      assert.doesNotMatch(block, /SERVICE_ROLE/);
+      assert.doesNotMatch(block, /refresh_token/);
+      assert.doesNotMatch(block, /access_token/);
+    }
+  });
+
+  it("throws when auth.admin.listUsers fails instead of treating it as an empty page", () => {
+    assert.match(
+      adminPersonnelSource,
+      /if \(error\) \{[\s\S]*auth\.admin\.listUsers[\s\S]*throw new PasswordResetError\(PASSWORD_RESET_FAILED_MESSAGE\)/,
+    );
+    assert.doesNotMatch(
+      adminPersonnelSource,
+      /if \(error \|\| !data\.users\.length\)/,
+    );
+  });
+
+  it("continues returning the generic browser message for internal reset failures", () => {
+    assert.match(
+      adminPersonnelSource,
+      /throw new PasswordResetError\(PASSWORD_RESET_FAILED_MESSAGE\)/,
+    );
+    assert.equal(PASSWORD_RESET_FAILED_MESSAGE, "Unable to reset the password.");
   });
 
   it("never exposes the service-role key to client code", () => {
