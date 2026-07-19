@@ -3,6 +3,10 @@
 import { FormEvent, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { ExpenseSummary } from "@/components/requests/ExpenseSummary";
+import {
+  CorrectionRequiredAlert,
+  shouldShowWizardCorrectionAlert,
+} from "@/components/requests/CorrectionRequiredAlert";
 import { WizardProgress } from "@/components/requests/WizardProgress";
 import { Button } from "@/components/ui/Button";
 import { Field } from "@/components/ui/Field";
@@ -32,10 +36,13 @@ import {
   PERSONNEL_NAME_REQUIRED_MESSAGE,
 } from "@/lib/personnel";
 import {
+  getLatestCorrectionAction,
+  listTrainingRequestActions,
+} from "@/lib/training-request-actions";
+import {
   buildTrainingRequestInput,
   createAndSubmitTrainingRequest,
   createTrainingRequestDraft,
-  formatTrainingRequestIdentifier,
   getTrainingRequestById,
   resubmitTrainingRequest,
   submitTrainingRequest,
@@ -44,6 +51,7 @@ import {
   updateTrainingRequestDraft,
 } from "@/lib/training-requests";
 import { TRAINING_REQUEST_NUMBER_PREVIEW } from "@/types/training-request";
+import type { TrainingRequestActionRecord } from "@/types/training-request-action";
 import type { TrainingRequestDraft } from "@/types";
 import { cn } from "@/lib/utils";
 
@@ -132,6 +140,8 @@ export function TrainingRequestWizard({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSavingDraft, setIsSavingDraft] = useState(false);
   const [isLoadingDraft, setIsLoadingDraft] = useState(Boolean(draftId));
+  const [latestCorrectionAction, setLatestCorrectionAction] =
+    useState<TrainingRequestActionRecord | null>(null);
 
   const gsaMileageRate = useMemo(() => getGsaMileageRate(), []);
   const rateAvailable = gsaMileageRate !== null;
@@ -189,9 +199,18 @@ export function TrainingRequestWizard({
           setDraft(trainingRequestRecordToDraft(request));
           setStatusMessage(
             request.status === "returned_for_correction"
-              ? `Loaded returned request ${formatTrainingRequestIdentifier(request)} for correction.`
+              ? null
               : "Loaded draft.",
           );
+
+          if (request.status === "returned_for_correction") {
+            const actions = await listTrainingRequestActions(request.id);
+            if (!cancelled) {
+              setLatestCorrectionAction(getLatestCorrectionAction(actions));
+            }
+          } else if (!cancelled) {
+            setLatestCorrectionAction(null);
+          }
         }
       } catch (error) {
         if (!cancelled) {
@@ -498,6 +517,14 @@ export function TrainingRequestWizard({
         className="rounded-2xl bg-white p-6 shadow-sm shadow-zinc-200/60 sm:p-8"
         noValidate
       >
+        {shouldShowWizardCorrectionAlert(editableStatus) ? (
+          <CorrectionRequiredAlert
+            action={latestCorrectionAction}
+            variant="wizard"
+            className="mb-6"
+          />
+        ) : null}
+
         {step === 1 ? (
           <section className="space-y-5" aria-labelledby="step-1-heading">
             <div>

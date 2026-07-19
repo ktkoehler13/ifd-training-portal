@@ -11,6 +11,10 @@ import type { AuthenticatedPersonnel } from "@/lib/auth/personnel";
 import {
   formatCurrentActionRole,
   formatActionTimestamp,
+  getCorrectionCommentsDisplay,
+  getLatestCorrectionAction,
+  listTrainingRequestActions,
+  truncateCorrectionPreview,
 } from "@/lib/training-request-actions";
 import {
   formatTrainingRequestIdentifier,
@@ -20,6 +24,10 @@ import {
 } from "@/lib/training-requests";
 import type { TrainingRequestRecord } from "@/types/training-request";
 import { cn } from "@/lib/utils";
+
+interface CorrectionPreview {
+  commentsPreview: string;
+}
 
 function formatDisplayDate(value: string) {
   if (!value) {
@@ -41,6 +49,9 @@ function formatDisplayDate(value: string) {
 function MyRequestsContent({ personnel }: { personnel: AuthenticatedPersonnel }) {
   const router = useRouter();
   const [requests, setRequests] = useState<TrainingRequestRecord[]>([]);
+  const [correctionPreviews, setCorrectionPreviews] = useState<
+    Record<string, CorrectionPreview>
+  >({});
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -50,13 +61,33 @@ function MyRequestsContent({ personnel }: { personnel: AuthenticatedPersonnel })
 
     try {
       const data = await listOwnTrainingRequests(personnel.id);
+      const returnedRequests = data.filter(
+        (request) => request.status === "returned_for_correction",
+      );
+      const previewEntries = await Promise.all(
+        returnedRequests.map(async (request) => {
+          const actions = await listTrainingRequestActions(request.id);
+          const latestCorrectionAction = getLatestCorrectionAction(actions);
+          return [
+            request.id,
+            {
+              commentsPreview: truncateCorrectionPreview(
+                getCorrectionCommentsDisplay(latestCorrectionAction),
+              ),
+            },
+          ] as const;
+        }),
+      );
+
       startTransition(() => {
         setRequests(data);
+        setCorrectionPreviews(Object.fromEntries(previewEntries));
         setIsLoading(false);
       });
     } catch (error) {
       startTransition(() => {
         setRequests([]);
+        setCorrectionPreviews({});
         setLoadError(
           error instanceof Error
             ? error.message
@@ -199,22 +230,35 @@ function MyRequestsContent({ personnel }: { personnel: AuthenticatedPersonnel })
                         {formatCurrency(request.totalEstimatedExpenses)}
                       </td>
                       <td className="px-4 py-4 align-top">
-                        <span
-                          className={cn(
-                            "inline-flex rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset",
-                            request.status === "draft"
-                              ? "bg-zinc-100 text-zinc-700 ring-zinc-200"
-                              : request.status === "approved"
-                                ? "bg-green-50 text-green-900 ring-green-200"
-                                : request.status === "denied"
-                                  ? "bg-red-50 text-red-900 ring-red-200"
-                                  : request.status === "returned_for_correction"
-                                    ? "bg-amber-100 text-amber-950 ring-amber-300"
-                                    : "bg-amber-50 text-amber-900 ring-amber-200",
-                          )}
-                        >
-                          {formatTrainingRequestStatus(request.status)}
-                        </span>
+                        <div className="space-y-2">
+                          <span
+                            className={cn(
+                              "inline-flex rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset",
+                              request.status === "draft"
+                                ? "bg-zinc-100 text-zinc-700 ring-zinc-200"
+                                : request.status === "approved"
+                                  ? "bg-green-50 text-green-900 ring-green-200"
+                                  : request.status === "denied"
+                                    ? "bg-red-50 text-red-900 ring-red-200"
+                                    : request.status === "returned_for_correction"
+                                      ? "bg-amber-100 text-amber-950 ring-amber-300"
+                                      : "bg-amber-50 text-amber-900 ring-amber-200",
+                            )}
+                          >
+                            {formatTrainingRequestStatus(request.status)}
+                          </span>
+                          {request.status === "returned_for_correction" ? (
+                            <span className="inline-flex rounded-full bg-red-100 px-2.5 py-1 text-xs font-semibold text-red-900 ring-1 ring-red-200 ring-inset">
+                              Action required
+                            </span>
+                          ) : null}
+                          {request.status === "returned_for_correction" &&
+                          correctionPreviews[request.id] ? (
+                            <p className="max-w-xs text-xs leading-5 whitespace-pre-wrap text-amber-950">
+                              {correctionPreviews[request.id].commentsPreview}
+                            </p>
+                          ) : null}
+                        </div>
                       </td>
                       <td className="px-4 py-4 align-top text-zinc-700">
                         {formatCurrentActionRole(request.currentActionRole) ??
@@ -240,17 +284,25 @@ function MyRequestsContent({ personnel }: { personnel: AuthenticatedPersonnel })
                             </Button>
                           ) : null}
                           {request.status === "returned_for_correction" ? (
-                            <Button
-                              type="button"
-                              className="h-9 px-3 text-xs"
-                              onClick={() =>
-                                router.push(
-                                  `/requests/new?draft=${encodeURIComponent(request.id)}`,
-                                )
-                              }
-                            >
-                              Edit and Resubmit
-                            </Button>
+                            <>
+                              <Link
+                                href={`/requests/${encodeURIComponent(request.id)}/confirmation`}
+                                className="inline-flex h-9 items-center rounded-xl border border-amber-300 bg-amber-50 px-3 text-xs font-semibold text-amber-950 shadow-sm hover:bg-amber-100"
+                              >
+                                Review corrections
+                              </Link>
+                              <Button
+                                type="button"
+                                className="h-9 px-3 text-xs"
+                                onClick={() =>
+                                  router.push(
+                                    `/requests/new?draft=${encodeURIComponent(request.id)}`,
+                                  )
+                                }
+                              >
+                                Edit and Resubmit
+                              </Button>
+                            </>
                           ) : null}
                           {request.status !== "draft" ? (
                             <Link

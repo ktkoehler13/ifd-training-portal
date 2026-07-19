@@ -58,21 +58,79 @@ export async function listTrainingRequestActions(
   return (data as TrainingRequestActionRow[]).map(mapTrainingRequestActionRow);
 }
 
-export function getLatestCorrectionComments(
+export const MISSING_CORRECTION_COMMENTS_MESSAGE =
+  "Reviewers did not provide correction details. Contact the reviewer before resubmitting.";
+
+function isCorrectionReturnAction(action: TrainingRequestActionRecord) {
+  return (
+    action.action === "mto_returned" ||
+    action.action === "deputy_chief_returned"
+  );
+}
+
+export function getLatestCorrectionAction(
   actions: TrainingRequestActionRecord[],
-): string | null {
+): TrainingRequestActionRecord | null {
   for (let index = actions.length - 1; index >= 0; index -= 1) {
     const action = actions[index];
-    if (
-      (action.action === "mto_returned" ||
-        action.action === "deputy_chief_returned") &&
-      action.comments
-    ) {
-      return action.comments;
+    if (isCorrectionReturnAction(action)) {
+      return action;
     }
   }
 
   return null;
+}
+
+export function getCorrectionCommentsDisplay(
+  action: TrainingRequestActionRecord | null,
+): string {
+  const comments = action?.comments?.trim();
+  if (comments) {
+    return comments;
+  }
+
+  return MISSING_CORRECTION_COMMENTS_MESSAGE;
+}
+
+export function formatCorrectionReviewerLabel(
+  action: TrainingRequestActionRecord,
+): string {
+  const role = formatCurrentActionRole(action.actorRole);
+  if (role) {
+    return `${action.actorName} (${role})`;
+  }
+
+  return action.actorName;
+}
+
+export function getCorrectionReturnedAt(
+  action: TrainingRequestActionRecord,
+): string {
+  return formatActionTimestamp(action.signedAt ?? action.createdAt);
+}
+
+export function truncateCorrectionPreview(
+  text: string,
+  maxLength = 120,
+): string {
+  if (text.length <= maxLength) {
+    return text;
+  }
+
+  return `${text.slice(0, maxLength).trimEnd()}…`;
+}
+
+export function getLatestCorrectionComments(
+  actions: TrainingRequestActionRecord[],
+): string | null {
+  const action = getLatestCorrectionAction(actions);
+  const comments = action?.comments?.trim();
+
+  if (!comments) {
+    return null;
+  }
+
+  return comments;
 }
 
 export function formatCurrentActionRole(

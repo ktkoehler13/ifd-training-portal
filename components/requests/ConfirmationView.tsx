@@ -4,6 +4,10 @@ import { startTransition, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { RequestActionTimeline } from "@/components/requests/RequestActionTimeline";
 import { ApprovedPacketPanel } from "@/components/requests/ApprovedPacketPanel";
+import {
+  CorrectionRequiredAlert,
+  shouldShowCorrectionAlert,
+} from "@/components/requests/CorrectionRequiredAlert";
 import { RequestDetailPanel } from "@/components/requests/RequestDetailPanel";
 import { AuthGate } from "@/components/layout/AuthGate";
 import { Button } from "@/components/ui/Button";
@@ -11,7 +15,7 @@ import { isAdministrativeRole } from "@/lib/auth/roles";
 import type { AuthenticatedPersonnel } from "@/lib/auth/personnel";
 import {
   formatCurrentActionRole,
-  getLatestCorrectionComments,
+  getLatestCorrectionAction,
   listTrainingRequestActions,
 } from "@/lib/training-request-actions";
 import {
@@ -125,10 +129,12 @@ function ConfirmationContent({
     };
   }, [personnel.role, requestId]);
 
-  const correctionComments = getLatestCorrectionComments(actions);
+  const latestCorrectionAction = getLatestCorrectionAction(actions);
   const canEditAndResubmit =
     request?.status === "returned_for_correction" &&
     request.requesterPersonnelId === personnel.id;
+  const showCorrectionAlert =
+    request !== null && shouldShowCorrectionAlert(request.status);
 
   return (
     <div className="flex flex-1 flex-col bg-zinc-100">
@@ -162,10 +168,24 @@ function ConfirmationContent({
                 </p>
               </div>
 
-              {canEditAndResubmit && correctionComments ? (
-                <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-                  <p className="font-semibold">Correction required</p>
-                  <p className="mt-2 whitespace-pre-wrap">{correctionComments}</p>
+              {showCorrectionAlert ? (
+                <div className="mb-6 space-y-4">
+                  <CorrectionRequiredAlert
+                    action={latestCorrectionAction}
+                    showResubmitHint={canEditAndResubmit}
+                  />
+                  {canEditAndResubmit ? (
+                    <Button
+                      className="w-full sm:w-auto"
+                      onClick={() =>
+                        router.push(
+                          `/requests/new?draft=${encodeURIComponent(request.id)}`,
+                        )
+                      }
+                    >
+                      Edit and Resubmit
+                    </Button>
+                  ) : null}
                 </div>
               ) : null}
 
@@ -227,18 +247,6 @@ function ConfirmationContent({
               ) : null}
 
               <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-                {canEditAndResubmit ? (
-                  <Button
-                    className="w-full flex-1"
-                    onClick={() =>
-                      router.push(
-                        `/requests/new?draft=${encodeURIComponent(request.id)}`,
-                      )
-                    }
-                  >
-                    Edit and Resubmit
-                  </Button>
-                ) : null}
                 <Button
                   variant="secondary"
                   className="w-full flex-1"
