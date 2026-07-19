@@ -2,6 +2,10 @@ import "server-only";
 
 import { clearPersonnelMustChangePassword } from "@/lib/auth/admin-personnel-server";
 import {
+  markForcedPasswordSetupPendingFinalize,
+  reconcileForcedPasswordSetupIfPending,
+} from "@/lib/auth/forced-password-setup-reconciliation";
+import {
   generateMemorableInitialPassword,
   validatePermanentPassword,
   CURRENT_PASSWORD_INCORRECT_MESSAGE,
@@ -22,8 +26,8 @@ export interface ChangePasswordInput {
 const FORCED_PASSWORD_UPDATE_FAILED_MESSAGE =
   "Unable to update password right now. Try again later.";
 
-const FORCED_PASSWORD_SETUP_FAILED_MESSAGE =
-  "Unable to complete password setup right now. Try again later.";
+export const FORCED_PASSWORD_SETUP_PARTIAL_SUCCESS_MESSAGE =
+  "Your password was changed, but account setup could not be finalized. Sign out and sign in with your new password, or contact an administrator.";
 
 export async function changeAuthenticatedUserPassword(
   input: ChangePasswordInput,
@@ -47,6 +51,8 @@ export async function changeAuthenticatedUserPassword(
     return { ok: false, error: "Sign in to change your password." };
   }
 
+  await reconcileForcedPasswordSetupIfPending();
+
   const personnel = await resolvePersonnelByEmail(user.email);
 
   if (!personnel?.active) {
@@ -58,6 +64,14 @@ export async function changeAuthenticatedUserPassword(
     normalizePersonnelEmail(personnel.email)
   ) {
     return { ok: false, error: "Sign in to change your password." };
+  }
+
+  const hadPendingFinalize =
+    (user.app_metadata as Record<string, unknown> | undefined)
+      ?.forced_password_setup_pending_finalize === true;
+
+  if (hadPendingFinalize && !personnel.mustChangePassword) {
+    return { ok: true, message: PASSWORD_CHANGE_SUCCESS_MESSAGE };
   }
 
   if (personnel.mustChangePassword) {
@@ -82,7 +96,11 @@ export async function changeAuthenticatedUserPassword(
     try {
       await clearPersonnelMustChangePassword(personnel.id);
     } catch {
-      return { ok: false, error: FORCED_PASSWORD_SETUP_FAILED_MESSAGE };
+      await markForcedPasswordSetupPendingFinalize(
+        user.id,
+        user.app_metadata as Record<string, unknown> | undefined,
+      );
+      return { ok: false, error: FORCED_PASSWORD_SETUP_PARTIAL_SUCCESS_MESSAGE };
     }
 
     return { ok: true, message: PASSWORD_CHANGE_SUCCESS_MESSAGE };

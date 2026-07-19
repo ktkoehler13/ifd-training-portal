@@ -12,6 +12,21 @@ const changePasswordViewSource = readFileSync(
   path.join(process.cwd(), "components/settings/ChangePasswordView.tsx"),
   "utf8",
 );
+const adminPersonnelSource = readFileSync(
+  path.join(process.cwd(), "lib/auth/admin-personnel-server.ts"),
+  "utf8",
+);
+const reconciliationSource = readFileSync(
+  path.join(process.cwd(), "lib/auth/forced-password-setup-reconciliation.ts"),
+  "utf8",
+);
+const correctiveMigrationSql = readFileSync(
+  path.join(
+    process.cwd(),
+    "supabase/migrations/20260719200000_add_password_setup_completed_at.sql",
+  ),
+  "utf8",
+);
 
 function extractForcedSetupBlock(source: string): string {
   const match = source.match(
@@ -110,5 +125,80 @@ describe("permanent password validation and security", () => {
     assert.match(changePasswordServerSource, /mode: "ordinary-change"/);
     assert.match(changePasswordServerSource, /code: updateError\.code/);
     assert.match(changePasswordServerSource, /message: updateError\.message/);
+  });
+});
+
+describe("password setup completion migration and flag clearing", () => {
+  it("adds password_setup_completed_at in the corrective migration", () => {
+    assert.match(
+      correctiveMigrationSql,
+      /add column if not exists password_setup_completed_at timestamptz null/,
+    );
+    assert.match(
+      correctiveMigrationSql,
+      /successfully established or replaced their permanent password/,
+    );
+  });
+
+  it("sets must_change_password to false after successful forced setup", () => {
+    const forcedSetupBlock = extractForcedSetupBlock(changePasswordServerSource);
+    assert.match(adminPersonnelSource, /must_change_password: false/);
+    assert.match(forcedSetupBlock, /clearPersonnelMustChangePassword\(personnel\.id\)/);
+  });
+
+  it("records password_setup_completed_at after successful forced setup", () => {
+    assert.match(adminPersonnelSource, /password_setup_completed_at: new Date\(\)\.toISOString\(\)/);
+    assert.match(adminPersonnelSource, /\.select\("id"\)[\s\S]*\.maybeSingle\(\)/);
+  });
+
+  it("treats a missing personnel row as a failure", () => {
+    assert.match(adminPersonnelSource, /if \(!data\)/);
+    assert.match(adminPersonnelSource, /PERSONNEL_NOT_FOUND/);
+  });
+
+  it("returns the partial-success message when Auth succeeds but the personnel update fails", () => {
+    assert.match(
+      changePasswordServerSource,
+      /FORCED_PASSWORD_SETUP_PARTIAL_SUCCESS_MESSAGE/,
+    );
+    assert.match(
+      changePasswordServerSource,
+      /Your password was changed, but account setup could not be finalized/,
+    );
+    assert.match(
+      changePasswordServerSource,
+      /markForcedPasswordSetupPendingFinalize/,
+    );
+  });
+
+  it("reconciles pending forced setup only when the Auth marker is present", () => {
+    assert.match(
+      reconciliationSource,
+      /forced_password_setup_pending_finalize/,
+    );
+    assert.match(reconciliationSource, /personnel\.mustChangePassword/);
+    assert.match(reconciliationSource, /normalizePersonnelEmail/);
+    assert.doesNotMatch(
+      reconciliationSource,
+      /mustChangePassword[\s\S]*clearPersonnelMustChangePassword[\s\S]*readPendingFinalizeMarker/,
+    );
+  });
+
+  it("never logs passwords or tokens during personnel flag clearing", () => {
+    const diagnosticBlocks = [
+      ...(adminPersonnelSource.match(/console\.error\([\s\S]*?\}\);/g) ?? []),
+      ...(reconciliationSource.match(/console\.error\([\s\S]*?\}\);/g) ?? []),
+      ...(changePasswordServerSource.match(/console\.error\([\s\S]*?\}\);/g) ?? []),
+    ];
+    assert.ok(diagnosticBlocks.length > 0, "diagnostic blocks should exist");
+    for (const block of diagnosticBlocks) {
+      assert.doesNotMatch(block, /newPassword/);
+      assert.doesNotMatch(block, /currentPassword/);
+      assert.doesNotMatch(block, /initialPassword/);
+      assert.doesNotMatch(block, /access token/i);
+      assert.doesNotMatch(block, /refresh token/i);
+      assert.doesNotMatch(block, /serviceRoleKey/);
+      assert.doesNotMatch(block, /SERVICE_ROLE/);
+    }
   });
 });

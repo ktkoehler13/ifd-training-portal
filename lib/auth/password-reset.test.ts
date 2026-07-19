@@ -289,7 +289,10 @@ describe("forced password setup", () => {
   });
 
   it("redirects forced users to /settings/password?required=1 after login", () => {
-    assert.match(loginServerSource, /mustChangePassword: verifiedPersonnel\.mustChangePassword/);
+    assert.match(
+      loginServerSource,
+      /mustChangePassword:[\s\S]*refreshedPersonnel\?\.mustChangePassword/,
+    );
     assert.match(loginRouteSource, /\/settings\/password\?required=1/);
   });
 

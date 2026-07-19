@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { reconcileForcedPasswordSetupIfPending } from "@/lib/auth/forced-password-setup-reconciliation";
 import { normalizePersonnelEmail } from "@/lib/personnel";
 import { getSupabaseEnv } from "@/lib/supabase/env";
 
@@ -75,6 +76,11 @@ export async function updateSession(request: NextRequest) {
     pathname.startsWith("/admin") ||
     pathname.startsWith("/settings") ||
     pathname.startsWith("/approvals");
+
+  if (user?.email) {
+    await reconcileForcedPasswordSetupIfPending();
+  }
+
   const mustChangePassword = user?.email
     ? await resolveMustChangePassword(supabase, user.email)
     : false;

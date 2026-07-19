@@ -126,19 +126,30 @@ export async function clearPersonnelMustChangePassword(
   personnelId: string,
 ): Promise<void> {
   const service = createServiceRoleClient();
-  const { error } = await service
+  const { data, error } = await service
     .from("personnel")
     .update({
       must_change_password: false,
       password_setup_completed_at: new Date().toISOString(),
     })
-    .eq("id", personnelId);
+    .eq("id", personnelId)
+    .select("id")
+    .maybeSingle();
 
   if (error) {
     console.error("Password update personnel flag clear failed", {
       personnelId,
       code: error.code,
       message: error.message,
+    });
+    throw new Error("Unable to clear the required password change flag.");
+  }
+
+  if (!data) {
+    console.error("Password update personnel flag clear failed", {
+      personnelId,
+      code: "PERSONNEL_NOT_FOUND",
+      message: "No personnel row was updated.",
     });
     throw new Error("Unable to clear the required password change flag.");
   }

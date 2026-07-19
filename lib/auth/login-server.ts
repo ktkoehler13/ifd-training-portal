@@ -1,5 +1,6 @@
 import "server-only";
 
+import { reconcileForcedPasswordSetupIfPending } from "@/lib/auth/forced-password-setup-reconciliation";
 import { INVALID_CREDENTIALS_MESSAGE } from "@/lib/auth/password";
 import {
   normalizeBadgeNumberForLookup,
@@ -71,5 +72,14 @@ export async function performPasswordLogin(
     return { ok: false, error: INVALID_CREDENTIALS_MESSAGE };
   }
 
-  return { ok: true, mustChangePassword: verifiedPersonnel.mustChangePassword };
+  await reconcileForcedPasswordSetupIfPending();
+
+  const refreshedPersonnel = await resolveActivePersonnelByBadge(badgeNumber);
+
+  return {
+    ok: true,
+    mustChangePassword:
+      refreshedPersonnel?.mustChangePassword ??
+      verifiedPersonnel.mustChangePassword,
+  };
 }
