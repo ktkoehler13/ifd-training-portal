@@ -16,6 +16,7 @@ interface UsersTableProps {
   currentUserEmail: string;
   onEdit: (user: PersonnelRecord) => void;
   onChangeStatus: (user: PersonnelRecord, nextActive: boolean) => void;
+  onResetPassword: (user: PersonnelRecord) => void;
   onDelete: (user: PersonnelRecord) => void;
 }
 
@@ -39,6 +40,7 @@ export function UsersTable({
   currentUserEmail,
   onEdit,
   onChangeStatus,
+  onResetPassword,
   onDelete,
 }: UsersTableProps) {
   return (
@@ -106,6 +108,15 @@ export function UsersTable({
                         }
                       >
                         {user.active ? "Move to Inactive" : "Reactivate"}
+                      </Button>
+
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        className="h-9 px-3 text-xs"
+                        onClick={() => onResetPassword(user)}
+                      >
+                        Reset Password
                       </Button>
 
                       {isSelf ? (

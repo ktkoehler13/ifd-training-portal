@@ -75,6 +75,12 @@ function getQuickActionCards(
     cards.push(adminRequestsCard);
   }
 
+  cards.push({
+    title: "Change Password",
+    description: "Update your account password.",
+    href: "/settings/password",
+  });
+
   cards.push(baseActionCards[2]);
   return cards;
 }

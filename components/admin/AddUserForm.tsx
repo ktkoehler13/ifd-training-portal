@@ -70,7 +70,8 @@ export function AddUserForm({
     >
       <h2 className="text-lg font-semibold text-zinc-900">Add User</h2>
       <p className="mt-1 text-sm text-zinc-600">
-        Create a personnel record using badge number and department email only.
+        Create a personnel record and Supabase Auth account. Communicate the
+        generated temporary password securely outside the portal.
       </p>
 
       <div className="mt-6 space-y-4">

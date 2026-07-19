@@ -69,75 +69,112 @@ Apply these files in order using the Supabase SQL editor:
 7. `supabase/migrations/20260718200000_human_readable_request_numbers.sql`
 8. `supabase/migrations/20260718210000_personnel_signatures.sql`
 9. `supabase/migrations/20260718220000_approval_signature_snapshots_and_packets.sql`
+10. `supabase/migrations/20260718230000_delete_own_training_request_drafts.sql`
+11. `supabase/migrations/20260718240000_password_authentication.sql`
 
-### 5. Insert test personnel manually
+### 5. Create the first administrator manually
 
-Use `supabase/seed.example.sql` as a development-only guide, or insert your initial MTO test user directly:
+Because public signup is disabled, the first administrator must be created manually:
+
+1. In the Supabase dashboard, open **Authentication -> Users** and create a user with the personnel department email and a strong temporary password.
+2. Insert the matching personnel row:
 
 ```sql
-insert into public.personnel (badge_number, email, role, active)
-values ('207', 'ifd.mto@gmail.com', 'mto', true);
+insert into public.personnel (
+  badge_number,
+  email,
+  first_name,
+  last_name,
+  role,
+  active
+)
+values (
+  '207',
+  'ifd.mto@gmail.com',
+  'Kevin',
+  'Koehler',
+  'mto',
+  true
+);
 ```
+
+3. Sign in at `/` using badge number and password.
+
+After the first administrator exists, additional personnel should be created through **User Management**, which provisions both the `public.personnel` row and the Supabase Auth account server-side.
 
 Do not add real personnel information to the repository.
 
-## Magic Link Authentication
+## Password Authentication
 
-The login page uses badge number plus department email verification, followed by a Supabase magic-link email.
+The login page uses badge number and password only. Users do not enter their department email during sign-in.
 
-### Enable email authentication
+Internally, Supabase Auth still uses the personnel email address. The application resolves that email on the server from `public.personnel` using the submitted badge number, then calls `signInWithPassword()` through the Supabase SSR server client.
+
+Normal login does not send magic links, OTP messages, or sign-in emails.
+
+### Enable email/password authentication
 
 In the Supabase dashboard:
 
 1. Open **Authentication**.
 2. Open **Providers**.
-3. Ensure **Email** is enabled.
+3. Ensure **Email** is enabled for password sign-in.
 
-### Use the default Supabase magic-link template
+Disable unrestricted public signup. This portal provisions accounts only through administrative personnel management or manual first-administrator setup.
 
-For current development and testing, you can use Supabase's default **Magic Link** email template. The application does not require a custom `{{ .Token }}` template.
+### Sign-in flow
 
-The login flow works like this:
+1. The user enters badge number and password on `/`.
+2. The browser POSTs to `/api/auth/login`.
+3. Trusted server code resolves exactly one active personnel row by badge number using a server-only lookup.
+4. The server calls `signInWithPassword()` with the resolved personnel email and submitted password.
+5. The server verifies the authenticated Supabase user email matches the personnel email, the personnel row is still active, and the role is valid.
+6. On success, the SSR session cookie is established and the user is redirected to `/dashboard`.
+7. On any failure, the server returns the generic error: `Unable to sign in. Check your badge number and password.`
 
-1. The user enters badge number and department email.
-2. The app calls `personnel_login_allowed`.
-3. The app stores a short-lived HTTP-only badge cookie.
-4. Supabase sends a magic-link email.
-5. The user clicks the link and returns to `/auth/callback`.
-6. The callback exchanges the auth code, validates badge + email against `public.personnel`, and creates a secure session.
+The application does not reveal whether a badge exists, whether an account is active, or which email belongs to a badge.
 
-### Configure redirect URLs
+### Password requirements
 
-In the Supabase dashboard:
+Passwords must be at least 12 characters and include upper- and lowercase letters, a number, and a special character.
 
-1. Open **Authentication**.
-2. Open **URL Configuration**.
-3. Add your callback URL to **Redirect URLs**, for example:
-   - `http://localhost:3000/auth/callback`
-   - your production URL when deployed
+Administrators assign temporary passwords when creating or resetting accounts. Users should change temporary passwords from **Settings -> Change Password** after first sign-in.
 
-Keep **Site URL** aligned with the environment you are testing.
+### Administrator account provisioning
 
-### Email delivery notes
+Administrators with `mto`, `deputy_chief`, or `admin` roles can create personnel from `/admin/users`.
 
-Supabase can send magic-link emails without custom SMTP during development.
+The protected server route `/api/admin/personnel`:
 
-Custom SMTP may still be needed later for production reliability and branding, but it is not required for current testing.
+1. Verifies the signed-in administrator.
+2. Creates the Supabase Auth user with the personnel email and a generated temporary password.
+3. Creates the matching `public.personnel` row.
+4. Reconciles partial failures so an Auth user is not left behind without a personnel row.
 
-Optional dashboard settings that help reduce abuse:
+Administrators must communicate temporary passwords securely outside the portal.
 
-- Keep Supabase auth rate limits enabled
-- Review **Authentication -> Rate Limits** in the Supabase dashboard
+Administrators can also reset a user's password from User Management. This assigns a new temporary password server-side; users should change it after signing in.
 
-The application also enforces a 60-second resend cooldown in the login UI.
+### Change password
+
+Authenticated users can update their password at `/settings/password`.
+
+The page verifies the current password, validates the new password against the same strength rules, and updates the Supabase Auth password through a protected server route.
+
+### Email confirmation and recovery callback
+
+`/auth/callback` remains available for Supabase email confirmation, invitation, and password-recovery flows. It is not used for ordinary badge-number sign-in.
+
+Recovery links may redirect to `/settings/password`.
 
 ## Authentication and Authorization
 
 - Login uses Supabase secure session cookies through `@supabase/ssr`
 - The app does not use `sessionStorage` or `localStorage` for authentication
 - Middleware refreshes Supabase sessions and protects authenticated routes
-- After the magic link callback, the app confirms the signed-in email and badge number match an active personnel row
+- After password sign-in, the app confirms the authenticated email matches an active personnel row
 - Roles come only from `public.personnel`, never from browser input after login
+- Passwords remain entirely in Supabase Auth; `public.personnel` does not store passwords
 
 Protected routes:
 
@@ -147,13 +184,15 @@ Protected routes:
 - `/approvals`
 - `/admin/users`
 - `/admin/requests`
+- `/settings/password`
+- `/settings/signature`
 
 Authorization:
 
 - `firefighter`, `mto`, `deputy_chief`, and `admin` may use normal request routes
 - `firefighter` is the only non-administrative role and has no personnel-management permissions
-- `mto`, `deputy_chief`, and `admin` have equal administrative permissions: read, add, edit, activate, deactivate, assign any valid role (including `admin`), and hard-delete personnel records
-- Administrative roles may access `/admin/users` and manage personnel through Supabase RLS
+- `mto`, `deputy_chief`, and `admin` have equal administrative permissions: read, add, edit, activate, deactivate, assign any valid role (including `admin`), reset passwords, and hard-delete personnel records
+- Administrative roles may access `/admin/users` and manage personnel through Supabase RLS plus protected server provisioning routes
 - Distinct role values remain for future workflow routing only: MTO approval actions go to `mto`, Deputy Chief approval actions go to `deputy_chief`, and `admin` has administrative access without an automatic approval stage
 
 ## Personnel Data Model
@@ -168,7 +207,9 @@ The `personnel` table stores only:
 - active status
 - created/updated timestamps
 
-First and last names are trimmed on write and stored as null when blank. Names are required before a personnel user can create a training request. Login continues to use badge number and department email only.
+First and last names are trimmed on write and stored as null when blank. Names are required before a personnel user can create a training request. Login uses badge number and password only; the department email remains linked to Supabase Auth internally and must match the Auth user email.
+
+Active badge numbers must be unique. The database enforces case-insensitive uniqueness among active personnel records.
 
 It intentionally does not store phone numbers, addresses, passwords, medical information, or payroll information.
 

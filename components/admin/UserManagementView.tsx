@@ -124,28 +124,58 @@ function UserManagementContent({ currentPersonnel }: UserManagementContentProps)
       throw new Error(configError);
     }
 
-    const supabase = createClient();
-    const { data, error } = await supabase
-      .from("personnel")
-      .insert({
-        first_name: input.firstName,
-        last_name: input.lastName,
-        badge_number: input.badgeNumber,
-        email: input.email,
-        role: input.role,
-        active: input.active,
-      })
-      .select("*")
-      .single();
+    const response = await fetch("/api/admin/personnel", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(input),
+    });
 
-    if (error) {
-      throw new Error(getPersonnelErrorMessage(error));
+    const payload = (await response.json()) as {
+      error?: string;
+      personnel?: PersonnelRecord;
+      temporaryPassword?: string;
+    };
+
+    if (!response.ok || !payload.personnel) {
+      throw new Error(payload.error ?? "Unable to create personnel account.");
     }
 
-    const created = mapPersonnelRow(data as PersonnelRow);
-    setUsers((current) => [created, ...current]);
+    setUsers((current) => [payload.personnel!, ...current]);
     setLoadError(null);
-    showSuccess(`Added ${created.badgeNumber} (${created.email}).`);
+    showSuccess(
+      `Added ${payload.personnel.badgeNumber} (${payload.personnel.email}). Temporary password: ${payload.temporaryPassword}. Provide it securely and require the user to change it after first sign-in.`,
+    );
+  }
+
+  async function handleResetPassword(userId: string) {
+    if (configError) {
+      throw new Error(configError);
+    }
+
+    const response = await fetch(
+      `/api/admin/personnel/${encodeURIComponent(userId)}/reset-password`,
+      {
+        method: "POST",
+      },
+    );
+
+    const payload = (await response.json()) as {
+      error?: string;
+      temporaryPassword?: string;
+    };
+
+    if (!response.ok || !payload.temporaryPassword) {
+      throw new Error(payload.error ?? "Unable to reset password.");
+    }
+
+    const user = users.find((entry) => entry.id === userId);
+    showSuccess(
+      user
+        ? `Reset password for ${user.badgeNumber}. Temporary password: ${payload.temporaryPassword}. Provide it securely and require the user to change it after sign-in.`
+        : `Temporary password: ${payload.temporaryPassword}. Provide it securely and require the user to change it after sign-in.`,
+    );
   }
 
   async function handleEditUser(userId: string, input: PersonnelUpdateInput) {
@@ -264,8 +294,8 @@ function UserManagementContent({ currentPersonnel }: UserManagementContentProps)
                 User Management
               </h1>
               <p className="mt-1 text-sm text-zinc-600">
-                Manage personnel records keyed by badge number and department
-                email.
+                Manage personnel records and password-based Supabase Auth
+                accounts keyed by badge number and department email.
               </p>
             </div>
             <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
@@ -386,6 +416,15 @@ function UserManagementContent({ currentPersonnel }: UserManagementContentProps)
                 onChangeStatus={(user, nextActive) =>
                   setStatusChangeTarget({ user, nextActive })
                 }
+                onResetPassword={(user) => {
+                  void handleResetPassword(user.id).catch((error) => {
+                    setOperationError(
+                      error instanceof Error
+                        ? error.message
+                        : "Unable to reset password.",
+                    );
+                  });
+                }}
                 onDelete={setDeletingUser}
               />
             )}

@@ -1,39 +1,17 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { getAuthenticatedPersonnelForLogin } from "@/lib/auth/personnel";
-import {
-  getPendingLoginCookieOptions,
-  PENDING_LOGIN_COOKIE,
-} from "@/lib/auth/pending-login";
-import { normalizePersonnelEmail } from "@/lib/personnel";
+import { getAuthenticatedPersonnel } from "@/lib/auth/personnel";
 import { createClient } from "@/lib/supabase/server";
-
-function clearPendingLoginCookie(response: NextResponse) {
-  response.cookies.set(PENDING_LOGIN_COOKIE, "", {
-    ...getPendingLoginCookieOptions(),
-    maxAge: 0,
-  });
-}
 
 export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url);
   const code = requestUrl.searchParams.get("code");
+  const type = requestUrl.searchParams.get("type");
   const origin = requestUrl.origin;
 
   if (!code) {
     const response = NextResponse.redirect(
       new URL("/?reason=access-denied", origin),
     );
-    clearPendingLoginCookie(response);
-    return response;
-  }
-
-  const pendingBadge = request.cookies.get(PENDING_LOGIN_COOKIE)?.value?.trim();
-
-  if (!pendingBadge) {
-    const response = NextResponse.redirect(
-      new URL("/?reason=access-denied", origin),
-    );
-    clearPendingLoginCookie(response);
     return response;
   }
 
@@ -43,41 +21,19 @@ export async function GET(request: NextRequest) {
 
   if (exchangeError) {
     await supabase.auth.signOut();
-    const response = NextResponse.redirect(
-      new URL("/?reason=access-denied", origin),
-    );
-    clearPendingLoginCookie(response);
-    return response;
+    return NextResponse.redirect(new URL("/?reason=access-denied", origin));
   }
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user?.email) {
-    await supabase.auth.signOut();
-    const response = NextResponse.redirect(
-      new URL("/?reason=access-denied", origin),
-    );
-    clearPendingLoginCookie(response);
-    return response;
+  if (type === "recovery") {
+    return NextResponse.redirect(new URL("/settings/password", origin));
   }
 
-  const personnel = await getAuthenticatedPersonnelForLogin({
-    badgeNumber: pendingBadge,
-    email: normalizePersonnelEmail(user.email),
-  });
+  const personnel = await getAuthenticatedPersonnel();
 
   if (!personnel) {
     await supabase.auth.signOut();
-    const response = NextResponse.redirect(
-      new URL("/?reason=access-denied", origin),
-    );
-    clearPendingLoginCookie(response);
-    return response;
+    return NextResponse.redirect(new URL("/?reason=access-denied", origin));
   }
 
-  const response = NextResponse.redirect(new URL("/dashboard", origin));
-  clearPendingLoginCookie(response);
-  return response;
+  return NextResponse.redirect(new URL("/dashboard", origin));
 }

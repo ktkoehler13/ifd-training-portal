@@ -91,7 +91,7 @@ export const SELF_EDIT_NOTICE =
   "You cannot deactivate or delete your own signed-in account. Changing your email will sign you out.";
 
 export const SELF_EDIT_EMAIL_CONFIRM_MESSAGE =
-  "Changing your email will sign you out. Future sign-in links will be sent to the new email address.";
+  "Changing your email will sign you out. Sign in again with your badge number and the password for the updated account.";
 
 export const SELF_EDIT_IDENTITY_CONFIRM_MESSAGE =
   "Changing your own badge number or role can affect how your account is identified and authorized. Continue only if you intend to make this change.";
@@ -204,11 +204,16 @@ export function validatePersonnelForm(
   }
 
   if (badgeNumber) {
+    const willBeActive = values.active !== false;
     const duplicateBadge = comparableUsers.some(
-      (user) => user.badgeNumber.toLowerCase() === badgeNumber.toLowerCase(),
+      (user) =>
+        user.active &&
+        willBeActive &&
+        user.badgeNumber.trim().toLowerCase() === badgeNumber.toLowerCase(),
     );
     if (duplicateBadge) {
-      errors.badgeNumber = "This badge number is already in use.";
+      errors.badgeNumber =
+        "This badge number is already in use by an active personnel record.";
     }
   }
 
@@ -282,7 +287,7 @@ export function getPersonnelErrorMessage(error: unknown): string {
     }
 
     if (error.message.includes("duplicate key")) {
-      return "A user with this badge number or email already exists.";
+      return "A user with this badge number or email already exists. Active badge numbers must be unique.";
     }
 
     return error.message;
