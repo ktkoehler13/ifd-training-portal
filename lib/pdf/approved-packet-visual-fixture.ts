@@ -9,6 +9,7 @@ export const APPROVED_PACKET_VISUAL_FIXTURE_REQUEST: TrainingRequestRecord = {
   requesterBadgeNumber: "207",
   requesterEmail: "firefighter@ifd.example",
   requesterName: "Fire Fighter",
+  requesterTitleSnapshot: "firefighter",
   courseName: "Testing Sig",
   courseNumber: "TS-1",
   trainingProvider: "IFD Training",

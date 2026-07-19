@@ -43,6 +43,12 @@ const adminRequestsCard = {
   href: "/admin/requests",
 } as const;
 
+const approvedTrainingCard = {
+  title: "Approved Training",
+  description: "Review the department schedule of fully approved training.",
+  href: "/admin/approved-training",
+} as const;
+
 function getQuickActionCards(
   personnel: AuthenticatedPersonnel,
   pendingApprovalCount: number | null,
@@ -73,6 +79,7 @@ function getQuickActionCards(
   if (isAdministrativeRole(personnel.role)) {
     cards.push(administrativeActionCard);
     cards.push(adminRequestsCard);
+    cards.push(approvedTrainingCard);
   }
 
   cards.push({

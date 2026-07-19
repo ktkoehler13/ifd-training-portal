@@ -1,4 +1,4 @@
-import type { PersonnelRole } from "@/types/personnel";
+import type { PersonnelRole, PersonnelTitle } from "@/types/personnel";
 
 export const TRAINING_REQUEST_STATUSES = [
   "draft",
@@ -40,6 +40,7 @@ export interface TrainingRequestRow {
   requester_badge_number: string;
   requester_email: string;
   requester_name: string;
+  requester_title_snapshot: PersonnelTitle | null;
   training_title: string;
   course_number: string;
   provider: string;
@@ -74,6 +75,7 @@ export interface TrainingRequestRecord {
   requesterBadgeNumber: string;
   requesterEmail: string;
   requesterName: string;
+  requesterTitleSnapshot: PersonnelTitle | null;
   courseName: string;
   courseNumber: string;
   trainingProvider: string;

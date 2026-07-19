@@ -69,6 +69,7 @@ export function mapTrainingRequestRow(row: TrainingRequestRow): TrainingRequestR
     requesterBadgeNumber: row.requester_badge_number,
     requesterEmail: row.requester_email,
     requesterName: row.requester_name,
+    requesterTitleSnapshot: row.requester_title_snapshot ?? null,
     courseName: row.training_title,
     courseNumber: row.course_number,
     trainingProvider: row.provider,

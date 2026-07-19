@@ -42,6 +42,7 @@ const approvedRequest: TrainingRequestRecord = {
   requesterBadgeNumber: "207",
   requesterEmail: "owner@ifd.example",
   requesterName: "Kevin Koehler",
+  requesterTitleSnapshot: "firefighter",
   courseName: "Fire Officer I",
   courseNumber: "FO-1",
   trainingProvider: "Provider",
