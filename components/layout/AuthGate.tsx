@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import { AUTH_MESSAGES } from "@/lib/auth/messages";
 import { isAdministrativeRole } from "@/lib/auth/roles";
@@ -18,6 +18,7 @@ interface AuthGateProps {
 
 export function AuthGate({ children }: AuthGateProps) {
   const router = useRouter();
+  const pathname = usePathname();
   const [personnel, setPersonnel] = useState<AuthenticatedPersonnel | null>(
     null,
   );
@@ -53,6 +54,16 @@ export function AuthGate({ children }: AuthGateProps) {
     };
   }, [router]);
 
+  useEffect(() => {
+    if (
+      status === "ready" &&
+      personnel?.mustChangePassword &&
+      !pathname.startsWith("/settings/password")
+    ) {
+      router.replace("/settings/password?required=1");
+    }
+  }, [pathname, personnel, router, status]);
+
   if (status === "loading") {
     return (
       <div className="flex flex-1 items-center justify-center bg-zinc-100 px-4 py-12">
@@ -68,6 +79,19 @@ export function AuthGate({ children }: AuthGateProps) {
       <div className="flex flex-1 items-center justify-center bg-zinc-100 px-4 py-12">
         <p className="text-sm text-zinc-500" role="status">
           Redirecting…
+        </p>
+      </div>
+    );
+  }
+
+  if (
+    personnel.mustChangePassword &&
+    !pathname.startsWith("/settings/password")
+  ) {
+    return (
+      <div className="flex flex-1 items-center justify-center bg-zinc-100 px-4 py-12">
+        <p className="text-sm text-zinc-500" role="status">
+          Redirecting to password setup…
         </p>
       </div>
     );

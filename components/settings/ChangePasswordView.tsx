@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { FormEvent, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { AuthGate } from "@/components/layout/AuthGate";
 import { SignOutButton } from "@/components/auth/SignOutButton";
 import { Button } from "@/components/ui/Button";
@@ -9,6 +10,9 @@ import { Input } from "@/components/ui/Input";
 import { PASSWORD_CHANGE_SUCCESS_MESSAGE } from "@/lib/auth/password";
 
 function ChangePasswordContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const requiredPasswordChange = searchParams.get("required") === "1";
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -37,9 +41,10 @@ function ChangePasswordContent() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          currentPassword,
+          currentPassword: requiredPasswordChange ? undefined : currentPassword,
           newPassword,
           confirmPassword,
+          requiredPasswordChange,
         }),
       });
 
@@ -57,6 +62,10 @@ function ChangePasswordContent() {
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
+
+      if (requiredPasswordChange) {
+        router.replace("/dashboard");
+      }
     } catch {
       setError("Unable to update password. Try again later.");
     } finally {
@@ -70,23 +79,25 @@ function ChangePasswordContent() {
         <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 px-4 py-5 sm:flex-row sm:items-start sm:justify-between sm:px-6">
           <div>
             <h1 className="text-xl font-semibold tracking-tight text-zinc-900 sm:text-2xl">
-              Change Password
+              {requiredPasswordChange ? "Choose a New Password" : "Change Password"}
             </h1>
             <p className="mt-1 text-sm text-zinc-600">
-              Update your account password. You sign in with badge number and
-              password; your department email remains linked to Supabase Auth
-              internally.
+              {requiredPasswordChange
+                ? "Your account is using a temporary password. Choose a new password before continuing."
+                : "Update your account password. You sign in with badge number and password; your department email remains linked to Supabase Auth internally."}
             </p>
           </div>
-          <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
-            <Link
-              href="/dashboard"
-              className="inline-flex h-11 items-center justify-center rounded-xl border border-zinc-200 bg-white px-5 text-sm font-semibold text-zinc-800 shadow-sm transition-colors hover:bg-zinc-50"
-            >
-              Dashboard
-            </Link>
-            <SignOutButton className="px-5" />
-          </div>
+          {!requiredPasswordChange ? (
+            <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
+              <Link
+                href="/dashboard"
+                className="inline-flex h-11 items-center justify-center rounded-xl border border-zinc-200 bg-white px-5 text-sm font-semibold text-zinc-800 shadow-sm transition-colors hover:bg-zinc-50"
+              >
+                Dashboard
+              </Link>
+              <SignOutButton className="px-5" />
+            </div>
+          ) : null}
         </div>
       </header>
 
@@ -97,33 +108,35 @@ function ChangePasswordContent() {
           noValidate
         >
           <div className="space-y-4">
-            <div className="space-y-2">
-              <label
-                htmlFor="current-password"
-                className="block text-sm font-medium text-zinc-700"
-              >
-                Current Password
-              </label>
-              <div className="relative">
-                <Input
-                  id="current-password"
-                  type={showCurrentPassword ? "text" : "password"}
-                  value={currentPassword}
-                  onChange={(event) => setCurrentPassword(event.target.value)}
-                  autoComplete="current-password"
-                  disabled={isSubmitting}
-                  className="pr-24"
-                />
-                <button
-                  type="button"
-                  className="absolute top-1/2 right-3 -translate-y-1/2 text-xs font-semibold text-zinc-600"
-                  onClick={() => setShowCurrentPassword((current) => !current)}
-                  disabled={isSubmitting}
+            {!requiredPasswordChange ? (
+              <div className="space-y-2">
+                <label
+                  htmlFor="current-password"
+                  className="block text-sm font-medium text-zinc-700"
                 >
-                  {showCurrentPassword ? "Hide" : "Show"}
-                </button>
+                  Current Password
+                </label>
+                <div className="relative">
+                  <Input
+                    id="current-password"
+                    type={showCurrentPassword ? "text" : "password"}
+                    value={currentPassword}
+                    onChange={(event) => setCurrentPassword(event.target.value)}
+                    autoComplete="current-password"
+                    disabled={isSubmitting}
+                    className="pr-24"
+                  />
+                  <button
+                    type="button"
+                    className="absolute top-1/2 right-3 -translate-y-1/2 text-xs font-semibold text-zinc-600"
+                    onClick={() => setShowCurrentPassword((current) => !current)}
+                    disabled={isSubmitting}
+                  >
+                    {showCurrentPassword ? "Hide" : "Show"}
+                  </button>
+                </div>
               </div>
-            </div>
+            ) : null}
 
             <div className="space-y-2">
               <label
@@ -199,7 +212,11 @@ function ChangePasswordContent() {
             ) : null}
 
             <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? "Updating…" : "Update Password"}
+              {isSubmitting
+                ? "Updating…"
+                : requiredPasswordChange
+                  ? "Save New Password"
+                  : "Update Password"}
             </Button>
           </div>
         </form>

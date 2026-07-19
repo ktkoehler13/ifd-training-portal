@@ -125,7 +125,9 @@ describe("login page and route", () => {
   it("does not return resolved personnel email to the browser", () => {
     assert.doesNotMatch(loginRouteSource, /email:/);
     assert.doesNotMatch(loginRouteSource, /personnel\.email/);
-    assert.match(loginRouteSource, /redirectTo: "\/dashboard"/);
+    assert.match(loginRouteSource, /redirectTo: result\.mustChangePassword/);
+    assert.match(loginRouteSource, /\/settings\/password\?required=1/);
+    assert.match(loginRouteSource, /\/dashboard/);
     assert.match(personnelLookupSource, /import "server-only"/);
   });
 

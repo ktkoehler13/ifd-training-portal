@@ -8,6 +8,7 @@ export interface PersonnelRecord {
   lastName: string | null;
   role: PersonnelRole;
   active: boolean;
+  mustChangePassword: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -38,6 +39,7 @@ export interface PersonnelRow {
   last_name: string | null;
   role: PersonnelRole;
   active: boolean;
+  must_change_password: boolean;
   created_at: string;
   updated_at: string;
 }

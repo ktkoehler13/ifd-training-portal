@@ -31,20 +31,26 @@ export function generateTemporaryPassword(): string {
   const specials = "!@#$%^&*-_+=.";
   const all = uppercase + lowercase + numbers + specials;
 
+  const randomIndex = (max: number) => {
+    const bytes = new Uint32Array(1);
+    crypto.getRandomValues(bytes);
+    return bytes[0]! % max;
+  };
+
   const required = [
-    uppercase[Math.floor(Math.random() * uppercase.length)],
-    lowercase[Math.floor(Math.random() * lowercase.length)],
-    numbers[Math.floor(Math.random() * numbers.length)],
-    specials[Math.floor(Math.random() * specials.length)],
+    uppercase[randomIndex(uppercase.length)]!,
+    lowercase[randomIndex(lowercase.length)]!,
+    numbers[randomIndex(numbers.length)]!,
+    specials[randomIndex(specials.length)]!,
   ];
 
   while (required.length < 16) {
-    required.push(all[Math.floor(Math.random() * all.length)]);
+    required.push(all[randomIndex(all.length)]!);
   }
 
   for (let index = required.length - 1; index > 0; index -= 1) {
-    const swapIndex = Math.floor(Math.random() * (index + 1));
-    [required[index], required[swapIndex]] = [required[swapIndex], required[index]];
+    const swapIndex = randomIndex(index + 1);
+    [required[index], required[swapIndex]] = [required[swapIndex]!, required[index]!];
   }
 
   return required.join("");

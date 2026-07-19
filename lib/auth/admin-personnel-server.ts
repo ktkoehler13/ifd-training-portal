@@ -4,6 +4,15 @@ import {
   generateTemporaryPassword,
   validatePasswordStrength,
 } from "@/lib/auth/password";
+import {
+  PasswordResetError,
+  PASSWORD_RESET_AMBIGUOUS_AUTH_ACCOUNT_MESSAGE,
+  PASSWORD_RESET_FAILED_MESSAGE,
+  PASSWORD_RESET_INACTIVE_MESSAGE,
+  PASSWORD_RESET_NO_AUTH_ACCOUNT_MESSAGE,
+  PASSWORD_RESET_PERSONNEL_NOT_FOUND_MESSAGE,
+  PASSWORD_RESET_UNAUTHORIZED_MESSAGE,
+} from "@/lib/auth/password-reset-messages";
 import { getAuthenticatedPersonnel } from "@/lib/auth/personnel";
 import {
   mapPersonnelRow,
@@ -18,9 +27,15 @@ import type {
   PersonnelRow,
 } from "@/types/personnel";
 
-async function findAuthUserIdByEmail(email: string): Promise<string | null> {
+type AuthUserLookupResult =
+  | { kind: "found"; authUserId: string }
+  | { kind: "missing" }
+  | { kind: "ambiguous" };
+
+async function findAuthUserMatchesByEmail(email: string): Promise<string[]> {
   const service = createServiceRoleClient();
   const normalizedEmail = normalizePersonnelEmail(email);
+  const matches: string[] = [];
   let page = 1;
 
   while (page <= 10) {
@@ -30,17 +45,16 @@ async function findAuthUserIdByEmail(email: string): Promise<string | null> {
     });
 
     if (error || !data.users.length) {
-      return null;
+      break;
     }
 
-    const match = data.users.find(
-      (user) =>
+    for (const user of data.users) {
+      if (
         user.email &&
-        normalizePersonnelEmail(user.email) === normalizedEmail,
-    );
-
-    if (match) {
-      return match.id;
+        normalizePersonnelEmail(user.email) === normalizedEmail
+      ) {
+        matches.push(user.id);
+      }
     }
 
     if (data.users.length < 200) {
@@ -50,7 +64,23 @@ async function findAuthUserIdByEmail(email: string): Promise<string | null> {
     page += 1;
   }
 
-  return null;
+  return matches;
+}
+
+async function resolveAuthUserIdByPersonnelEmail(
+  email: string,
+): Promise<AuthUserLookupResult> {
+  const matches = await findAuthUserMatchesByEmail(email);
+
+  if (matches.length === 0) {
+    return { kind: "missing" };
+  }
+
+  if (matches.length > 1) {
+    return { kind: "ambiguous" };
+  }
+
+  return { kind: "found", authUserId: matches[0]! };
 }
 
 async function deleteAuthUserById(userId: string): Promise<void> {
@@ -58,11 +88,39 @@ async function deleteAuthUserById(userId: string): Promise<void> {
   await service.auth.admin.deleteUser(userId);
 }
 
+async function markPersonnelMustChangePassword(
+  personnelId: string,
+): Promise<void> {
+  const service = createServiceRoleClient();
+  const { error } = await service
+    .from("personnel")
+    .update({ must_change_password: true })
+    .eq("id", personnelId);
+
+  if (error) {
+    throw new PasswordResetError(PASSWORD_RESET_FAILED_MESSAGE);
+  }
+}
+
+export async function clearPersonnelMustChangePassword(
+  personnelId: string,
+): Promise<void> {
+  const service = createServiceRoleClient();
+  const { error } = await service
+    .from("personnel")
+    .update({ must_change_password: false })
+    .eq("id", personnelId);
+
+  if (error) {
+    throw new Error("Unable to clear the required password change flag.");
+  }
+}
+
 export async function requireAdministrativePersonnel(): Promise<PersonnelRecord> {
   const personnel = await getAuthenticatedPersonnel();
 
   if (!personnel || !isAdministrativeRole(personnel.role)) {
-    throw new Error("Administrative access is required.");
+    throw new PasswordResetError(PASSWORD_RESET_UNAUTHORIZED_MESSAGE);
   }
 
   return personnel;
@@ -109,6 +167,7 @@ export async function createPersonnelAuthAccount(input: {
         email: normalizePersonnelEmail(input.personnel.email),
         role: input.personnel.role,
         active: input.personnel.active,
+        must_change_password: true,
       })
       .select("*")
       .single();
@@ -145,35 +204,46 @@ export async function resetPersonnelAuthPassword(input: {
     .maybeSingle();
 
   if (personnelError || !personnelRow) {
-    throw new Error("Personnel record not found.");
+    throw new PasswordResetError(PASSWORD_RESET_PERSONNEL_NOT_FOUND_MESSAGE);
   }
 
   const personnel = mapPersonnelRow(personnelRow as PersonnelRow);
-  const authUserId = await findAuthUserIdByEmail(personnel.email);
 
-  if (!authUserId) {
-    throw new Error(
-      "No Supabase Auth account exists for this personnel email.",
-    );
+  if (!personnel.active) {
+    throw new PasswordResetError(PASSWORD_RESET_INACTIVE_MESSAGE);
+  }
+
+  const authLookup = await resolveAuthUserIdByPersonnelEmail(personnel.email);
+
+  if (authLookup.kind === "missing") {
+    throw new PasswordResetError(PASSWORD_RESET_NO_AUTH_ACCOUNT_MESSAGE);
+  }
+
+  if (authLookup.kind === "ambiguous") {
+    throw new PasswordResetError(PASSWORD_RESET_AMBIGUOUS_AUTH_ACCOUNT_MESSAGE);
   }
 
   const temporaryPassword = generateTemporaryPassword();
   const passwordError = validatePasswordStrength(temporaryPassword);
 
   if (passwordError) {
-    throw new Error("Unable to generate a valid temporary password.");
+    throw new PasswordResetError(PASSWORD_RESET_FAILED_MESSAGE);
   }
 
   const { error: updateError } = await service.auth.admin.updateUserById(
-    authUserId,
+    authLookup.authUserId,
     {
       password: temporaryPassword,
     },
   );
 
   if (updateError) {
-    throw new Error("Unable to reset the password for this user.");
+    throw new PasswordResetError(PASSWORD_RESET_FAILED_MESSAGE);
   }
+
+  await markPersonnelMustChangePassword(personnel.id);
 
   return { temporaryPassword };
 }
+
+export { PasswordResetError } from "@/lib/auth/password-reset-messages";

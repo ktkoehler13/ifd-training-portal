@@ -6,6 +6,7 @@ export async function POST(request: NextRequest) {
     currentPassword?: unknown;
     newPassword?: unknown;
     confirmPassword?: unknown;
+    requiredPasswordChange?: unknown;
   };
 
   try {
@@ -13,6 +14,7 @@ export async function POST(request: NextRequest) {
       currentPassword?: unknown;
       newPassword?: unknown;
       confirmPassword?: unknown;
+      requiredPasswordChange?: unknown;
     };
   } catch {
     return NextResponse.json(
@@ -27,11 +29,13 @@ export async function POST(request: NextRequest) {
     typeof body.newPassword === "string" ? body.newPassword : "";
   const confirmPassword =
     typeof body.confirmPassword === "string" ? body.confirmPassword : "";
+  const requiredPasswordChange = body.requiredPasswordChange === true;
 
   const result = await changeAuthenticatedUserPassword({
     currentPassword,
     newPassword,
     confirmPassword,
+    requiredPasswordChange,
   });
 
   if (!result.ok) {

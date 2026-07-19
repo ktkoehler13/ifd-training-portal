@@ -67,5 +67,10 @@ export async function POST(request: NextRequest) {
 
   resetLoginAttempts(ipAddress, badgeNumber);
 
-  return NextResponse.json({ ok: true, redirectTo: "/dashboard" });
+  return NextResponse.json({
+    ok: true,
+    redirectTo: result.mustChangePassword
+      ? "/settings/password?required=1"
+      : "/dashboard",
+  });
 }

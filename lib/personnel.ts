@@ -16,6 +16,7 @@ export function mapPersonnelRow(row: PersonnelRow): PersonnelRecord {
     lastName: row.last_name,
     role: row.role,
     active: row.active,
+    mustChangePassword: row.must_change_password ?? false,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

@@ -1,5 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { resetPersonnelAuthPassword } from "@/lib/auth/admin-personnel-server";
+import {
+  PasswordResetError,
+  resetPersonnelAuthPassword,
+} from "@/lib/auth/admin-personnel-server";
+import { PASSWORD_RESET_FAILED_MESSAGE } from "@/lib/auth/password-reset-messages";
 
 export async function POST(
   _request: NextRequest,
@@ -22,13 +26,12 @@ export async function POST(
       temporaryPassword: result.temporaryPassword,
     });
   } catch (error) {
+    if (error instanceof PasswordResetError) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+
     return NextResponse.json(
-      {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Unable to reset password for this user.",
-      },
+      { error: PASSWORD_RESET_FAILED_MESSAGE },
       { status: 400 },
     );
   }

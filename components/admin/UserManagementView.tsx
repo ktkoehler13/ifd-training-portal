@@ -6,6 +6,8 @@ import { startTransition, useCallback, useEffect, useMemo, useState } from "reac
 import { AddUserForm } from "@/components/admin/AddUserForm";
 import { DeleteUserDialog } from "@/components/admin/DeleteUserDialog";
 import { EditUserModal } from "@/components/admin/EditUserModal";
+import { ResetPasswordConfirmDialog } from "@/components/admin/ResetPasswordConfirmDialog";
+import { ResetPasswordResultDialog } from "@/components/admin/ResetPasswordResultDialog";
 import { StatusChangeDialog } from "@/components/admin/StatusChangeDialog";
 import { UsersTable } from "@/components/admin/UsersTable";
 import { SignOutButton } from "@/components/auth/SignOutButton";
@@ -61,6 +63,11 @@ function UserManagementContent({ currentPersonnel }: UserManagementContentProps)
     user: PersonnelRecord;
     nextActive: boolean;
   } | null>(null);
+  const [resetPasswordTarget, setResetPasswordTarget] =
+    useState<PersonnelRecord | null>(null);
+  const [resetPasswordResult, setResetPasswordResult] = useState<string | null>(
+    null,
+  );
   const configError = getSupabaseConfigError();
 
   const filteredUsers = useMemo(() => {
@@ -149,7 +156,7 @@ function UserManagementContent({ currentPersonnel }: UserManagementContentProps)
     );
   }
 
-  async function handleResetPassword(userId: string) {
+  async function handleConfirmResetPassword(userId: string) {
     if (configError) {
       throw new Error(configError);
     }
@@ -170,12 +177,15 @@ function UserManagementContent({ currentPersonnel }: UserManagementContentProps)
       throw new Error(payload.error ?? "Unable to reset password.");
     }
 
-    const user = users.find((entry) => entry.id === userId);
-    showSuccess(
-      user
-        ? `Reset password for ${user.badgeNumber}. Temporary password: ${payload.temporaryPassword}. Provide it securely and require the user to change it after sign-in.`
-        : `Temporary password: ${payload.temporaryPassword}. Provide it securely and require the user to change it after sign-in.`,
+    setUsers((current) =>
+      current.map((user) =>
+        user.id === userId ? { ...user, mustChangePassword: true } : user,
+      ),
     );
+    setResetPasswordTarget(null);
+    setResetPasswordResult(payload.temporaryPassword);
+    setOperationError(null);
+    showSuccess("Password reset successfully. Share the temporary password securely.");
   }
 
   async function handleEditUser(userId: string, input: PersonnelUpdateInput) {
@@ -417,13 +427,8 @@ function UserManagementContent({ currentPersonnel }: UserManagementContentProps)
                   setStatusChangeTarget({ user, nextActive })
                 }
                 onResetPassword={(user) => {
-                  void handleResetPassword(user.id).catch((error) => {
-                    setOperationError(
-                      error instanceof Error
-                        ? error.message
-                        : "Unable to reset password.",
-                    );
-                  });
+                  setOperationError(null);
+                  setResetPasswordTarget(user);
                 }}
                 onDelete={setDeletingUser}
               />
@@ -452,6 +457,17 @@ function UserManagementContent({ currentPersonnel }: UserManagementContentProps)
         user={deletingUser}
         onClose={() => setDeletingUser(null)}
         onConfirm={handleDeleteUser}
+      />
+
+      <ResetPasswordConfirmDialog
+        user={resetPasswordTarget}
+        onClose={() => setResetPasswordTarget(null)}
+        onConfirm={handleConfirmResetPassword}
+      />
+
+      <ResetPasswordResultDialog
+        temporaryPassword={resetPasswordResult}
+        onClose={() => setResetPasswordResult(null)}
       />
     </>
   );

@@ -1,5 +1,6 @@
 import "server-only";
 
+import { clearPersonnelMustChangePassword } from "@/lib/auth/admin-personnel-server";
 import {
   generateTemporaryPassword,
   validatePasswordStrength,
@@ -13,9 +14,10 @@ import { normalizePersonnelEmail } from "@/lib/personnel";
 import { createClient } from "@/lib/supabase/server";
 
 export interface ChangePasswordInput {
-  currentPassword: string;
+  currentPassword?: string;
   newPassword: string;
   confirmPassword: string;
+  requiredPasswordChange?: boolean;
 }
 
 export async function changeAuthenticatedUserPassword(
@@ -37,13 +39,24 @@ export async function changeAuthenticatedUserPassword(
   }
 
   const supabase = await createClient();
-  const { error: verifyError } = await supabase.auth.signInWithPassword({
-    email: personnel.email,
-    password: input.currentPassword,
-  });
+  const requiresCurrentPassword =
+    !input.requiredPasswordChange || !personnel.mustChangePassword;
 
-  if (verifyError) {
-    return { ok: false, error: CURRENT_PASSWORD_INCORRECT_MESSAGE };
+  if (requiresCurrentPassword) {
+    const currentPassword = input.currentPassword?.trim() ?? "";
+
+    if (!currentPassword) {
+      return { ok: false, error: CURRENT_PASSWORD_INCORRECT_MESSAGE };
+    }
+
+    const { error: verifyError } = await supabase.auth.signInWithPassword({
+      email: personnel.email,
+      password: currentPassword,
+    });
+
+    if (verifyError) {
+      return { ok: false, error: CURRENT_PASSWORD_INCORRECT_MESSAGE };
+    }
   }
 
   const { error: updateError } = await supabase.auth.updateUser({
@@ -55,6 +68,10 @@ export async function changeAuthenticatedUserPassword(
       ok: false,
       error: "Unable to update password right now. Try again later.",
     };
+  }
+
+  if (personnel.mustChangePassword) {
+    await clearPersonnelMustChangePassword(personnel.id);
   }
 
   return { ok: true, message: PASSWORD_CHANGE_SUCCESS_MESSAGE };

@@ -15,7 +15,10 @@ export interface PasswordLoginInput {
 
 export async function performPasswordLogin(
   input: PasswordLoginInput,
-): Promise<{ ok: true } | { ok: false; error: string }> {
+): Promise<
+  | { ok: true; mustChangePassword: boolean }
+  | { ok: false; error: string }
+> {
   const badgeNumber = normalizeBadgeNumberForLookup(input.badgeNumber);
   const password = input.password;
 
@@ -68,5 +71,5 @@ export async function performPasswordLogin(
     return { ok: false, error: INVALID_CREDENTIALS_MESSAGE };
   }
 
-  return { ok: true };
+  return { ok: true, mustChangePassword: verifiedPersonnel.mustChangePassword };
 }
