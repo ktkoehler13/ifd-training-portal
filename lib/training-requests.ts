@@ -200,6 +200,14 @@ export function getTrainingRequestErrorMessage(error: unknown): string {
     typeof error.message === "string"
   ) {
     if (
+      "code" in error &&
+      typeof error.code === "string" &&
+      error.code === "PGRST116"
+    ) {
+      return "This draft no longer exists.";
+    }
+
+    if (
       error.message.includes("permission denied") ||
       error.message.includes("RLS")
     ) {
@@ -320,6 +328,19 @@ export async function updateTrainingRequestDraft(
   }
 
   return mapTrainingRequestRow(data as TrainingRequestRow);
+}
+
+export async function deleteOwnTrainingRequestDraft(
+  requestId: string,
+): Promise<void> {
+  const supabase = createClient();
+  const { error } = await supabase.rpc("delete_own_training_request_draft", {
+    p_request_id: requestId,
+  });
+
+  if (error) {
+    throw new Error(getTrainingRequestErrorMessage(error));
+  }
 }
 
 export async function updateReturnedTrainingRequest(

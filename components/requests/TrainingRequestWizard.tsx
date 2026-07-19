@@ -39,6 +39,7 @@ import {
   getLatestCorrectionAction,
   listTrainingRequestActions,
 } from "@/lib/training-request-actions";
+import { DRAFT_NO_LONGER_EXISTS_MESSAGE } from "@/lib/training-request-draft-deletion";
 import {
   buildTrainingRequestInput,
   createAndSubmitTrainingRequest,
@@ -142,6 +143,7 @@ export function TrainingRequestWizard({
   const [isLoadingDraft, setIsLoadingDraft] = useState(Boolean(draftId));
   const [latestCorrectionAction, setLatestCorrectionAction] =
     useState<TrainingRequestActionRecord | null>(null);
+  const [draftLoadError, setDraftLoadError] = useState<string | null>(null);
 
   const gsaMileageRate = useMemo(() => getGsaMileageRate(), []);
   const rateAvailable = gsaMileageRate !== null;
@@ -180,11 +182,15 @@ export function TrainingRequestWizard({
     async function loadDraft() {
       setIsLoadingDraft(true);
       setErrors({});
+      setDraftLoadError(null);
 
       try {
         const request = await getTrainingRequestById(activeDraftId);
+        if (!request) {
+          throw new Error(DRAFT_NO_LONGER_EXISTS_MESSAGE);
+        }
+
         if (
-          !request ||
           (request.status !== "draft" &&
             request.status !== "returned_for_correction") ||
           request.requesterPersonnelId !== personnel.id
@@ -214,11 +220,13 @@ export function TrainingRequestWizard({
         }
       } catch (error) {
         if (!cancelled) {
+          const message =
+            error instanceof Error
+              ? error.message
+              : "Unable to load the selected draft.";
+          setDraftLoadError(message);
           setErrors({
-            submit:
-              error instanceof Error
-                ? error.message
-                : "Unable to load the selected draft.",
+            submit: message,
           });
         }
       } finally {
@@ -417,11 +425,19 @@ export function TrainingRequestWizard({
       await persistDraft();
       setStatusMessage("Draft saved.");
     } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Unable to save draft. Try again later.";
+
+      if (message === DRAFT_NO_LONGER_EXISTS_MESSAGE) {
+        setDraftLoadError(message);
+        router.push("/requests");
+        return;
+      }
+
       setErrors({
-        submit:
-          error instanceof Error
-            ? error.message
-            : "Unable to save draft. Try again later.",
+        submit: message,
       });
     } finally {
       setIsSavingDraft(false);
@@ -504,6 +520,23 @@ export function TrainingRequestWizard({
     return (
       <div className="mx-auto w-full max-w-3xl rounded-2xl bg-white p-8 text-sm text-zinc-500 shadow-sm shadow-zinc-200/60">
         Loading draft...
+      </div>
+    );
+  }
+
+  if (draftLoadError === DRAFT_NO_LONGER_EXISTS_MESSAGE) {
+    return (
+      <div className="mx-auto w-full max-w-3xl rounded-2xl bg-white p-8 shadow-sm shadow-zinc-200/60">
+        <p className="text-sm text-red-700" role="alert">
+          {DRAFT_NO_LONGER_EXISTS_MESSAGE}
+        </p>
+        <Button
+          type="button"
+          className="mt-4"
+          onClick={() => router.push("/requests")}
+        >
+          Go to My Requests
+        </Button>
       </div>
     );
   }

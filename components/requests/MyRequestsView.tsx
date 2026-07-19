@@ -4,6 +4,7 @@ import Link from "next/link";
 import { startTransition, useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AuthGate } from "@/components/layout/AuthGate";
+import { DeleteDraftDialog } from "@/components/requests/DeleteDraftDialog";
 import { Button } from "@/components/ui/Button";
 import { formatCurrency } from "@/lib/currency";
 import { formatTransportationIndicator } from "@/lib/expenses";
@@ -17,6 +18,12 @@ import {
   truncateCorrectionPreview,
 } from "@/lib/training-request-actions";
 import {
+  DRAFT_DELETED_SUCCESS_MESSAGE,
+  removeDeletedDraftFromList,
+  shouldShowDeleteDraftButton,
+} from "@/lib/training-request-draft-deletion";
+import {
+  deleteOwnTrainingRequestDraft,
   formatTrainingRequestIdentifier,
   formatTrainingRequestStatus,
   LEGACY_LOCAL_STORAGE_NOTICE,
@@ -54,6 +61,10 @@ function MyRequestsContent({ personnel }: { personnel: AuthenticatedPersonnel })
   >({});
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [draftToDelete, setDraftToDelete] = useState<TrainingRequestRecord | null>(
+    null,
+  );
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const loadRequests = useCallback(async () => {
     setIsLoading(true);
@@ -102,6 +113,12 @@ function MyRequestsContent({ personnel }: { personnel: AuthenticatedPersonnel })
     void loadRequests();
   }, [loadRequests]);
 
+  async function handleConfirmDeleteDraft(requestId: string) {
+    await deleteOwnTrainingRequestDraft(requestId);
+    setRequests((current) => removeDeletedDraftFromList(current, requestId));
+    setSuccessMessage(DRAFT_DELETED_SUCCESS_MESSAGE);
+  }
+
   return (
     <div className="flex flex-1 flex-col bg-zinc-100">
       <header className="border-b border-zinc-200 bg-white">
@@ -145,6 +162,15 @@ function MyRequestsContent({ personnel }: { personnel: AuthenticatedPersonnel })
             role="alert"
           >
             {loadError}
+          </div>
+        ) : null}
+
+        {successMessage ? (
+          <div
+            className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800"
+            role="status"
+          >
+            {successMessage}
           </div>
         ) : null}
 
@@ -270,18 +296,29 @@ function MyRequestsContent({ personnel }: { personnel: AuthenticatedPersonnel })
                       <td className="px-4 py-4 align-top">
                         <div className="flex flex-col gap-2">
                           {request.status === "draft" ? (
-                            <Button
-                              type="button"
-                              variant="secondary"
-                              className="h-9 px-3 text-xs"
-                              onClick={() =>
-                                router.push(
-                                  `/requests/new?draft=${encodeURIComponent(request.id)}`,
-                                )
-                              }
-                            >
-                              Continue
-                            </Button>
+                            <>
+                              <Button
+                                type="button"
+                                variant="secondary"
+                                className="h-9 px-3 text-xs"
+                                onClick={() =>
+                                  router.push(
+                                    `/requests/new?draft=${encodeURIComponent(request.id)}`,
+                                  )
+                                }
+                              >
+                                Continue
+                              </Button>
+                              {shouldShowDeleteDraftButton(request.status) ? (
+                                <Button
+                                  type="button"
+                                  className="h-9 border border-red-200 bg-red-700 px-3 text-xs hover:bg-red-800"
+                                  onClick={() => setDraftToDelete(request)}
+                                >
+                                  Delete Draft
+                                </Button>
+                              ) : null}
+                            </>
                           ) : null}
                           {request.status === "returned_for_correction" ? (
                             <>
@@ -322,6 +359,12 @@ function MyRequestsContent({ personnel }: { personnel: AuthenticatedPersonnel })
           </div>
         )}
       </div>
+
+      <DeleteDraftDialog
+        request={draftToDelete}
+        onClose={() => setDraftToDelete(null)}
+        onConfirm={handleConfirmDeleteDraft}
+      />
     </div>
   );
 }
