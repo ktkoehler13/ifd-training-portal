@@ -2,17 +2,19 @@
 
 import Link from "next/link";
 import { FormEvent, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
 import { AuthGate } from "@/components/layout/AuthGate";
 import { SignOutButton } from "@/components/auth/SignOutButton";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { PASSWORD_CHANGE_SUCCESS_MESSAGE } from "@/lib/auth/password";
+import type { AuthenticatedPersonnel } from "@/lib/auth/personnel";
 
-function ChangePasswordContent() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const requiredPasswordChange = searchParams.get("required") === "1";
+interface ChangePasswordContentProps {
+  personnel: AuthenticatedPersonnel;
+}
+
+function ChangePasswordContent({ personnel }: ChangePasswordContentProps) {
+  const forcedPasswordSetup = personnel.mustChangePassword;
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -41,10 +43,9 @@ function ChangePasswordContent() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          currentPassword: requiredPasswordChange ? undefined : currentPassword,
+          currentPassword: forcedPasswordSetup ? undefined : currentPassword,
           newPassword,
           confirmPassword,
-          requiredPasswordChange,
         }),
       });
 
@@ -63,8 +64,8 @@ function ChangePasswordContent() {
       setNewPassword("");
       setConfirmPassword("");
 
-      if (requiredPasswordChange) {
-        router.replace("/dashboard");
+      if (forcedPasswordSetup) {
+        window.location.assign("/dashboard");
       }
     } catch {
       setError("Unable to update password. Try again later.");
@@ -79,15 +80,15 @@ function ChangePasswordContent() {
         <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 px-4 py-5 sm:flex-row sm:items-start sm:justify-between sm:px-6">
           <div>
             <h1 className="text-xl font-semibold tracking-tight text-zinc-900 sm:text-2xl">
-              {requiredPasswordChange ? "Choose a New Password" : "Change Password"}
+              {forcedPasswordSetup ? "Choose a New Password" : "Change Password"}
             </h1>
             <p className="mt-1 text-sm text-zinc-600">
-              {requiredPasswordChange
+              {forcedPasswordSetup
                 ? "Your account is using a temporary password. Choose a new password before continuing."
                 : "Update your account password. You sign in with badge number and password; your department email remains linked to Supabase Auth internally."}
             </p>
           </div>
-          {!requiredPasswordChange ? (
+          {!forcedPasswordSetup ? (
             <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
               <Link
                 href="/dashboard"
@@ -108,7 +109,7 @@ function ChangePasswordContent() {
           noValidate
         >
           <div className="space-y-4">
-            {!requiredPasswordChange ? (
+            {!forcedPasswordSetup ? (
               <div className="space-y-2">
                 <label
                   htmlFor="current-password"
@@ -214,7 +215,7 @@ function ChangePasswordContent() {
             <Button type="submit" disabled={isSubmitting}>
               {isSubmitting
                 ? "Updating…"
-                : requiredPasswordChange
+                : forcedPasswordSetup
                   ? "Save New Password"
                   : "Update Password"}
             </Button>
@@ -228,7 +229,7 @@ function ChangePasswordContent() {
 export function ChangePasswordView() {
   return (
     <AuthGate>
-      {() => <ChangePasswordContent />}
+      {(personnel) => <ChangePasswordContent personnel={personnel} />}
     </AuthGate>
   );
 }

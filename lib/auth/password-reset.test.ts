@@ -46,6 +46,18 @@ const loginServerSource = readFileSync(
   path.join(process.cwd(), "lib/auth/login-server.ts"),
   "utf8",
 );
+const loginRouteSource = readFileSync(
+  path.join(process.cwd(), "app/api/auth/login/route.ts"),
+  "utf8",
+);
+const changePasswordRouteSource = readFileSync(
+  path.join(process.cwd(), "app/api/auth/change-password/route.ts"),
+  "utf8",
+);
+const middlewareSource = readFileSync(
+  path.join(process.cwd(), "lib/supabase/middleware.ts"),
+  "utf8",
+);
 
 describe("administrator password reset authorization", () => {
   it("allows MTO personnel to reset passwords", () => {
@@ -191,17 +203,89 @@ describe("self-service password change", () => {
   it("still requires the current password for normal changes", () => {
     assert.match(changePasswordViewSource, /Current Password/);
     assert.match(changePasswordServerSource, /signInWithPassword/);
-    assert.match(changePasswordServerSource, /requiresCurrentPassword/);
+    assert.match(
+      changePasswordServerSource,
+      /requiresCurrentPassword = !personnel\.mustChangePassword/,
+    );
   });
 
   it("allows required first-login changes without the current password", () => {
-    assert.match(changePasswordViewSource, /requiredPasswordChange/);
+    assert.match(changePasswordViewSource, /personnel\.mustChangePassword/);
+    assert.match(changePasswordViewSource, /forcedPasswordSetup/);
     assert.match(changePasswordViewSource, /Choose a New Password/);
+    assert.doesNotMatch(changePasswordViewSource, /searchParams\.get\("required"\)/);
+    assert.match(changePasswordServerSource, /clearPersonnelMustChangePassword/);
+  });
+});
+
+describe("forced password setup", () => {
+  it("allows legacy users to receive a temporary password from admin reset", () => {
+    assert.match(adminPersonnelSource, /generateTemporaryPassword/);
+    assert.match(adminPersonnelSource, /auth\.admin\.updateUserById/);
+    assert.match(adminPersonnelSource, /markPersonnelMustChangePassword/);
+  });
+
+  it("sets must_change_password after administrator reset", () => {
+    assert.match(migrationSql, /must_change_password boolean not null default false/);
+    assert.match(adminPersonnelSource, /must_change_password: true/);
+  });
+
+  it("redirects forced users to /settings/password?required=1 after login", () => {
+    assert.match(loginServerSource, /mustChangePassword: verifiedPersonnel\.mustChangePassword/);
+    assert.match(loginRouteSource, /\/settings\/password\?required=1/);
+  });
+
+  it("does not render Current Password during forced setup", () => {
+    assert.match(
+      changePasswordViewSource,
+      /\{!forcedPasswordSetup \? \([\s\S]*Current Password/,
+    );
+    assert.match(changePasswordViewSource, /\) : null\}/);
+  });
+
+  it("does not require Current Password in the forced password API", () => {
     assert.match(
       changePasswordServerSource,
-      /requiresCurrentPassword[\s\S]*signInWithPassword/,
+      /if \(requiresCurrentPassword\)[\s\S]*signInWithPassword/,
     );
-    assert.match(changePasswordServerSource, /clearPersonnelMustChangePassword/);
+    assert.match(
+      changePasswordServerSource,
+      /requiresCurrentPassword = !personnel\.mustChangePassword/,
+    );
+  });
+
+  it("does not trust forged requiredPasswordChange from the request body", () => {
+    assert.doesNotMatch(changePasswordServerSource, /requiredPasswordChange/);
+    assert.doesNotMatch(changePasswordRouteSource, /requiredPasswordChange/);
+  });
+
+  it("clears must_change_password only after a successful forced update", () => {
+    assert.match(
+      changePasswordServerSource,
+      /if \(updateError\)[\s\S]*return[\s\S]*if \(personnel\.mustChangePassword\)[\s\S]*clearPersonnelMustChangePassword/,
+    );
+  });
+
+  it("does not clear must_change_password when the update fails", () => {
+    const updateFailureBlock = changePasswordServerSource.match(
+      /if \(updateError\) \{[\s\S]*?\n  \}/,
+    );
+    assert.ok(updateFailureBlock, "updateError block should exist");
+    assert.doesNotMatch(updateFailureBlock[0], /clearPersonnelMustChangePassword/);
+  });
+
+  it("enters forced mode from personnel.mustChangePassword without the query parameter", () => {
+    assert.match(changePasswordViewSource, /personnel\.mustChangePassword/);
+    assert.doesNotMatch(changePasswordViewSource, /useSearchParams/);
+    assert.match(authGateSource, /personnel\?\.mustChangePassword/);
+  });
+
+  it("redirects forced users away from protected pages in middleware", () => {
+    assert.match(middlewareSource, /must_change_password/);
+    assert.match(middlewareSource, /isPasswordSetupPath/);
+    assert.match(middlewareSource, /redirectToPasswordSetup/);
+    assert.match(middlewareSource, /request\.nextUrl\.clone\(\)/);
+    assert.match(middlewareSource, /searchParams\.set\("required", "1"\)/);
   });
 });
 

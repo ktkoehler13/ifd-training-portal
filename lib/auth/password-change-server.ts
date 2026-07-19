@@ -17,7 +17,6 @@ export interface ChangePasswordInput {
   currentPassword?: string;
   newPassword: string;
   confirmPassword: string;
-  requiredPasswordChange?: boolean;
 }
 
 export async function changeAuthenticatedUserPassword(
@@ -39,8 +38,7 @@ export async function changeAuthenticatedUserPassword(
   }
 
   const supabase = await createClient();
-  const requiresCurrentPassword =
-    !input.requiredPasswordChange || !personnel.mustChangePassword;
+  const requiresCurrentPassword = !personnel.mustChangePassword;
 
   if (requiresCurrentPassword) {
     const currentPassword = input.currentPassword?.trim() ?? "";
