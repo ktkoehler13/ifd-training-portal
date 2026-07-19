@@ -282,6 +282,7 @@ export async function generateApprovedTrainingRequestPacket(
 
     const pdfBytes = await generateApprovedPacketBytes({
       request,
+      actions,
       mtoAction,
       deputyAction,
       mtoSignaturePng,

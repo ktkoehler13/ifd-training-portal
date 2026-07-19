@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { PDFDocument } from "pdf-lib";
-import { APPROVED_PACKET_VISUAL_FIXTURE_INPUT, APPROVED_PACKET_VISUAL_FIXTURE_REQUEST } from "./approved-packet-visual-fixture";
+import { APPROVED_PACKET_VISUAL_FIXTURE_INPUT, APPROVED_PACKET_VISUAL_FIXTURE_REQUEST, buildDefaultApprovedPacketActions } from "./approved-packet-visual-fixture";
 import {
   getApprovedPacketStampPlan,
   inspectApprovedPacketGeometry,
@@ -87,28 +87,32 @@ function buildAction(
   };
 }
 
+const mtoAction = buildAction({ action: "mto_approved", actorRole: "mto" });
+const deputyAction = buildAction({
+  id: "55555555-5555-5555-5555-555555555555",
+  action: "deputy_chief_approved",
+  actorRole: "deputy_chief",
+  actorName: "Deputy Chief Reviewer",
+  signatureName: "Deputy Chief Reviewer",
+  signedAt: "2026-07-02T10:00:00.000Z",
+  createdAt: "2026-07-02T10:00:00.000Z",
+  signatureStoragePath: `${sampleRequest.id}/55555555-5555-5555-5555-555555555555/signature.png`,
+});
+
 const packetInput = {
   request: sampleRequest,
-  mtoAction: buildAction({ action: "mto_approved", actorRole: "mto" }),
-  deputyAction: buildAction({
-    id: "55555555-5555-5555-5555-555555555555",
-    action: "deputy_chief_approved",
-    actorRole: "deputy_chief",
-    actorName: "Deputy Chief Reviewer",
-    signatureName: "Deputy Chief Reviewer",
-    signedAt: "2026-07-02T10:00:00.000Z",
-    createdAt: "2026-07-02T10:00:00.000Z",
-    signatureStoragePath: `${sampleRequest.id}/55555555-5555-5555-5555-555555555555/signature.png`,
-  }),
+  actions: buildDefaultApprovedPacketActions(sampleRequest, mtoAction, deputyAction),
+  mtoAction,
+  deputyAction,
   mtoSignaturePng: VALID_TEST_PNG,
   deputySignaturePng: VALID_TEST_PNG,
 };
 
 describe("generateApprovedPacketBytes", () => {
-  it("produces a two-page merged approved packet", async () => {
+  it("produces a merged approved packet with an audit trail", async () => {
     const bytes = await generateApprovedPacketBytes(packetInput);
     const pdf = await PDFDocument.load(bytes);
-    assert.equal(pdf.getPageCount(), 2);
+    assert.ok(pdf.getPageCount() >= 3);
   });
 
   it("validates the final packet has zero AcroForm fields", async () => {
@@ -167,6 +171,21 @@ describe("approved packet missing data policy", () => {
 
   const sparsePacketInput = {
     request: sparseRequest,
+    actions: buildDefaultApprovedPacketActions(
+      sparseRequest,
+      buildAction({
+        trainingRequestId: sparseRequest.id,
+        action: "mto_approved",
+        actorRole: "mto",
+      }),
+      buildAction({
+        id: "88888888-8888-8888-8888-888888888888",
+        trainingRequestId: sparseRequest.id,
+        action: "deputy_chief_approved",
+        actorRole: "deputy_chief",
+        signatureStoragePath: `${sparseRequest.id}/88888888-8888-8888-8888-888888888888/signature.png`,
+      }),
+    ),
     mtoAction: buildAction({
       trainingRequestId: sparseRequest.id,
       action: "mto_approved",
@@ -296,7 +315,7 @@ describe("approved packet visual fixture", () => {
 
     assert.match(plan.trainingRequestText.requesterName, /Fire Fighter/);
     assert.match(plan.trainingRequestText.badge, /207/);
-    assert.match(plan.trainingRequestText.applicationDate, /07\/10\/2026/);
+    assert.match(plan.trainingRequestText.applicationDate, /07\/06\/2026/);
     assert.match(plan.trainingRequestText.trainingName, /Testing Sig/);
     assert.match(plan.trainingRequestText.trainingLocation, /Where ever/);
     assert.equal(
@@ -306,8 +325,8 @@ describe("approved packet visual fixture", () => {
         APPROVED_PACKET_VISUAL_FIXTURE_REQUEST.courseEndDate,
       ),
     );
-    assert.match(plan.trainingRequestApprovalDates.mtoApprovalDate, /07\/10\/2026/);
-    assert.match(plan.trainingRequestApprovalDates.deputyApprovalDate, /07\/11\/2026/);
+    assert.match(plan.trainingRequestApprovalDates.mtoApprovalDate, /07\/08\/2026/);
+    assert.match(plan.trainingRequestApprovalDates.deputyApprovalDate, /07\/08\/2026/);
     assert.equal(plan.trainingRequestText.onDutyDatePrimary, "");
     assert.equal(plan.trainingRequestText.onDutyDateSecondary, "");
 
@@ -359,7 +378,10 @@ describe("validateFinalMergedPacketNonInteractive", () => {
     form.createTextField("test-field");
 
     await assert.rejects(
-      async () => validateFinalMergedPacketNonInteractive(await pdf.save()),
+      async () =>
+        validateFinalMergedPacketNonInteractive(await pdf.save(), {
+          minimumPageCount: 2,
+        }),
       /AcroForm field/,
     );
   });

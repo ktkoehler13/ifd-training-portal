@@ -1,3 +1,4 @@
+import { readdir } from "node:fs/promises";
 import { mkdtemp, writeFile } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
 import os from "node:os";
@@ -27,8 +28,13 @@ export async function renderPdfBytesToPngPages(
     throw new Error(render.stderr || "pdftoppm failed to render the approved packet.");
   }
 
+  const pngPaths = (await readdir(directory))
+    .filter((fileName) => fileName.startsWith("page-") && fileName.endsWith(".png"))
+    .sort()
+    .map((fileName) => path.join(directory, fileName));
+
   return {
     outputDirectory: directory,
-    pngPaths: [path.join(directory, "page-1.png"), path.join(directory, "page-2.png")],
+    pngPaths,
   };
 }

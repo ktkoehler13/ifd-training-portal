@@ -46,12 +46,14 @@ export function countWidgetAnnotations(pdf: PDFDocument): number {
 
 export async function validateFinalMergedPacketNonInteractive(
   pdfBytes: Uint8Array,
+  options?: { minimumPageCount?: number },
 ): Promise<void> {
   const pdf = await PDFDocument.load(pdfBytes);
+  const minimumPageCount = options?.minimumPageCount ?? 3;
 
-  if (pdf.getPageCount() !== 2) {
+  if (pdf.getPageCount() < minimumPageCount) {
     throw new PdfPacketValidationError(
-      `Approved packet must contain exactly two pages, found ${pdf.getPageCount()}.`,
+      `Approved packet must contain at least ${minimumPageCount} pages, found ${pdf.getPageCount()}.`,
     );
   }
 

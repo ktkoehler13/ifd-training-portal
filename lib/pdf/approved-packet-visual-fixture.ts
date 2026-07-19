@@ -31,8 +31,8 @@ export const APPROVED_PACKET_VISUAL_FIXTURE_REQUEST: TrainingRequestRecord = {
   transportationNotes: "Personal Vehicle",
   status: "approved",
   currentActionRole: null,
-  submittedAt: "2026-07-10T12:00:00.000Z",
-  createdAt: "2026-07-09T12:00:00.000Z",
+  submittedAt: "2026-07-06T18:34:00.000Z",
+  createdAt: "2026-07-06T18:34:00.000Z",
   updatedAt: "2026-07-11T12:00:00.000Z",
 };
 
@@ -61,19 +61,119 @@ function buildFixtureAction(
   };
 }
 
-export const APPROVED_PACKET_VISUAL_FIXTURE_INPUT = {
-  request: APPROVED_PACKET_VISUAL_FIXTURE_REQUEST,
-  mtoAction: buildFixtureAction({ action: "mto_approved", actorRole: "mto" }),
-  deputyAction: buildFixtureAction({
+export const APPROVED_PACKET_VISUAL_FIXTURE_ACTIONS: TrainingRequestActionRecord[] = [
+  buildFixtureAction({
+    id: "11111111-1111-1111-1111-111111111111",
+    actorPersonnelId: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+    actorName: "Fire Fighter",
+    actorBadgeNumber: "207",
+    actorRole: "firefighter",
+    action: "submitted",
+    signatureName: null,
+    signedAt: null,
+    signatureStorageBucket: null,
+    signatureStoragePath: null,
+    signatureSha256: null,
+    signatureMimeType: null,
+    signatureFileSizeBytes: null,
+    electronicSignatureConfirmed: false,
+    createdAt: "2026-07-06T18:34:00.000Z",
+  }),
+  buildFixtureAction({
+    id: "22222222-2222-2222-2222-222222222222",
+    actorName: "Kevin Koehler",
+    actorRole: "mto",
+    action: "mto_returned",
+    comments: "Please attach the course registration information.",
+    signatureName: null,
+    signedAt: null,
+    signatureStorageBucket: null,
+    signatureStoragePath: null,
+    signatureSha256: null,
+    signatureMimeType: null,
+    signatureFileSizeBytes: null,
+    electronicSignatureConfirmed: false,
+    createdAt: "2026-07-07T13:45:00.000Z",
+  }),
+  buildFixtureAction({
+    id: "33333333-3333-3333-3333-333333333333",
+    actorPersonnelId: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+    actorName: "Fire Fighter",
+    actorBadgeNumber: "207",
+    actorRole: "firefighter",
+    action: "resubmitted",
+    signatureName: null,
+    signedAt: null,
+    signatureStorageBucket: null,
+    signatureStoragePath: null,
+    signatureSha256: null,
+    signatureMimeType: null,
+    signatureFileSizeBytes: null,
+    electronicSignatureConfirmed: false,
+    createdAt: "2026-07-07T17:20:00.000Z",
+  }),
+  buildFixtureAction({
+    id: "44444444-4444-4444-4444-444444444444",
+    actorName: "Kevin Koehler",
+    actorRole: "mto",
+    action: "mto_approved",
+    signatureName: "Kevin Koehler",
+    signedAt: "2026-07-08T13:45:00.000Z",
+    createdAt: "2026-07-08T13:45:00.000Z",
+    signatureStoragePath: `${APPROVED_PACKET_VISUAL_FIXTURE_REQUEST.id}/44444444-4444-4444-4444-444444444444/signature.png`,
+  }),
+  buildFixtureAction({
     id: "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee",
-    action: "deputy_chief_approved",
+    actorName: "John Smith",
     actorRole: "deputy_chief",
-    actorName: "Deputy Chief Reviewer",
-    signatureName: "Deputy Chief Reviewer",
-    signedAt: "2026-07-11T10:00:00.000Z",
-    createdAt: "2026-07-11T10:00:00.000Z",
+    action: "deputy_chief_approved",
+    signatureName: "John Smith",
+    signedAt: "2026-07-08T15:02:00.000Z",
+    createdAt: "2026-07-08T15:02:00.000Z",
     signatureStoragePath: `${APPROVED_PACKET_VISUAL_FIXTURE_REQUEST.id}/eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee/signature.png`,
   }),
+];
+
+export const APPROVED_PACKET_VISUAL_FIXTURE_INPUT = {
+  request: APPROVED_PACKET_VISUAL_FIXTURE_REQUEST,
+  actions: APPROVED_PACKET_VISUAL_FIXTURE_ACTIONS,
+  mtoAction: APPROVED_PACKET_VISUAL_FIXTURE_ACTIONS.find(
+    (action) => action.action === "mto_approved",
+  )!,
+  deputyAction: APPROVED_PACKET_VISUAL_FIXTURE_ACTIONS.find(
+    (action) => action.action === "deputy_chief_approved",
+  )!,
   mtoSignaturePng: VALID_TEST_PNG,
   deputySignaturePng: VALID_TEST_PNG,
 };
+
+export function buildDefaultApprovedPacketActions(
+  request: TrainingRequestRecord,
+  mtoAction: TrainingRequestActionRecord,
+  deputyAction: TrainingRequestActionRecord,
+): TrainingRequestActionRecord[] {
+  return [
+    {
+      ...mtoAction,
+      id: "aaaaaaaa-1111-1111-1111-111111111111",
+      trainingRequestId: request.id,
+      actorPersonnelId: request.requesterPersonnelId,
+      actorName: request.requesterName,
+      actorBadgeNumber: request.requesterBadgeNumber,
+      actorRole: "firefighter",
+      action: "submitted",
+      comments: null,
+      signatureName: null,
+      signedAt: null,
+      signatureStorageBucket: null,
+      signatureStoragePath: null,
+      signatureSha256: null,
+      signatureMimeType: null,
+      signatureFileSizeBytes: null,
+      electronicSignatureConfirmed: false,
+      createdAt: request.submittedAt ?? request.createdAt,
+    },
+    { ...mtoAction, trainingRequestId: request.id },
+    { ...deputyAction, trainingRequestId: request.id },
+  ];
+}

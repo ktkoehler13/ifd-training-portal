@@ -7,6 +7,7 @@ import {
   buildTrainingRequestFormStampValues,
   getApprovedPacketStampPlan,
 } from "@/lib/pdf/build-stamp-values";
+import { createAuditTrailPages } from "@/lib/pdf/build-audit-trail";
 import { warnApprovedPacketFieldUnavailable } from "@/lib/pdf/warn-approved-packet-fields";
 import { cropSignaturePngTransparentMargins } from "@/lib/pdf/crop-signature-png";
 import {
@@ -50,6 +51,7 @@ const TAL_TEMPLATE = path.join(TEMPLATE_DIR, "tal.pdf");
 
 export interface ApprovedPacketGenerationInput {
   request: TrainingRequestRecord;
+  actions: TrainingRequestActionRecord[];
   mtoAction: TrainingRequestActionRecord;
   deputyAction: TrainingRequestActionRecord;
   mtoSignaturePng: Uint8Array;
@@ -292,11 +294,25 @@ export async function generateApprovedPacketBytes(
   await stampTalOriginalInitials(flattenedTalPdf, input);
   await stampTalAgencySignature(flattenedTalPdf, input.mtoSignaturePng);
 
+  const auditPdf = await PDFDocument.create();
+  await createAuditTrailPages(auditPdf, input.request, input.actions);
+
   const mergedPdf = await PDFDocument.create();
   const [trainingPage] = await mergedPdf.copyPages(flattenedTrainingPdf, [0]);
   const [talPage] = await mergedPdf.copyPages(flattenedTalPdf, [0]);
   mergedPdf.addPage(trainingPage);
   mergedPdf.addPage(talPage);
+
+  const auditPageIndexes = Array.from(
+    { length: auditPdf.getPageCount() },
+    (_, index) => index,
+  );
+  if (auditPageIndexes.length > 0) {
+    const auditPages = await mergedPdf.copyPages(auditPdf, auditPageIndexes);
+    for (const auditPage of auditPages) {
+      mergedPdf.addPage(auditPage);
+    }
+  }
 
   stripInteractivePdfArtifacts(mergedPdf);
 
