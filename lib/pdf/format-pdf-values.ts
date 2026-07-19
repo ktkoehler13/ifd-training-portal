@@ -47,6 +47,22 @@ export function formatTrainingDatesIncludingTravel(
   return start || end;
 }
 
+export function formatOptionalPdfCurrency(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(value) || value === 0) {
+    return "";
+  }
+
+  return formatCurrency(value);
+}
+
+export function formatOptionalPdfNumber(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(value) || value === 0) {
+    return "";
+  }
+
+  return String(value);
+}
+
 export function formatTransportationSelection(input: {
   requestDepartmentVehicle: boolean;
   transportationNotes: string;
@@ -55,8 +71,7 @@ export function formatTransportationSelection(input: {
     return "Department Vehicle";
   }
 
-  const notes = input.transportationNotes.trim();
-  return notes || "Personal Vehicle";
+  return input.transportationNotes.trim();
 }
 
 export function splitRequesterNameForTal(requesterName: string): {

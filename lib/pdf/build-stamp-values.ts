@@ -5,13 +5,13 @@ import {
 } from "@/lib/pdf/field-mapping";
 import { deriveApprovalInitials } from "@/lib/pdf/derive-approval-initials";
 import {
-  formatPdfCurrency,
+  formatOptionalPdfCurrency,
+  formatOptionalPdfNumber,
   formatPdfDate,
-  formatPdfNumber,
   formatTrainingDatesIncludingTravel,
   formatTransportationSelection,
 } from "@/lib/pdf/format-pdf-values";
-import { PdfFormFieldError } from "@/lib/pdf/pdf-form-fields";
+import { warnApprovedPacketFieldUnavailable } from "@/lib/pdf/warn-approved-packet-fields";
 import type { TrainingRequestActionRecord } from "@/types/training-request-action";
 import type { TrainingRequestRecord } from "@/types/training-request";
 
@@ -21,30 +21,17 @@ export interface ApprovedPacketStampInput {
   deputyAction: TrainingRequestActionRecord;
 }
 
-function requireValue(value: string, label: string): string {
-  if (!value.trim()) {
-    throw new PdfFormFieldError(
-      `Approved packet generation requires ${label}, but no value was available.`,
-    );
-  }
-
-  return value.trim();
+function optionalText(value: string | null | undefined): string {
+  return value?.trim() ?? "";
 }
 
 export function resolveMtoApprovalInitials(
   mtoAction: TrainingRequestActionRecord,
 ): string {
-  const initials =
+  return (
     deriveApprovalInitials(mtoAction.signatureName) ||
-    deriveApprovalInitials(mtoAction.actorName);
-
-  if (!initials) {
-    throw new PdfFormFieldError(
-      "Approved packet generation requires MTO approval initials, but none could be derived from the committed approval record.",
-    );
-  }
-
-  return initials;
+    deriveApprovalInitials(mtoAction.actorName)
+  );
 }
 
 export function buildTrainingRequestFormStampValues(
@@ -57,30 +44,27 @@ export function buildTrainingRequestFormStampValues(
   );
 
   return {
-    requesterName: requireValue(request.requesterName, "requester name"),
-    badge: requireValue(request.requesterBadgeNumber, "badge number"),
-    applicationDate: requireValue(
-      formatPdfDate(request.submittedAt ?? request.createdAt),
-      "application date",
-    ),
-    trainingName: requireValue(request.courseName, "training name"),
-    trainingLocation: requireValue(request.location, "training location"),
-    trainingDatesIncludingTravel: requireValue(trainingDates, "training dates"),
-    totalDaysIncludingTravel: formatPdfNumber(request.numberOfDaysOnDuty),
+    requesterName: optionalText(request.requesterName),
+    badge: optionalText(request.requesterBadgeNumber),
+    applicationDate: formatPdfDate(request.submittedAt ?? request.createdAt),
+    trainingName: optionalText(request.courseName),
+    trainingLocation: optionalText(request.location),
+    trainingDatesIncludingTravel: trainingDates,
+    totalDaysIncludingTravel: formatOptionalPdfNumber(request.numberOfDaysOnDuty),
     transportation: formatTransportationSelection({
       requestDepartmentVehicle: request.requestDepartmentVehicle,
       transportationNotes: request.transportationNotes,
     }),
-    registrationFees: formatPdfCurrency(request.registrationFee),
-    mileage: formatPdfNumber(request.totalReimbursableMiles),
-    mileageRate: formatPdfCurrency(request.gsaMileageRate),
-    mileageTotal: formatPdfCurrency(request.mileageReimbursement),
-    mealFoodTotal: formatPdfCurrency(request.foodExpenses),
-    lodgingTotal: formatPdfCurrency(request.lodging),
-    otherTotal: formatPdfCurrency(request.otherExpenses),
-    airfareTotal: formatPdfCurrency(request.airfare),
-    rentalVehicleTotal: formatPdfCurrency(request.rentalVehicle),
-    totalEstimatedExpenses: formatPdfCurrency(request.totalEstimatedExpenses),
+    registrationFees: formatOptionalPdfCurrency(request.registrationFee),
+    mileage: formatOptionalPdfNumber(request.totalReimbursableMiles),
+    mileageRate: formatOptionalPdfCurrency(request.gsaMileageRate),
+    mileageTotal: formatOptionalPdfCurrency(request.mileageReimbursement),
+    mealFoodTotal: formatOptionalPdfCurrency(request.foodExpenses),
+    lodgingTotal: formatOptionalPdfCurrency(request.lodging),
+    otherTotal: formatOptionalPdfCurrency(request.otherExpenses),
+    airfareTotal: formatOptionalPdfCurrency(request.airfare),
+    rentalVehicleTotal: formatOptionalPdfCurrency(request.rentalVehicle),
+    totalEstimatedExpenses: formatOptionalPdfCurrency(request.totalEstimatedExpenses),
     onDutyDatePrimary: "",
     onDutyDateSecondary: "",
   };
@@ -95,14 +79,8 @@ export function buildTrainingRequestApprovalStampValues(
   const { mtoAction, deputyAction } = input;
 
   return {
-    mtoApprovalDate: requireValue(
-      formatPdfDate(mtoAction.signedAt ?? mtoAction.createdAt),
-      "MTO approval date",
-    ),
-    deputyApprovalDate: requireValue(
-      formatPdfDate(deputyAction.signedAt ?? deputyAction.createdAt),
-      "Deputy Chief approval date",
-    ),
+    mtoApprovalDate: formatPdfDate(mtoAction.signedAt ?? mtoAction.createdAt),
+    deputyApprovalDate: formatPdfDate(deputyAction.signedAt ?? deputyAction.createdAt),
   };
 }
 
@@ -117,6 +95,45 @@ export function buildTalOriginalInitialStampValues(
   };
 }
 
+function warnIfBlank(
+  requestId: string,
+  field: string,
+  value: string,
+): void {
+  if (!value.trim()) {
+    warnApprovedPacketFieldUnavailable(requestId, field);
+  }
+}
+
+export function warnForMissingApprovedPacketContent(
+  input: ApprovedPacketStampInput,
+  plan: ReturnType<typeof getApprovedPacketStampPlan>,
+): void {
+  const { request } = input;
+  const requestId = request.id;
+
+  warnIfBlank(requestId, "requesterName", plan.trainingRequestText.requesterName);
+  warnIfBlank(requestId, "requesterBadgeNumber", plan.trainingRequestText.badge);
+  warnIfBlank(requestId, "courseName", plan.trainingRequestText.trainingName);
+  warnIfBlank(requestId, "location", plan.trainingRequestText.trainingLocation);
+  warnIfBlank(
+    requestId,
+    "trainingDatesIncludingTravel",
+    plan.trainingRequestText.trainingDatesIncludingTravel,
+  );
+  warnIfBlank(requestId, "mtoApprovalDate", plan.trainingRequestApprovalDates.mtoApprovalDate);
+  warnIfBlank(
+    requestId,
+    "deputyApprovalDate",
+    plan.trainingRequestApprovalDates.deputyApprovalDate,
+  );
+  warnIfBlank(
+    requestId,
+    "mtoOriginalInitials",
+    plan.talOriginalInitials.studentAuthorization,
+  );
+}
+
 export function getApprovedPacketStampPlan(input: ApprovedPacketStampInput): {
   trainingRequestText: ReturnType<typeof buildTrainingRequestFormStampValues>;
   trainingRequestApprovalDates: ReturnType<typeof buildTrainingRequestApprovalStampValues>;
@@ -124,13 +141,17 @@ export function getApprovedPacketStampPlan(input: ApprovedPacketStampInput): {
   signaturePlacements: typeof TRAINING_REQUEST_FORM_SIGNATURE_PLACEMENTS;
   talOriginalInitialPlacements: typeof TAL_ORIGINAL_INITIAL_PLACEMENTS;
 } {
-  return {
+  const plan = {
     trainingRequestText: buildTrainingRequestFormStampValues(input),
     trainingRequestApprovalDates: buildTrainingRequestApprovalStampValues(input),
     talOriginalInitials: buildTalOriginalInitialStampValues(input),
     signaturePlacements: TRAINING_REQUEST_FORM_SIGNATURE_PLACEMENTS,
     talOriginalInitialPlacements: TAL_ORIGINAL_INITIAL_PLACEMENTS,
   };
+
+  warnForMissingApprovedPacketContent(input, plan);
+
+  return plan;
 }
 
 export function rectanglesOverlap(
@@ -163,8 +184,4 @@ export function inspectApprovedPacketGeometry(
       deputyApprovalDate,
     ),
   };
-}
-
-export function inspectApprovedPacketPdfContent(pdfBytes: Uint8Array): string {
-  return Buffer.from(pdfBytes).toString("latin1");
 }

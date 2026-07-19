@@ -7,6 +7,7 @@ import {
   buildTrainingRequestFormStampValues,
   getApprovedPacketStampPlan,
 } from "@/lib/pdf/build-stamp-values";
+import { warnApprovedPacketFieldUnavailable } from "@/lib/pdf/warn-approved-packet-fields";
 import { cropSignaturePngTransparentMargins } from "@/lib/pdf/crop-signature-png";
 import {
   TAL_CONSTANTS,
@@ -27,7 +28,6 @@ import {
   checkRequiredCheckbox,
   PdfFormFieldError,
   setOptionalTextField,
-  setRequiredTextField,
   uncheckOptionalCheckbox,
 } from "@/lib/pdf/pdf-form-fields";
 import {
@@ -63,9 +63,21 @@ async function drawSignatureInBox(
   pdf: PDFDocument,
   pngBytes: Uint8Array,
   placement: PdfImageBoxPlacement,
+  context: string,
 ): Promise<void> {
+  if (pngBytes.byteLength === 0) {
+    throw new PdfFormFieldError(`${context} signature image is empty and cannot be embedded.`);
+  }
+
   const cropped = cropSignaturePngTransparentMargins(pngBytes);
-  const image = await pdf.embedPng(cropped);
+
+  let image;
+  try {
+    image = await pdf.embedPng(cropped);
+  } catch {
+    throw new PdfFormFieldError(`${context} signature image could not be decoded or embedded.`);
+  }
+
   const scale = Math.min(
     placement.width / image.width,
     placement.height / image.height,
@@ -95,30 +107,27 @@ function populateTalForm(pdf: PDFDocument, input: ApprovedPacketGenerationInput)
   const { request, mtoAction } = input;
   const fields = TAL_FORM_FIELDS;
   const student = splitRequesterNameForTal(request.requesterName);
-  const context = "TAL";
 
-  setRequiredTextField(form, fields.courseName, request.courseName, context);
+  setOptionalTextField(form, fields.courseName, request.courseName);
   setOptionalTextField(form, fields.courseNumber, request.courseNumber);
-  setRequiredTextField(form, fields.courseLocation, request.location, context);
-  setRequiredTextField(form, fields.agencyName, TAL_CONSTANTS.agencyName, context);
-  setRequiredTextField(form, fields.fdid, TAL_CONSTANTS.fdid, context);
-  setRequiredTextField(
+  setOptionalTextField(form, fields.courseLocation, request.location);
+  setOptionalTextField(form, fields.agencyName, TAL_CONSTANTS.agencyName);
+  setOptionalTextField(form, fields.fdid, TAL_CONSTANTS.fdid);
+  setOptionalTextField(
     form,
     fields.authorizationDate,
     formatPdfDate(mtoAction.signedAt ?? mtoAction.createdAt),
-    context,
   );
-  setRequiredTextField(
+  setOptionalTextField(
     form,
     fields.authorizedRepresentativeName,
     mtoAction.signatureName ?? mtoAction.actorName,
-    context,
   );
-  checkRequiredCheckbox(form, fields.studentAuthorized, context);
-  checkRequiredCheckbox(form, fields.scbaClearance, context);
-  setRequiredTextField(form, fields.lastName, student.lastName, context);
-  setRequiredTextField(form, fields.firstName, student.firstName, context);
-  setRequiredTextField(form, fields.email, request.requesterEmail, context);
+  checkOptionalCheckbox(form, fields.studentAuthorized);
+  checkOptionalCheckbox(form, fields.scbaClearance);
+  setOptionalTextField(form, fields.lastName, student.lastName);
+  setOptionalTextField(form, fields.firstName, student.firstName);
+  setOptionalTextField(form, fields.email, request.requesterEmail);
 }
 
 async function stampTrainingRequestFormText(
@@ -163,12 +172,14 @@ async function stampTrainingRequestSignatures(
     pdf,
     input.mtoSignaturePng,
     TRAINING_REQUEST_FORM_SIGNATURE_PLACEMENTS.mtoSignature,
+    "MTO",
   );
   await drawSignatureInBox(
     page,
     pdf,
     input.deputySignaturePng,
     TRAINING_REQUEST_FORM_SIGNATURE_PLACEMENTS.deputySignature,
+    "Deputy Chief",
   );
 }
 
@@ -200,6 +211,7 @@ async function stampTalAgencySignature(
     pdf,
     mtoSignaturePng,
     TAL_SIGNATURE_PLACEMENTS.agencyAuthorization,
+    "TAL agency authorization",
   );
 }
 
@@ -234,13 +246,38 @@ export async function generateApprovedPacketBytes(
 ): Promise<Uint8Array> {
   getApprovedPacketStampPlan(input);
 
-  const [trainingTemplateBytes, talTemplateBytes] = await Promise.all([
-    readFile(TRAINING_REQUEST_FORM_TEMPLATE),
-    readFile(TAL_TEMPLATE),
-  ]);
+  if (input.mtoSignaturePng.byteLength === 0) {
+    warnApprovedPacketFieldUnavailable(input.request.id, "mtoSignature");
+  }
+  if (input.deputySignaturePng.byteLength === 0) {
+    warnApprovedPacketFieldUnavailable(input.request.id, "deputySignature");
+  }
 
-  const trainingPdf = await PDFDocument.load(trainingTemplateBytes);
-  const talPdf = await PDFDocument.load(talTemplateBytes);
+  let trainingTemplateBytes: Uint8Array;
+  let talTemplateBytes: Uint8Array;
+
+  try {
+    [trainingTemplateBytes, talTemplateBytes] = await Promise.all([
+      readFile(TRAINING_REQUEST_FORM_TEMPLATE),
+      readFile(TAL_TEMPLATE),
+    ]);
+  } catch {
+    throw new PdfFormFieldError("Approved packet template file could not be read.");
+  }
+
+  let trainingPdf: PDFDocument;
+  let talPdf: PDFDocument;
+
+  try {
+    trainingPdf = await PDFDocument.load(trainingTemplateBytes);
+    talPdf = await PDFDocument.load(talTemplateBytes);
+  } catch {
+    throw new PdfFormFieldError("Approved packet template could not be parsed.");
+  }
+
+  if (trainingPdf.getPageCount() < 1 || talPdf.getPageCount() < 1) {
+    throw new PdfFormFieldError("Approved packet template is missing a required page.");
+  }
 
   populateTrainingRequestCheckboxes(trainingPdf);
   populateTalForm(talPdf, input);
@@ -263,7 +300,13 @@ export async function generateApprovedPacketBytes(
 
   stripInteractivePdfArtifacts(mergedPdf);
 
-  const mergedBytes = await mergedPdf.save();
+  let mergedBytes: Uint8Array;
+  try {
+    mergedBytes = await mergedPdf.save();
+  } catch {
+    throw new PdfFormFieldError("Approved packet could not be saved.");
+  }
+
   await validateFinalMergedPacketNonInteractive(mergedBytes);
 
   return mergedBytes;

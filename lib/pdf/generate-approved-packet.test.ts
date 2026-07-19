@@ -8,10 +8,13 @@ import {
   inspectApprovedPacketGeometry,
 } from "./build-stamp-values";
 import {
+  collectApprovedPacketWarningsForTest,
+  collectApprovedPacketWarningsForTestAsync,
+} from "./warn-approved-packet-fields";
+import {
   generateApprovedPacketBytes,
   inspectTalPopulationForTest,
   PdfFormFieldError,
-  populateTrainingRequestFormForTest,
 } from "./generate-approved-packet";
 import { renderPdfBytesToPngPages } from "./render-pdf-pages-for-test";
 import {
@@ -129,21 +132,6 @@ describe("generateApprovedPacketBytes", () => {
     assert.equal(populated.scbaClearanceChecked, true);
   });
 
-  it("fails generation when a required training request field is missing", async () => {
-    await assert.rejects(
-      () =>
-        populateTrainingRequestFormForTest({
-          ...packetInput,
-          request: { ...sampleRequest, requesterName: "" },
-        }),
-      (error: unknown) => {
-        assert.ok(error instanceof PdfFormFieldError);
-        assert.match(error.message, /requester name/i);
-        return true;
-      },
-    );
-  });
-
   it("does not fail when an optional TAL field is absent", async () => {
     const talPdf = await PDFDocument.load(
       await readFile("lib/pdf/templates/tal.pdf"),
@@ -154,6 +142,149 @@ describe("generateApprovedPacketBytes", () => {
       setRequiredTextField(form, TAL_FORM_FIELDS.courseName, "Fire Officer I", "TAL");
       setOptionalTextField(form, TAL_FORM_FIELDS.courseNumber, "");
     });
+  });
+});
+
+describe("approved packet missing data policy", () => {
+  const sparseRequest: TrainingRequestRecord = {
+    ...sampleRequest,
+    id: "99999999-9999-9999-9999-999999999999",
+    courseNumber: "",
+    registrationFee: 0,
+    lodging: 0,
+    foodExpenses: 0,
+    airfare: 0,
+    rentalVehicle: 0,
+    otherExpenses: 0,
+    mileageReimbursement: 0,
+    totalReimbursableMiles: 0,
+    gsaMileageRate: 0,
+    totalEstimatedExpenses: 0,
+    numberOfDaysOnDuty: 0,
+    transportationNotes: "",
+    requestDepartmentVehicle: false,
+  };
+
+  const sparsePacketInput = {
+    request: sparseRequest,
+    mtoAction: buildAction({
+      trainingRequestId: sparseRequest.id,
+      action: "mto_approved",
+      actorRole: "mto",
+    }),
+    deputyAction: buildAction({
+      id: "88888888-8888-8888-8888-888888888888",
+      trainingRequestId: sparseRequest.id,
+      action: "deputy_chief_approved",
+      actorRole: "deputy_chief",
+      signatureStoragePath: `${sparseRequest.id}/88888888-8888-8888-8888-888888888888/signature.png`,
+    }),
+    mtoSignaturePng: VALID_TEST_PNG,
+    deputySignaturePng: VALID_TEST_PNG,
+  };
+
+  it("succeeds when optional expense fields are blank", async () => {
+    const { warnings, result: plan } = collectApprovedPacketWarningsForTest(() =>
+      getApprovedPacketStampPlan(sparsePacketInput),
+    );
+    const bytes = await generateApprovedPacketBytes(sparsePacketInput);
+
+    assert.equal(plan.trainingRequestText.mileage, "");
+    assert.equal(plan.trainingRequestText.mileageRate, "");
+    assert.equal(plan.trainingRequestText.lodgingTotal, "");
+    assert.equal(plan.trainingRequestText.airfareTotal, "");
+    assert.equal(plan.trainingRequestText.rentalVehicleTotal, "");
+    assert.equal(plan.trainingRequestText.otherTotal, "");
+    assert.equal(plan.trainingRequestText.registrationFees, "");
+    assert.ok(bytes.byteLength > 0);
+    assert.ok(warnings.length >= 0);
+  });
+
+  it("succeeds when course number is blank", async () => {
+    const plan = getApprovedPacketStampPlan(sparsePacketInput);
+    const populated = await inspectTalPopulationForTest(sparsePacketInput);
+
+    assert.equal(sparseRequest.courseNumber, "");
+    assert.match(plan.trainingRequestText.trainingName, /Fire Officer I/);
+    await assert.doesNotReject(() => generateApprovedPacketBytes(sparsePacketInput));
+    assert.equal(populated.studentAuthorizedChecked, true);
+    assert.equal(populated.scbaClearanceChecked, true);
+  });
+
+  it("leaves individual on-duty dates blank without substitutes", async () => {
+    const plan = getApprovedPacketStampPlan(sparsePacketInput);
+
+    assert.equal(plan.trainingRequestText.onDutyDatePrimary, "");
+    assert.equal(plan.trainingRequestText.onDutyDateSecondary, "");
+    assert.equal(plan.trainingRequestText.totalDaysIncludingTravel, "");
+    assert.doesNotMatch(plan.trainingRequestText.onDutyDatePrimary, /5/);
+  });
+
+  it("still populates available requester, course, and approval content", async () => {
+    const plan = getApprovedPacketStampPlan(sparsePacketInput);
+
+    assert.match(plan.trainingRequestText.requesterName, /Kevin Koehler/);
+    assert.match(plan.trainingRequestText.badge, /207/);
+    assert.match(plan.trainingRequestText.trainingName, /Fire Officer I/);
+    assert.match(plan.trainingRequestText.trainingLocation, /Montour Falls/);
+    assert.ok(plan.trainingRequestText.trainingDatesIncludingTravel.length > 0);
+    assert.ok(plan.trainingRequestApprovalDates.mtoApprovalDate.length > 0);
+    assert.ok(plan.trainingRequestApprovalDates.deputyApprovalDate.length > 0);
+    assert.equal(plan.talOriginalInitials.studentAuthorization, "MR");
+  });
+
+  it("does not insert placeholder or misleading text for unavailable values", async () => {
+    const plan = getApprovedPacketStampPlan(sparsePacketInput);
+
+    assert.equal(plan.trainingRequestText.transportation, "");
+    assert.equal(plan.trainingRequestText.mileageTotal, "");
+    assert.doesNotMatch(plan.trainingRequestText.registrationFees, /\$0\.00/);
+    assert.doesNotMatch(plan.trainingRequestText.onDutyDatePrimary, /N\/A/i);
+  });
+
+  it("logs warnings but still generates when core request fields are missing", async () => {
+    const incompleteInput = {
+      ...sparsePacketInput,
+      request: {
+        ...sparseRequest,
+        requesterName: "",
+        requesterBadgeNumber: "",
+        courseName: "",
+        location: "",
+        courseStartDate: "",
+        courseEndDate: "",
+      },
+    };
+
+    const { warnings } = await collectApprovedPacketWarningsForTestAsync(() =>
+      generateApprovedPacketBytes(incompleteInput),
+    );
+
+    assert.ok(
+      warnings.some((warning) => warning.field === "requesterName"),
+    );
+    assert.ok(warnings.some((warning) => warning.field === "courseName"));
+  });
+
+  it("fails safely when a signature image cannot be decoded", async () => {
+    await assert.rejects(
+      () =>
+        generateApprovedPacketBytes({
+          ...packetInput,
+          mtoSignaturePng: new Uint8Array([0x00, 0x01, 0x02, 0x03]),
+        }),
+      (error: unknown) => {
+        assert.ok(error instanceof PdfFormFieldError);
+        assert.match(error.message, /could not be decoded or embedded/i);
+        return true;
+      },
+    );
+  });
+
+  it("fails safely when a template cannot be parsed", async () => {
+    await assert.rejects(
+      () => PDFDocument.load(new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x00])),
+    );
   });
 });
 
