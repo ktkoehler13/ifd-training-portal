@@ -259,7 +259,21 @@ When `must_change_password` is false, the page verifies the current password, va
 
 Password-setup links use `flow=password-setup` and redirect to forced password creation.
 
-Recovery links may redirect to `/settings/password`.
+Self-service password recovery:
+
+- `/forgot-password` accepts a badge number and sends a Supabase recovery email when a matching active account exists.
+- Recovery emails use `resetPasswordForEmail` with `redirectTo` set to `${APP_BASE_URL}/reset-password` (or the current request origin during local development).
+- `/reset-password` lets the user choose a new permanent password after following the email link.
+- `/auth/callback` still handles Supabase recovery codes with `type=recovery` and redirects to `/reset-password`.
+
+Configure Supabase **Authentication → URL Configuration → Redirect URLs** to include:
+
+- `https://YOUR-PRODUCTION-DOMAIN/reset-password`
+- `http://localhost:3000/reset-password`
+
+Do not rely on Site URL alone; the recovery redirect must be explicitly allowlisted.
+
+If you customize the Supabase recovery email template, keep the link target driven by `{{ .ConfirmationURL }}` / the redirect supplied by `resetPasswordForEmail`. Do not hard-code `/` or `/login` in the template.
 
 ## Authentication and Authorization
 

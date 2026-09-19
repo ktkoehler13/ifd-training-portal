@@ -24,13 +24,30 @@ export const INITIAL_PASSWORD_INVALID_SERVER_MESSAGE =
 const PERMANENT_PASSWORD_PATTERN =
   /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{12,}$/;
 
+/** @internal Used to keep pattern and validation aligned in tests. */
+export function matchesPermanentPasswordPattern(password: string): boolean {
+  return PERMANENT_PASSWORD_PATTERN.test(password);
+}
+
 export function validatePermanentPassword(password: string): string | null {
   if (password.length < 12) {
     return "Password must be at least 12 characters.";
   }
 
-  if (!PERMANENT_PASSWORD_PATTERN.test(password)) {
-    return "Password must include upper- and lowercase letters, a number, and a special character.";
+  if (!/[a-z]/.test(password)) {
+    return "Password must include a lowercase letter.";
+  }
+
+  if (!/[A-Z]/.test(password)) {
+    return "Password must include an uppercase letter.";
+  }
+
+  if (!/\d/.test(password)) {
+    return "Password must include a number.";
+  }
+
+  if (!/[^A-Za-z0-9]/.test(password)) {
+    return "Password must include a special character.";
   }
 
   return null;

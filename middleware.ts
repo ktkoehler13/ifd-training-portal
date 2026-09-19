@@ -13,5 +13,8 @@ export const config = {
     "/approvals/:path*",
     "/admin/:path*",
     "/settings/:path*",
+    "/reset-password",
+    "/forgot-password",
+    "/auth/callback",
   ],
 };

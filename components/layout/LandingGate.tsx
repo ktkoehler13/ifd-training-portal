@@ -9,6 +9,7 @@ import {
   AUTH_MESSAGES,
   INVALID_CREDENTIALS_MESSAGE,
 } from "@/lib/auth/messages";
+import { PASSWORD_RECOVERY_SUCCESS_MESSAGE } from "@/lib/auth/password-recovery-messages";
 
 const SUBMIT_COOLDOWN_MS = 1_000;
 
@@ -32,7 +33,9 @@ export function LandingGate() {
         ? AUTH_MESSAGES.emailUpdatedSignInRequired
         : reason === "password-updated"
           ? AUTH_MESSAGES.passwordUpdatedSignInRequired
-          : null;
+          : reason === "password-reset"
+            ? PASSWORD_RECOVERY_SUCCESS_MESSAGE
+            : null;
 
   async function handleSignIn(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -188,6 +191,15 @@ export function LandingGate() {
             {isSubmitting ? "Signing In…" : "Sign In"}
           </Button>
         </form>
+
+        <p className="mt-4 text-center text-sm text-zinc-600">
+          <Link
+            href="/forgot-password"
+            className="font-semibold text-zinc-800 hover:text-zinc-950"
+          >
+            Forgot password?
+          </Link>
+        </p>
 
         <div className="mt-6 space-y-2 border-t border-zinc-200 pt-6 text-center">
           <Link

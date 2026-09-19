@@ -70,6 +70,11 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const pathname = request.nextUrl.pathname;
+
+  if (pathname === "/reset-password" || pathname === "/forgot-password") {
+    return supabaseResponse;
+  }
+
   const isProtectedRoute =
     pathname.startsWith("/dashboard") ||
     pathname.startsWith("/requests") ||

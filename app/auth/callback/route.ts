@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { markPersonnelMustChangePassword } from "@/lib/auth/admin-personnel-server";
+import { markPasswordRecoverySession } from "@/lib/auth/password-recovery-server";
 import { getAuthenticatedPersonnel } from "@/lib/auth/personnel";
 import { normalizePersonnelEmail } from "@/lib/personnel";
 import { createClient } from "@/lib/supabase/server";
@@ -85,7 +86,8 @@ export async function GET(request: NextRequest) {
   }
 
   if (type === "recovery") {
-    return NextResponse.redirect(new URL("/settings/password", origin));
+    await markPasswordRecoverySession();
+    return NextResponse.redirect(new URL("/reset-password", origin));
   }
 
   if (personnel.mustChangePassword) {
