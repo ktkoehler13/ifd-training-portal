@@ -22,10 +22,9 @@ import {
   validatePermanentPassword,
 } from "@/lib/auth/password";
 import { normalizePersonnelEmail } from "@/lib/personnel";
-import { getSupabaseEnv } from "@/lib/supabase/env";
+import { sendGoTruePasswordRecoveryEmail } from "@/lib/auth/gotrue-recover";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceRoleClient } from "@/lib/supabase/service";
-import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 
 const PASSWORD_RECOVERY_COOKIE_NAME = "ifd_password_recovery";
 const PASSWORD_RECOVERY_COOKIE_MAX_AGE_SECONDS = 60 * 30;
@@ -95,19 +94,6 @@ export function getPasswordRecoveryRedirectUrl(requestOrigin?: string): string {
   return buildApplicationPathUrl("/reset-password", requestOrigin);
 }
 
-function createPasswordRecoveryEmailClient() {
-  const { url, anonKey } = getSupabaseEnv();
-
-  return createSupabaseClient(url, anonKey, {
-    auth: {
-      flowType: "implicit",
-      persistSession: false,
-      autoRefreshToken: false,
-      detectSessionInUrl: false,
-    },
-  });
-}
-
 export async function markPasswordRecoverySession(): Promise<void> {
   const cookieStore = await cookies();
   cookieStore.set(PASSWORD_RECOVERY_COOKIE_NAME, "1", {
@@ -173,18 +159,18 @@ export async function requestPasswordRecovery(input: {
 
   const redirectTo = getPasswordRecoveryRedirectUrl(input.requestOrigin);
   console.log("Password recovery redirect URL:", redirectTo);
-  const supabase = createPasswordRecoveryEmailClient();
-  const { error: emailError } = await supabase.auth.resetPasswordForEmail(
-    normalizePersonnelEmail(personnel.email),
-    { redirectTo },
-  );
+  const emailResult = await sendGoTruePasswordRecoveryEmail({
+    email: normalizePersonnelEmail(personnel.email),
+    redirectTo,
+  });
 
-  if (emailError) {
+  if (!emailResult.ok) {
     console.error("Password recovery email request failed", {
-      operation: "auth.resetPasswordForEmail",
+      operation: "auth.v1.recover",
       personnelId: personnel.id,
-      code: emailError.code,
-      message: emailError.message,
+      code: emailResult.code,
+      message: emailResult.message,
+      status: emailResult.status,
     });
   }
 

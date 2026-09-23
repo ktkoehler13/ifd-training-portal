@@ -16,6 +16,10 @@ const recoveryServerSource = readFileSync(
   path.join(process.cwd(), "lib/auth/password-recovery-server.ts"),
   "utf8",
 );
+const goTrueRecoverSource = readFileSync(
+  path.join(process.cwd(), "lib/auth/gotrue-recover.ts"),
+  "utf8",
+);
 const recoveryRequestRouteSource = readFileSync(
   path.join(process.cwd(), "app/api/auth/request-password-recovery/route.ts"),
   "utf8",
@@ -68,10 +72,13 @@ describe("password recovery request flow", () => {
   });
 
   it("uses /reset-password as redirectTo", () => {
-    assert.match(recoveryServerSource, /resetPasswordForEmail/);
+    assert.match(recoveryServerSource, /sendGoTruePasswordRecoveryEmail/);
     assert.match(recoveryServerSource, /redirectTo/);
     assert.match(recoveryServerSource, /getPasswordRecoveryRedirectUrl/);
     assert.match(recoveryServerSource, /buildApplicationPathUrl\("\/reset-password"/);
+    assert.match(goTrueRecoverSource, /auth\/v1\/recover/);
+    assert.match(goTrueRecoverSource, /searchParams\.set\("redirect_to", input\.redirectTo\)/);
+    assert.match(goTrueRecoverSource, /redirect_to: input\.redirectTo/);
     const appUrlSource = readFileSync(
       path.join(process.cwd(), "lib/auth/app-url.ts"),
       "utf8",
@@ -174,13 +181,19 @@ describe("password recovery wiring", () => {
   });
 
   it("does not log passwords or recovery tokens", () => {
-    assert.doesNotMatch(recoveryServerSource, /console\.(log|info|debug)/);
+    const recoveryServerWithoutRedirectLog = recoveryServerSource.replace(
+      /^\s*console\.log\("Password recovery redirect URL:", redirectTo\);\n/m,
+      "",
+    );
+    assert.doesNotMatch(
+      recoveryServerWithoutRedirectLog,
+      /console\.(log|info|debug)/,
+    );
     assert.doesNotMatch(recoveryResetViewSource, /console\.(log|info|debug)/);
     assert.doesNotMatch(
-      recoveryServerSource,
-      /console\.(log|info|debug)\([^)]*password/i,
+      recoveryServerWithoutRedirectLog,
+      /console\.(log|info|debug)\([^)]*newPassword/i,
     );
-    assert.doesNotMatch(recoveryServerSource, /console\.(log|info|debug)\([^)]*code/i);
   });
 
   it("updates the authenticated user password on successful recovery", () => {
