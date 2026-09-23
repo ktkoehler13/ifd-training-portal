@@ -71,10 +71,7 @@ describe("password recovery request flow", () => {
     assert.match(recoveryServerSource, /resetPasswordForEmail/);
     assert.match(recoveryServerSource, /redirectTo/);
     assert.match(recoveryServerSource, /getPasswordRecoveryRedirectUrl/);
-    assert.match(
-      recoveryServerSource,
-      /getApplicationOrigin\(requestOrigin\)\}\/reset-password/,
-    );
+    assert.match(recoveryServerSource, /buildApplicationPathUrl\("\/reset-password"/);
     const appUrlSource = readFileSync(
       path.join(process.cwd(), "lib/auth/app-url.ts"),
       "utf8",

@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { getRequestApplicationOrigin } from "@/lib/auth/app-url";
 import { requestPasswordRecovery } from "@/lib/auth/password-recovery-server";
 import { PASSWORD_RECOVERY_REQUEST_SUCCESS_MESSAGE } from "@/lib/auth/password-recovery-messages";
 import { normalizeBadgeNumberForLookup } from "@/lib/auth/personnel-lookup-server";
@@ -30,7 +31,7 @@ export async function POST(request: NextRequest) {
       ? normalizeBadgeNumberForLookup(body.badgeNumber)
       : "";
   const ipAddress = getClientIpAddress(request);
-  const requestOrigin = new URL(request.url).origin;
+  const requestOrigin = getRequestApplicationOrigin(request);
 
   const result = await requestPasswordRecovery({
     badgeNumber,

@@ -1,7 +1,7 @@
 import "server-only";
 
 import { cookies } from "next/headers";
-import { getApplicationOrigin } from "@/lib/auth/app-url";
+import { buildApplicationPathUrl } from "@/lib/auth/app-url";
 import { getAuthenticatedPersonnel } from "@/lib/auth/personnel";
 import {
   normalizeBadgeNumberForLookup,
@@ -22,8 +22,10 @@ import {
   validatePermanentPassword,
 } from "@/lib/auth/password";
 import { normalizePersonnelEmail } from "@/lib/personnel";
+import { getSupabaseEnv } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceRoleClient } from "@/lib/supabase/service";
+import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 
 const PASSWORD_RECOVERY_COOKIE_NAME = "ifd_password_recovery";
 const PASSWORD_RECOVERY_COOKIE_MAX_AGE_SECONDS = 60 * 30;
@@ -90,7 +92,20 @@ async function resolveAuthUserForPasswordRecovery(
 }
 
 export function getPasswordRecoveryRedirectUrl(requestOrigin?: string): string {
-  return `${getApplicationOrigin(requestOrigin)}/reset-password`;
+  return buildApplicationPathUrl("/reset-password", requestOrigin);
+}
+
+function createPasswordRecoveryEmailClient() {
+  const { url, anonKey } = getSupabaseEnv();
+
+  return createSupabaseClient(url, anonKey, {
+    auth: {
+      flowType: "implicit",
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+    },
+  });
 }
 
 export async function markPasswordRecoverySession(): Promise<void> {
@@ -156,9 +171,9 @@ export async function requestPasswordRecovery(input: {
     return genericResponse;
   }
 
-  const supabase = await createClient();
   const redirectTo = getPasswordRecoveryRedirectUrl(input.requestOrigin);
   console.log("Password recovery redirect URL:", redirectTo);
+  const supabase = createPasswordRecoveryEmailClient();
   const { error: emailError } = await supabase.auth.resetPasswordForEmail(
     normalizePersonnelEmail(personnel.email),
     { redirectTo },
