@@ -1,7 +1,6 @@
 import "server-only";
 
 import {
-  generateMemorableInitialPassword,
   INITIAL_PASSWORD_INVALID_SERVER_MESSAGE,
   validateInitialPassword,
 } from "@/lib/auth/password";
@@ -20,7 +19,10 @@ import {
   normalizePersonnelEmail,
   getPersonnelErrorMessage,
 } from "@/lib/personnel";
-import { isAdministrativeRole } from "@/lib/auth/roles";
+import {
+  isAdministrativeRole,
+  isPersonnelPasswordResetRole,
+} from "@/lib/auth/roles";
 import { createServiceRoleClient } from "@/lib/supabase/service";
 import type {
   PersonnelInsertInput,
@@ -165,6 +167,16 @@ export async function requireAdministrativePersonnel(): Promise<PersonnelRecord>
   return personnel;
 }
 
+export async function requirePersonnelPasswordResetPersonnel(): Promise<PersonnelRecord> {
+  const personnel = await getAuthenticatedPersonnel();
+
+  if (!personnel || !isPersonnelPasswordResetRole(personnel.role)) {
+    throw new PasswordResetError(PASSWORD_RESET_UNAUTHORIZED_MESSAGE);
+  }
+
+  return personnel;
+}
+
 export async function createPersonnelAuthAccount(input: {
   personnel: PersonnelInsertInput;
   initialPassword: string;
@@ -232,8 +244,14 @@ export async function createPersonnelAuthAccount(input: {
 
 export async function resetPersonnelAuthPassword(input: {
   personnelId: string;
-}): Promise<{ temporaryPassword: string }> {
-  await requireAdministrativePersonnel();
+  temporaryPassword: string;
+}): Promise<void> {
+  await requirePersonnelPasswordResetPersonnel();
+
+  const passwordError = validateInitialPassword(input.temporaryPassword);
+  if (passwordError) {
+    throw new PasswordResetError(INITIAL_PASSWORD_INVALID_SERVER_MESSAGE);
+  }
 
   const service = createServiceRoleClient();
   const { data: personnelRow, error: personnelError } = await service
@@ -265,17 +283,10 @@ export async function resetPersonnelAuthPassword(input: {
     throw new PasswordResetError(PASSWORD_RESET_AMBIGUOUS_AUTH_ACCOUNT_MESSAGE);
   }
 
-  const initialPassword = generateMemorableInitialPassword();
-  const passwordError = validateInitialPassword(initialPassword);
-
-  if (passwordError) {
-    throw new PasswordResetError(PASSWORD_RESET_FAILED_MESSAGE);
-  }
-
   const { error: updateError } = await service.auth.admin.updateUserById(
     authLookup.authUserId,
     {
-      password: initialPassword,
+      password: input.temporaryPassword,
     },
   );
 
@@ -289,8 +300,6 @@ export async function resetPersonnelAuthPassword(input: {
   }
 
   await markPersonnelMustChangePassword(personnel.id);
-
-  return { temporaryPassword: initialPassword };
 }
 
 export { PasswordResetError } from "@/lib/auth/password-reset-messages";

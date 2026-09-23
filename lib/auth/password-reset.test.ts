@@ -12,7 +12,10 @@ import {
   validateInitialPassword,
   validatePermanentPassword,
 } from "./password";
-import { isAdministrativeRole } from "./roles";
+import {
+  isAdministrativeRole,
+  isPersonnelPasswordResetRole,
+} from "./roles";
 
 const migrationPath = path.join(
   process.cwd(),
@@ -27,8 +30,12 @@ const resetConfirmDialogSource = readFileSync(
   path.join(process.cwd(), "components/admin/ResetPasswordConfirmDialog.tsx"),
   "utf8",
 );
-const resetResultDialogSource = readFileSync(
-  path.join(process.cwd(), "components/admin/ResetPasswordResultDialog.tsx"),
+const resetPasswordRouteSource = readFileSync(
+  path.join(process.cwd(), "app/api/admin/personnel/[id]/reset-password/route.ts"),
+  "utf8",
+);
+const usersTableSource = readFileSync(
+  path.join(process.cwd(), "components/admin/UsersTable.tsx"),
   "utf8",
 );
 const userManagementSource = readFileSync(
@@ -74,20 +81,23 @@ function extractForcedSetupBlock(source: string): string {
 
 describe("administrator password reset authorization", () => {
   it("allows MTO personnel to reset passwords", () => {
-    assert.equal(isAdministrativeRole("mto"), true);
-    assert.match(adminPersonnelSource, /isAdministrativeRole/);
-  });
-
-  it("allows Deputy Chief personnel to reset passwords", () => {
-    assert.equal(isAdministrativeRole("deputy_chief"), true);
+    assert.equal(isPersonnelPasswordResetRole("mto"), true);
+    assert.match(adminPersonnelSource, /requirePersonnelPasswordResetPersonnel/);
+    assert.match(adminPersonnelSource, /isPersonnelPasswordResetRole/);
   });
 
   it("allows Admin personnel to reset passwords", () => {
-    assert.equal(isAdministrativeRole("admin"), true);
+    assert.equal(isPersonnelPasswordResetRole("admin"), true);
+  });
+
+  it("blocks Deputy Chief personnel from resetting passwords", () => {
+    assert.equal(isAdministrativeRole("deputy_chief"), true);
+    assert.equal(isPersonnelPasswordResetRole("deputy_chief"), false);
+    assert.match(usersTableSource, /canResetPassword/);
   });
 
   it("blocks firefighters from resetting another user's password", () => {
-    assert.equal(isAdministrativeRole("firefighter"), false);
+    assert.equal(isPersonnelPasswordResetRole("firefighter"), false);
     assert.match(
       adminPersonnelSource,
       /throw new PasswordResetError\(PASSWORD_RESET_UNAUTHORIZED_MESSAGE\)/,
@@ -99,8 +109,10 @@ describe("administrator reset UI", () => {
   it("does not include a Current Password field", () => {
     assert.doesNotMatch(resetConfirmDialogSource, /Current Password/);
     assert.doesNotMatch(userManagementSource, /currentPassword/);
-    assert.match(resetConfirmDialogSource, /Reset password\?/);
+    assert.match(resetConfirmDialogSource, /Reset password/);
     assert.match(resetConfirmDialogSource, /Reset Password/);
+    assert.match(resetConfirmDialogSource, /New temporary password/);
+    assert.match(resetConfirmDialogSource, /Confirm temporary password/);
   });
 
   it("requires confirmation before calling the reset route", () => {
@@ -118,18 +130,16 @@ describe("administrator reset UI", () => {
     assert.match(resetConfirmDialogSource, /Resetting…/);
   });
 
-  it("displays the temporary password once in a result dialog", () => {
-    assert.match(userManagementSource, /ResetPasswordResultDialog/);
-    assert.match(resetResultDialogSource, /Password reset successful/);
-    assert.match(resetResultDialogSource, /Copy Password/);
-    assert.match(
-      resetResultDialogSource,
-      /This password will not be shown again/,
-    );
+  it("shows a success message without returning the temporary password", () => {
+    assert.match(userManagementSource, /PASSWORD_RESET_SUCCESS_MESSAGE/);
+    assert.match(userManagementSource, /showSuccess/);
+    assert.doesNotMatch(userManagementSource, /ResetPasswordResultDialog/);
+    assert.doesNotMatch(userManagementSource, /payload\.temporaryPassword/);
+    assert.match(resetPasswordRouteSource, /PASSWORD_RESET_SUCCESS_MESSAGE/);
+    assert.doesNotMatch(resetPasswordRouteSource, /temporaryPassword:/);
   });
 
-  it("clears the temporary password from state when the dialog closes", () => {
-    assert.match(userManagementSource, /setResetPasswordResult\(null\)/);
+  it("does not persist temporary passwords in browser storage", () => {
     assert.doesNotMatch(
       userManagementSource,
       /localStorage|sessionStorage/,
@@ -148,7 +158,14 @@ describe("administrator reset server behavior", () => {
   });
 
   it("can replace an existing password", () => {
-    assert.match(adminPersonnelSource, /password: initialPassword/);
+    assert.match(adminPersonnelSource, /password: input\.temporaryPassword/);
+    assert.match(adminPersonnelSource, /validateInitialPassword\(input\.temporaryPassword\)/);
+  });
+
+  it("does not send recovery email during administrator reset", () => {
+    assert.doesNotMatch(adminPersonnelSource, /resetPasswordForEmail/);
+    assert.doesNotMatch(resetPasswordRouteSource, /resetPasswordForEmail/);
+    assert.match(resetConfirmDialogSource, /No recovery email will be sent/);
   });
 
   it("can assign the first password to a legacy account through updateUserById", () => {
@@ -277,8 +294,8 @@ describe("self-service password change", () => {
 });
 
 describe("forced password setup", () => {
-  it("allows legacy users to receive a temporary password from admin reset", () => {
-    assert.match(adminPersonnelSource, /generateMemorableInitialPassword/);
+  it("allows legacy users to receive an admin-assigned temporary password", () => {
+    assert.match(adminPersonnelSource, /temporaryPassword: string/);
     assert.match(adminPersonnelSource, /auth\.admin\.updateUserById/);
     assert.match(adminPersonnelSource, /markPersonnelMustChangePassword/);
   });

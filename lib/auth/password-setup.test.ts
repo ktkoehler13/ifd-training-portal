@@ -205,7 +205,7 @@ describe("login email behavior and administrator alternative", () => {
 
   it("keeps administrator temporary-password reset available", () => {
     assert.match(adminPersonnelSource, /resetPersonnelAuthPassword/);
-    assert.match(adminPersonnelSource, /generateMemorableInitialPassword/);
+    assert.match(adminPersonnelSource, /temporaryPassword: string/);
     assert.match(adminPersonnelSource, /markPersonnelMustChangePassword/);
   });
 

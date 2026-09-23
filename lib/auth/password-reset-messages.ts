@@ -12,6 +12,9 @@ export const PASSWORD_RESET_INACTIVE_MESSAGE =
 
 export const PASSWORD_RESET_FAILED_MESSAGE = "Unable to reset the password.";
 
+export const PASSWORD_RESET_SUCCESS_MESSAGE =
+  "Password reset successfully. The user must sign in with the new temporary password and will be prompted to choose a permanent password.";
+
 export const PASSWORD_RESET_AMBIGUOUS_AUTH_ACCOUNT_MESSAGE =
   "Unable to reset the password.";
 

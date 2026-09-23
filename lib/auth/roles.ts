@@ -16,6 +16,10 @@ export function isAdministrativeRole(
   );
 }
 
+export function isPersonnelPasswordResetRole(role: PersonnelRole): boolean {
+  return role === "mto" || role === "admin";
+}
+
 export function isSignatureEligibleRole(role: PersonnelRole): boolean {
   return role === "mto" || role === "deputy_chief";
 }

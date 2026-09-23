@@ -202,8 +202,10 @@ describe("forced permanent password policy", () => {
 
 describe("administrator reset password", () => {
   it("uses the relaxed initial-password policy", () => {
-    assert.match(adminPersonnelServerSource, /generateMemorableInitialPassword/);
-    assert.match(adminPersonnelServerSource, /validateInitialPassword\(initialPassword\)/);
+    assert.match(
+      adminPersonnelServerSource,
+      /validateInitialPassword\(input\.temporaryPassword\)/,
+    );
   });
 });
 

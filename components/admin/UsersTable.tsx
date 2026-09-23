@@ -17,6 +17,7 @@ import {
 interface UsersTableProps {
   users: PersonnelRecord[];
   currentUserEmail: string;
+  canResetPassword?: boolean;
   onEdit: (user: PersonnelRecord) => void;
   onChangeStatus: (user: PersonnelRecord, nextActive: boolean) => void;
   onResetPassword: (user: PersonnelRecord) => void;
@@ -41,6 +42,7 @@ function StatusBadge({ active }: { active: boolean }) {
 export function UsersTable({
   users,
   currentUserEmail,
+  canResetPassword = false,
   onEdit,
   onChangeStatus,
   onResetPassword,
@@ -117,14 +119,16 @@ export function UsersTable({
                         {user.active ? "Move to Inactive" : "Reactivate"}
                       </Button>
 
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        className="h-9 px-3 text-xs"
-                        onClick={() => onResetPassword(user)}
-                      >
-                        Reset Password
-                      </Button>
+                      {canResetPassword ? (
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          className="h-9 px-3 text-xs"
+                          onClick={() => onResetPassword(user)}
+                        >
+                          Reset Password
+                        </Button>
+                      ) : null}
 
                       {isSelf ? (
                         <p className="text-xs leading-5 text-zinc-500">
