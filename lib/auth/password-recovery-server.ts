@@ -158,6 +158,7 @@ export async function requestPasswordRecovery(input: {
 
   const supabase = await createClient();
   const redirectTo = getPasswordRecoveryRedirectUrl(input.requestOrigin);
+  console.log("Password recovery redirect URL:", redirectTo);
   const { error: emailError } = await supabase.auth.resetPasswordForEmail(
     normalizePersonnelEmail(personnel.email),
     { redirectTo },
