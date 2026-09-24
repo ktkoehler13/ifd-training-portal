@@ -1,7 +1,10 @@
 import { Suspense } from "react";
 import { NewRequestView } from "@/components/requests/NewRequestView";
+import { getCurrentGsaMileageRate } from "@/lib/system-settings-server";
 
-export default function NewRequestPage() {
+export default async function NewRequestPage() {
+  const currentGsaMileageRate = await getCurrentGsaMileageRate();
+
   return (
     <Suspense
       fallback={
@@ -12,7 +15,7 @@ export default function NewRequestPage() {
         </div>
       }
     >
-      <NewRequestView />
+      <NewRequestView currentGsaMileageRate={currentGsaMileageRate} />
     </Suspense>
   );
 }

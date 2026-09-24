@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState, type ReactNode } from "react";
+import { FormEvent, useEffect, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { ExpenseSummary } from "@/components/requests/ExpenseSummary";
 import {
@@ -26,9 +26,8 @@ import {
   formatDepartmentVehicle,
 } from "@/lib/expenses";
 import {
-  getGsaMileageRate,
-  isValidMilesInput,
   parseMilesInput,
+  validateTotalReimbursableMilesInput,
 } from "@/lib/mileage";
 import {
   formatPersonnelFullName,
@@ -99,6 +98,7 @@ function createInitialDraft(personnel: AuthenticatedPersonnel): TrainingRequestD
 interface TrainingRequestWizardProps {
   personnel: AuthenticatedPersonnel;
   draftId?: string | null;
+  currentGsaMileageRate: number | null;
 }
 
 type DraftErrors = Partial<
@@ -129,6 +129,7 @@ function formatDisplayDate(value: string) {
 export function TrainingRequestWizard({
   personnel,
   draftId = null,
+  currentGsaMileageRate,
 }: TrainingRequestWizardProps) {
   const router = useRouter();
   const [step, setStep] = useState(1);
@@ -151,10 +152,14 @@ export function TrainingRequestWizard({
   const [latestCorrectionAction, setLatestCorrectionAction] =
     useState<TrainingRequestActionRecord | null>(null);
   const [draftLoadError, setDraftLoadError] = useState<string | null>(null);
+  const [preservedSubmittedGsaRate, setPreservedSubmittedGsaRate] = useState<
+    number | null
+  >(null);
 
-  const gsaMileageRate = useMemo(() => getGsaMileageRate(), []);
-  const rateAvailable = gsaMileageRate !== null;
-  const activeRate = gsaMileageRate ?? 0;
+  const activeRate =
+    preservedSubmittedGsaRate ?? currentGsaMileageRate ?? 0;
+  const rateAvailable =
+    preservedSubmittedGsaRate !== null || currentGsaMileageRate !== null;
 
   const registrationFee = parseCurrencyInput(draft.registrationFee);
   const rawMiles = parseMilesInput(draft.totalReimbursableMiles);
@@ -210,6 +215,12 @@ export function TrainingRequestWizard({
           setEditableStatus(request.status);
           setSavedRequestNumber(request.requestNumber);
           setDraft(trainingRequestRecordToDraft(request));
+          setPreservedSubmittedGsaRate(
+            request.status === "returned_for_correction" &&
+              request.gsaMileageRate > 0
+              ? request.gsaMileageRate
+              : null,
+          );
           setStatusMessage(
             request.status === "returned_for_correction"
               ? null
@@ -273,15 +284,31 @@ export function TrainingRequestWizard({
     });
   }
 
-  function handleDepartmentVehicleChange(checked: boolean) {
-    if (checked) {
+  function handleDepartmentVehicleChange(requested: boolean) {
+    if (requested) {
       setPreservedMileage(draft.totalReimbursableMiles);
-      updateField("requestDepartmentVehicle", true);
+      setDraft((current) => ({
+        ...current,
+        requestDepartmentVehicle: true,
+      }));
+      setErrors((current) => {
+        const next = { ...current };
+        delete next.totalReimbursableMiles;
+        return next;
+      });
       return;
     }
 
-    updateField("requestDepartmentVehicle", false);
-    updateField("totalReimbursableMiles", preservedMileage);
+    setDraft((current) => ({
+      ...current,
+      requestDepartmentVehicle: false,
+      totalReimbursableMiles: preservedMileage,
+    }));
+    setErrors((current) => {
+      const next = { ...current };
+      delete next.totalReimbursableMiles;
+      return next;
+    });
   }
 
   function validateStep(currentStep: number): DraftErrors {
@@ -369,12 +396,12 @@ export function TrainingRequestWizard({
         }
       }
 
-      if (
-        !draft.requestDepartmentVehicle &&
-        !isValidMilesInput(draft.totalReimbursableMiles)
-      ) {
-        nextErrors.totalReimbursableMiles =
-          "Enter total reimbursable miles of zero or greater.";
+      const milesError = validateTotalReimbursableMilesInput(
+        draft.totalReimbursableMiles,
+        { requireInput: !draft.requestDepartmentVehicle },
+      );
+      if (milesError) {
+        nextErrors.totalReimbursableMiles = milesError;
       }
     }
 
@@ -506,6 +533,7 @@ export function TrainingRequestWizard({
 
     const nextErrors = {
       ...validateStep(2),
+      ...validateStep(3),
       ...validateStep(4),
     };
     if (!rateAvailable) {
@@ -887,40 +915,47 @@ export function TrainingRequestWizard({
                 className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"
                 role="alert"
               >
-                GSA mileage rate is missing or invalid. Set{" "}
-                <code className="font-mono text-xs">
-                  NEXT_PUBLIC_GSA_MILEAGE_RATE
-                </code>{" "}
-                to a value greater than zero before submitting.
+                GSA mileage rate is not configured. Contact the Training Bureau
+                before submitting.
               </div>
             ) : null}
 
             <FormSection title="Transportation">
-              <label className="flex items-start gap-3 rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-4 text-sm text-zinc-800">
-                <input
-                  type="checkbox"
-                  className="mt-1 h-4 w-4 rounded border-zinc-300 text-red-700 focus:ring-red-700"
-                  checked={draft.requestDepartmentVehicle}
-                  onChange={(event) =>
-                    handleDepartmentVehicleChange(event.target.checked)
-                  }
-                />
-                <span>
-                  <span className="font-medium">Request Department Vehicle</span>
-                  <span className="mt-1 block text-zinc-600">
-                    Check this box when a department vehicle will be used and
-                    personal mileage reimbursement does not apply.
-                  </span>
-                </span>
-              </label>
+              <fieldset className="space-y-3">
+                <legend className="text-sm font-medium text-zinc-900">
+                  Department Vehicle Requested
+                </legend>
+                <div className="flex flex-wrap gap-4">
+                  <label className="inline-flex items-center gap-2 text-sm text-zinc-800">
+                    <input
+                      type="radio"
+                      name="requestDepartmentVehicle"
+                      className="h-4 w-4 border-zinc-300 text-red-700 focus:ring-red-700"
+                      checked={draft.requestDepartmentVehicle === true}
+                      onChange={() => handleDepartmentVehicleChange(true)}
+                    />
+                    Yes
+                  </label>
+                  <label className="inline-flex items-center gap-2 text-sm text-zinc-800">
+                    <input
+                      type="radio"
+                      name="requestDepartmentVehicle"
+                      className="h-4 w-4 border-zinc-300 text-red-700 focus:ring-red-700"
+                      checked={draft.requestDepartmentVehicle === false}
+                      onChange={() => handleDepartmentVehicleChange(false)}
+                    />
+                    No
+                  </label>
+                </div>
+              </fieldset>
 
               {draft.requestDepartmentVehicle ? (
                 <p
                   className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900"
                   role="status"
                 >
-                  Personal mileage reimbursement does not apply when a
-                  department vehicle is requested.
+                  Mileage reimbursement does not apply when a department vehicle
+                  is requested.
                 </p>
               ) : null}
 
@@ -929,7 +964,6 @@ export function TrainingRequestWizard({
                   id="totalReimbursableMiles"
                   label="Total Reimbursable Miles"
                   error={errors.totalReimbursableMiles}
-                  optional
                 >
                   <Input
                     id="totalReimbursableMiles"
@@ -954,7 +988,10 @@ export function TrainingRequestWizard({
                     }
                   />
                 </Field>
-                <Field id="gsaMileageRateDisplay" label="GSA Mileage Rate">
+                <Field
+                  id="gsaMileageRateDisplay"
+                  label="Current GSA Mileage Rate"
+                >
                   <Input
                     id="gsaMileageRateDisplay"
                     value={
@@ -966,7 +1003,10 @@ export function TrainingRequestWizard({
                     readOnly
                   />
                 </Field>
-                <Field id="mileageReimbursementDisplay" label="Mileage Reimbursement">
+                <Field
+                  id="mileageReimbursementDisplay"
+                  label="Estimated Mileage Reimbursement"
+                >
                   <Input
                     id="mileageReimbursementDisplay"
                     value={formatCurrency(expenseSummary.mileageReimbursement)}

@@ -49,6 +49,12 @@ const approvedTrainingCard = {
   href: "/admin/approved-training",
 } as const;
 
+const systemSettingsCard = {
+  title: "System Settings",
+  description: "Update the current GSA mileage rate used on training requests.",
+  href: "/admin/settings",
+} as const;
+
 function getQuickActionCards(
   personnel: AuthenticatedPersonnel,
   pendingApprovalCount: number | null,
@@ -80,6 +86,7 @@ function getQuickActionCards(
     cards.push(administrativeActionCard);
     cards.push(adminRequestsCard);
     cards.push(approvedTrainingCard);
+    cards.push(systemSettingsCard);
   }
 
   cards.push({

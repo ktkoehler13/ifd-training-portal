@@ -14,7 +14,7 @@ Required local variables:
 
 - `NEXT_PUBLIC_SUPABASE_URL` — Supabase project URL
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY` — Supabase anon/public key
-- `NEXT_PUBLIC_GSA_MILEAGE_RATE` — example mileage rate only; replace it with the approved current GSA rate before calculating real reimbursements
+- `NEXT_PUBLIC_GSA_MILEAGE_RATE` — optional transitional fallback when `system_settings.gsa_mileage_rate` is not set; administrators should configure the live rate under **System Settings** in the app
 - `SUPABASE_SERVICE_ROLE_KEY` — server-only secret for immutable approval signature snapshots and approved PDF packet storage. Never prefix with `NEXT_PUBLIC_`.
 
 Never commit `.env.local`. Never add a Supabase service-role key to browser code or to `.env.local.example`.

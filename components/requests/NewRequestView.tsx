@@ -6,7 +6,11 @@ import { TrainingRequestWizard } from "@/components/requests/TrainingRequestWiza
 import { AuthGate } from "@/components/layout/AuthGate";
 import { LEGACY_LOCAL_STORAGE_NOTICE } from "@/lib/training-requests";
 
-export function NewRequestView() {
+interface NewRequestViewProps {
+  currentGsaMileageRate: number | null;
+}
+
+export function NewRequestView({ currentGsaMileageRate }: NewRequestViewProps) {
   const searchParams = useSearchParams();
   const draftId = searchParams.get("draft");
 
@@ -40,7 +44,11 @@ export function NewRequestView() {
             >
               {LEGACY_LOCAL_STORAGE_NOTICE}
             </div>
-            <TrainingRequestWizard personnel={personnel} draftId={draftId} />
+            <TrainingRequestWizard
+              personnel={personnel}
+              draftId={draftId}
+              currentGsaMileageRate={currentGsaMileageRate}
+            />
           </div>
         </div>
       )}

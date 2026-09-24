@@ -1,18 +1,31 @@
 import { roundCurrency } from "@/lib/currency";
+import { parseGsaMileageRateSettingValue } from "@/lib/system-settings";
 
-export function getGsaMileageRate(): number | null {
+/** Transitional env fallback when system_settings has no valid rate. */
+export function getGsaMileageRateFromEnv(): number | null {
   const raw = process.env.NEXT_PUBLIC_GSA_MILEAGE_RATE;
 
   if (raw === undefined || raw.trim() === "") {
     return null;
   }
 
-  const parsed = Number.parseFloat(raw);
-  if (!Number.isFinite(parsed) || parsed <= 0) {
-    return null;
+  return parseGsaMileageRateSettingValue(raw);
+}
+
+/** @deprecated Prefer getCurrentGsaMileageRate() on the server. */
+export function getGsaMileageRate(): number | null {
+  return getGsaMileageRateFromEnv();
+}
+
+export function resolveGsaMileageRate(input: {
+  databaseRate: number | null;
+  envRate?: number | null;
+}): number | null {
+  if (input.databaseRate !== null) {
+    return input.databaseRate;
   }
 
-  return parsed;
+  return input.envRate ?? getGsaMileageRateFromEnv();
 }
 
 export function calculateMileageReimbursement(
@@ -43,7 +56,7 @@ export function parseMilesInput(value: string): number {
 
 export function isValidMilesInput(value: string): boolean {
   if (!value.trim()) {
-    return true;
+    return false;
   }
 
   const cleaned = value.replace(/,/g, "").trim();
@@ -53,4 +66,23 @@ export function isValidMilesInput(value: string): boolean {
 
   const miles = Number.parseFloat(cleaned);
   return Number.isFinite(miles) && miles >= 0;
+}
+
+export function validateTotalReimbursableMilesInput(
+  value: string,
+  options: { requireInput: boolean },
+): string | null {
+  if (!options.requireInput) {
+    return null;
+  }
+
+  if (!value.trim()) {
+    return "Enter total reimbursable miles.";
+  }
+
+  if (!isValidMilesInput(value)) {
+    return "Enter a valid mileage amount of zero or greater.";
+  }
+
+  return null;
 }
