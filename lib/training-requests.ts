@@ -102,6 +102,8 @@ export function mapTrainingRequestRow(row: TrainingRequestRow): TrainingRequestR
     requesterTitleSnapshot: row.requester_title_snapshot ?? null,
     courseName: row.training_title,
     courseNumber: row.course_number,
+    isOfpcCourse:
+      typeof row.is_ofpc_course === "boolean" ? row.is_ofpc_course : null,
     trainingProvider: row.provider,
     courseDescription: row.description,
     location: row.location,
@@ -138,6 +140,7 @@ export function trainingRequestRecordToDraft(
     departmentEmail: request.requesterEmail,
     courseName: request.courseName,
     courseNumber: request.courseNumber,
+    isOfpcCourse: request.isOfpcCourse,
     trainingProvider: request.trainingProvider,
     location: request.location,
     courseStartDate: request.courseStartDate,
@@ -182,7 +185,11 @@ export function buildTrainingRequestInput(input: {
     requesterBadgeNumber: input.draft.badgeNumber.trim(),
     requesterEmail: normalizedEmail,
     courseName: input.draft.courseName.trim(),
-    courseNumber: input.draft.courseNumber.trim(),
+    courseNumber:
+      input.draft.isOfpcCourse === true
+        ? input.draft.courseNumber.trim()
+        : "",
+    isOfpcCourse: input.draft.isOfpcCourse,
     trainingProvider: input.draft.trainingProvider.trim(),
     courseDescription: input.draft.courseDescription.trim(),
     location: input.draft.location.trim(),
@@ -215,6 +222,7 @@ function toDatabasePayload(
     requester_email: input.requesterEmail,
     training_title: input.courseName,
     course_number: input.courseNumber,
+    is_ofpc_course: input.isOfpcCourse,
     provider: input.trainingProvider,
     description: input.courseDescription,
     location: input.location,

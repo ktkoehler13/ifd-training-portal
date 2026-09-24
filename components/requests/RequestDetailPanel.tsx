@@ -98,8 +98,23 @@ export function RequestDetailPanel({
           className="sm:col-span-2"
         />
         <DetailItem label="Course name" value={request.courseName} />
-        <DetailItem label="Course number" value={request.courseNumber} />
-        <DetailItem label="Provider" value={request.trainingProvider} />
+        <DetailItem
+          label="Training provider / course offering organization"
+          value={request.trainingProvider || "—"}
+        />
+        <DetailItem
+          label="OFPC offered course"
+          value={
+            request.isOfpcCourse === null
+              ? "—"
+              : request.isOfpcCourse
+                ? "Yes"
+                : "No"
+          }
+        />
+        {request.isOfpcCourse === true ? (
+          <DetailItem label="Course number" value={request.courseNumber} />
+        ) : null}
         <DetailItem label="Location" value={request.location} />
         <DetailItem
           label="Course dates"

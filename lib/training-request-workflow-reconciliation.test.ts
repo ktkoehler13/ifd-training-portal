@@ -24,6 +24,7 @@ function buildRequest(
     requesterTitleSnapshot: null,
     courseName: "Fire Officer I",
     courseNumber: "FO-1",
+    isOfpcCourse: true,
     trainingProvider: "Provider",
     courseDescription: "Description",
     location: "Montour Falls, NY",

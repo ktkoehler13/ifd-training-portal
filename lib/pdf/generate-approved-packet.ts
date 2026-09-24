@@ -111,7 +111,11 @@ function populateTalForm(pdf: PDFDocument, input: ApprovedPacketGenerationInput)
   const student = splitRequesterNameForTal(request.requesterName);
 
   setOptionalTextField(form, fields.courseName, request.courseName);
-  setOptionalTextField(form, fields.courseNumber, request.courseNumber);
+  setOptionalTextField(
+    form,
+    fields.courseNumber,
+    request.isOfpcCourse === true ? request.courseNumber : "",
+  );
   setOptionalTextField(form, fields.courseLocation, request.location);
   setOptionalTextField(form, fields.agencyName, TAL_CONSTANTS.agencyName);
   setOptionalTextField(form, fields.fdid, TAL_CONSTANTS.fdid);

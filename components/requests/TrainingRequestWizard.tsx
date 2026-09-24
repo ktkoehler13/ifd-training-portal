@@ -67,6 +67,7 @@ const initialDraft: TrainingRequestDraft = {
   departmentEmail: "",
   courseName: "",
   courseNumber: "",
+  isOfpcCourse: null,
   trainingProvider: "",
   location: "",
   courseStartDate: "",
@@ -256,6 +257,22 @@ export function TrainingRequestWizard({
     setDraft((current) => ({ ...current, [key]: value }));
   }
 
+  function handleIsOfpcCourseChange(value: boolean) {
+    setDraft((current) => ({
+      ...current,
+      isOfpcCourse: value,
+      courseNumber: value ? current.courseNumber : "",
+    }));
+    setErrors((current) => {
+      const next = { ...current };
+      delete next.isOfpcCourse;
+      if (!value) {
+        delete next.courseNumber;
+      }
+      return next;
+    });
+  }
+
   function handleDepartmentVehicleChange(checked: boolean) {
     if (checked) {
       setPreservedMileage(draft.totalReimbursableMiles);
@@ -297,7 +314,10 @@ export function TrainingRequestWizard({
       if (!draft.courseName.trim()) {
         nextErrors.courseName = "Course name is required.";
       }
-      if (!draft.courseNumber.trim()) {
+      if (draft.isOfpcCourse === null) {
+        nextErrors.isOfpcCourse =
+          "Select whether this is an OFPC offered course.";
+      } else if (draft.isOfpcCourse && !draft.courseNumber.trim()) {
         nextErrors.courseNumber = "Course number is required.";
       }
       if (!draft.location.trim()) {
@@ -686,26 +706,10 @@ export function TrainingRequestWizard({
                 />
               </Field>
               <Field
-                id="courseNumber"
-                label="Course Number"
-                error={errors.courseNumber}
-              >
-                <Input
-                  id="courseNumber"
-                  value={draft.courseNumber}
-                  onChange={(event) =>
-                    updateField("courseNumber", event.target.value)
-                  }
-                  aria-invalid={errors.courseNumber ? true : undefined}
-                  aria-describedby={
-                    errors.courseNumber ? "courseNumber-error" : undefined
-                  }
-                />
-              </Field>
-              <Field
                 id="trainingProvider"
-                label="Training Provider"
+                label="Training Provider / Course Offering Organization"
                 optional
+                className="sm:col-span-2"
               >
                 <Input
                   id="trainingProvider"
@@ -715,6 +719,76 @@ export function TrainingRequestWizard({
                   }
                 />
               </Field>
+              <div className="sm:col-span-2">
+                <fieldset>
+                  <legend className="text-sm font-medium text-zinc-700">
+                    Is this an OFPC offered course?{" "}
+                    <span className="text-red-700" aria-hidden="true">
+                      *
+                    </span>
+                  </legend>
+                  <div className="mt-3 flex flex-wrap gap-6">
+                    <label className="inline-flex items-center gap-2 text-sm text-zinc-800">
+                      <input
+                        type="radio"
+                        name="isOfpcCourse"
+                        checked={draft.isOfpcCourse === true}
+                        onChange={() => handleIsOfpcCourseChange(true)}
+                        className="h-4 w-4 border-zinc-300 text-red-700 focus:ring-red-700"
+                      />
+                      Yes
+                    </label>
+                    <label className="inline-flex items-center gap-2 text-sm text-zinc-800">
+                      <input
+                        type="radio"
+                        name="isOfpcCourse"
+                        checked={draft.isOfpcCourse === false}
+                        onChange={() => handleIsOfpcCourseChange(false)}
+                        className="h-4 w-4 border-zinc-300 text-red-700 focus:ring-red-700"
+                      />
+                      No
+                    </label>
+                  </div>
+                </fieldset>
+                {errors.isOfpcCourse ? (
+                  <p
+                    id="isOfpcCourse-error"
+                    role="alert"
+                    className="mt-2 text-sm text-red-700"
+                  >
+                    {errors.isOfpcCourse}
+                  </p>
+                ) : null}
+              </div>
+              {draft.isOfpcCourse === true ? (
+                <Field
+                  id="courseNumber"
+                  label="Course Number"
+                  error={errors.courseNumber}
+                  className="sm:col-span-2"
+                >
+                  <Input
+                    id="courseNumber"
+                    value={draft.courseNumber}
+                    onChange={(event) =>
+                      updateField("courseNumber", event.target.value)
+                    }
+                    aria-invalid={errors.courseNumber ? true : undefined}
+                    aria-describedby={
+                      errors.courseNumber
+                        ? "courseNumber-error courseNumber-help"
+                        : "courseNumber-help"
+                    }
+                  />
+                  <p
+                    id="courseNumber-help"
+                    className="mt-2 text-sm leading-6 text-zinc-600"
+                  >
+                    Enter the course number exactly as it appears in the OFPC
+                    Learning Management System (LMS).
+                  </p>
+                </Field>
+              ) : null}
               <Field
                 id="location"
                 label="Location"
@@ -1081,11 +1155,23 @@ export function TrainingRequestWizard({
 
             <ReviewSection title="Course">
               <ReviewItem label="Course Name" value={draft.courseName} />
-              <ReviewItem label="Course Number" value={draft.courseNumber} />
               <ReviewItem
-                label="Training Provider"
+                label="Training Provider / Course Offering Organization"
                 value={draft.trainingProvider || "—"}
               />
+              <ReviewItem
+                label="OFPC offered course"
+                value={
+                  draft.isOfpcCourse === null
+                    ? "—"
+                    : draft.isOfpcCourse
+                      ? "Yes"
+                      : "No"
+                }
+              />
+              {draft.isOfpcCourse === true ? (
+                <ReviewItem label="Course Number" value={draft.courseNumber} />
+              ) : null}
               <ReviewItem label="Location" value={draft.location} />
               <ReviewItem
                 label="Course Start Date"

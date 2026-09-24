@@ -43,6 +43,7 @@ export interface TrainingRequestRow {
   requester_title_snapshot: PersonnelTitle | null;
   training_title: string;
   course_number: string;
+  is_ofpc_course: boolean | null;
   provider: string;
   description: string;
   location: string;
@@ -80,6 +81,7 @@ export interface TrainingRequestRecord {
   requesterTitleSnapshot: PersonnelTitle | null;
   courseName: string;
   courseNumber: string;
+  isOfpcCourse: boolean | null;
   trainingProvider: string;
   courseDescription: string;
   location: string;
@@ -113,6 +115,7 @@ export interface TrainingRequestInsertInput {
   requesterEmail: string;
   courseName: string;
   courseNumber: string;
+  isOfpcCourse: boolean | null;
   trainingProvider: string;
   courseDescription: string;
   location: string;
@@ -142,6 +145,7 @@ export interface TrainingRequestDraft {
   departmentEmail: string;
   courseName: string;
   courseNumber: string;
+  isOfpcCourse: boolean | null;
   trainingProvider: string;
   location: string;
   courseStartDate: string;

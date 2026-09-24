@@ -12,6 +12,7 @@ export const APPROVED_PACKET_VISUAL_FIXTURE_REQUEST: TrainingRequestRecord = {
   requesterTitleSnapshot: "firefighter",
   courseName: "Testing Sig",
   courseNumber: "TS-1",
+  isOfpcCourse: true,
   trainingProvider: "IFD Training",
   courseDescription: "Signature placement verification course",
   location: "Where ever",
