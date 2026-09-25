@@ -213,7 +213,7 @@ export function buildTrainingRequestInput(input: {
   };
 }
 
-function toDatabasePayload(
+export function buildTrainingRequestDatabasePayload(
   input: TrainingRequestInsertInput | TrainingRequestUpdateInput,
 ) {
   return {
@@ -359,7 +359,7 @@ export async function createTrainingRequestDraft(
   const { data, error } = await supabase
     .from("training_requests")
     .insert({
-      ...toDatabasePayload(input),
+      ...buildTrainingRequestDatabasePayload(input),
       request_number: null,
       requester_name: "",
       status: "draft",
@@ -383,7 +383,7 @@ export async function updateTrainingRequestDraft(
   const supabase = createClient();
   const { data, error } = await supabase
     .from("training_requests")
-    .update(toDatabasePayload(input))
+    .update(buildTrainingRequestDatabasePayload(input))
     .eq("id", requestId)
     .eq("status", "draft")
     .select("*")
@@ -416,7 +416,7 @@ export async function updateReturnedTrainingRequest(
   const supabase = createClient();
   const { data, error } = await supabase
     .from("training_requests")
-    .update(toDatabasePayload(input))
+    .update(buildTrainingRequestDatabasePayload(input))
     .eq("id", requestId)
     .eq("status", "returned_for_correction")
     .select("*")

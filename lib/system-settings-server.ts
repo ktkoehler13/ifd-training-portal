@@ -1,5 +1,6 @@
 import "server-only";
 
+import { unstable_noStore as noStore } from "next/cache";
 import { getGsaMileageRateFromEnv } from "@/lib/mileage";
 import {
   GSA_MILEAGE_RATE_SETTING_KEY,
@@ -24,6 +25,7 @@ export class SystemSettingsValidationError extends Error {
 }
 
 async function readGsaMileageRateSettingRow(): Promise<SystemSettingRow | null> {
+  noStore();
   const service = createServiceRoleClient();
   const { data, error } = await service
     .from("system_settings")
@@ -44,6 +46,7 @@ async function readGsaMileageRateSettingRow(): Promise<SystemSettingRow | null> 
 }
 
 export async function getCurrentGsaMileageRate(): Promise<number | null> {
+  noStore();
   const row = await readGsaMileageRateSettingRow();
   const fromDatabase = parseGsaMileageRateSettingValue(row?.value);
 

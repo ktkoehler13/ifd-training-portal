@@ -2,6 +2,9 @@ import { Suspense } from "react";
 import { NewRequestView } from "@/components/requests/NewRequestView";
 import { getCurrentGsaMileageRate } from "@/lib/system-settings-server";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export default async function NewRequestPage() {
   const currentGsaMileageRate = await getCurrentGsaMileageRate();
 

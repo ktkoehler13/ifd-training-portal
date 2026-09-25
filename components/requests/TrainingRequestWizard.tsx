@@ -45,11 +45,8 @@ import {
 } from "@/lib/training-day-details";
 import {
   buildTrainingRequestInput,
-  createAndSubmitTrainingRequest,
   createTrainingRequestDraft,
   getTrainingRequestById,
-  resubmitTrainingRequest,
-  submitTrainingRequest,
   trainingRequestRecordToDraft,
   updateReturnedTrainingRequest,
   updateTrainingRequestDraft,
@@ -550,21 +547,37 @@ export function TrainingRequestWizard({
     setStatusMessage(null);
 
     try {
-      const input = buildTrainingRequestInput({
-        personnel,
-        draft,
-        expenseSummary,
-        requireComplete: true,
+      const submissionMode = !draftRequestId
+        ? "create"
+        : editableStatus === "returned_for_correction"
+          ? "returned"
+          : "draft";
+
+      const response = await fetch("/api/training-requests/submit", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          draft,
+          requestId: draftRequestId,
+          submissionMode,
+        }),
       });
 
-      const submitted = draftRequestId
-        ? editableStatus === "returned_for_correction"
-          ? await resubmitTrainingRequest(draftRequestId, input)
-          : await submitTrainingRequest(draftRequestId, input)
-        : await createAndSubmitTrainingRequest(input);
+      const payload = (await response.json()) as {
+        error?: string;
+        request?: { id: string };
+      };
+
+      if (!response.ok || !payload.request?.id) {
+        throw new Error(
+          payload.error ?? "Unable to submit request. Try again later.",
+        );
+      }
 
       router.push(
-        `/requests/${encodeURIComponent(submitted.id)}/confirmation`,
+        `/requests/${encodeURIComponent(payload.request.id)}/confirmation`,
       );
     } catch (error) {
       setErrors({

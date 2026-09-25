@@ -1,6 +1,6 @@
-import { addCurrency } from "@/lib/currency";
-import { calculateMileageReimbursement } from "@/lib/mileage";
-import type { ExpenseSummaryValues } from "@/types/training-request";
+import { addCurrency, parseCurrencyInput } from "@/lib/currency";
+import { calculateMileageReimbursement, parseMilesInput } from "@/lib/mileage";
+import type { ExpenseSummaryValues, TrainingRequestDraft } from "@/types/training-request";
 
 export function calculateExpenseSummary(input: {
   requestDepartmentVehicle: boolean;
@@ -54,4 +54,31 @@ export function formatTransportationIndicator(
   requestDepartmentVehicle: boolean,
 ): string {
   return requestDepartmentVehicle ? "Department Vehicle" : "Personal Mileage";
+}
+
+export function calculateExpenseSummaryFromDraft(
+  draft: Pick<
+    TrainingRequestDraft,
+    | "requestDepartmentVehicle"
+    | "totalReimbursableMiles"
+    | "registrationFee"
+    | "lodging"
+    | "airfare"
+    | "rentalVehicle"
+    | "foodExpenses"
+    | "otherExpenses"
+  >,
+  gsaMileageRate: number,
+): ExpenseSummaryValues {
+  return calculateExpenseSummary({
+    requestDepartmentVehicle: draft.requestDepartmentVehicle,
+    totalReimbursableMiles: parseMilesInput(draft.totalReimbursableMiles),
+    gsaMileageRate,
+    registrationFee: parseCurrencyInput(draft.registrationFee),
+    lodging: parseCurrencyInput(draft.lodging),
+    airfare: parseCurrencyInput(draft.airfare),
+    rentalVehicle: parseCurrencyInput(draft.rentalVehicle),
+    foodExpenses: parseCurrencyInput(draft.foodExpenses),
+    otherExpenses: parseCurrencyInput(draft.otherExpenses),
+  });
 }

@@ -78,10 +78,8 @@ describe("GSA mileage rate administration", () => {
 });
 
 describe("request workflow mileage snapshots", () => {
-  it("snapshots the current rate at submission through expense summary input", () => {
-    assert.match(wizardSource, /currentGsaMileageRate/);
-    assert.match(wizardSource, /buildTrainingRequestInput/);
-    assert.match(wizardSource, /expenseSummary/);
+  it("snapshots the current rate at submission through the server submit route", () => {
+    assert.match(wizardSource, /\/api\/training-requests\/submit/);
     assert.match(wizardSource, /preservedSubmittedGsaRate/);
   });
 
