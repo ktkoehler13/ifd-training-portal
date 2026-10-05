@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
+import { otherExpenseLabel, validateOtherExpenseDescription } from "@/lib/other-expense-description";
 import { ExpenseSummary } from "@/components/requests/ExpenseSummary";
 import {
   CorrectionRequiredAlert,
@@ -80,6 +81,7 @@ const initialDraft: TrainingRequestDraft = {
   rentalVehicle: "",
   foodExpenses: "",
   otherExpenses: "",
+  otherExpenseDescription: "",
   transportationNotes: "",
   confirmedAccurate: false,
 };
@@ -392,6 +394,9 @@ export function TrainingRequestWizard({
           nextErrors[field] = "Enter a valid dollar amount of zero or greater.";
         }
       }
+
+      const otherExpenseError = validateOtherExpenseDescription(otherExpenses, draft.otherExpenseDescription);
+      if (otherExpenseError) nextErrors.otherExpenseDescription = otherExpenseError;
 
       const milesError = validateTotalReimbursableMilesInput(
         draft.totalReimbursableMiles,
@@ -1137,6 +1142,22 @@ export function TrainingRequestWizard({
                   onBlur={() => handleCurrencyBlur("otherExpenses")}
                 />
               </Field>
+              <Field
+                id="otherExpenseDescription"
+                label="Describe Other Expense"
+                optional={otherExpenses <= 0}
+                error={errors.otherExpenseDescription}
+              >
+                <Textarea
+                  id="otherExpenseDescription"
+                  value={draft.otherExpenseDescription}
+                  placeholder="Parking & Tolls"
+                  required={otherExpenses > 0}
+                  aria-invalid={Boolean(errors.otherExpenseDescription)}
+                  aria-describedby={errors.otherExpenseDescription ? "otherExpenseDescription-error" : undefined}
+                  onChange={(event) => updateField("otherExpenseDescription", event.target.value)}
+                />
+              </Field>
             </FormSection>
 
             {errors.gsaMileageRate ? (
@@ -1146,7 +1167,7 @@ export function TrainingRequestWizard({
             ) : null}
 
             <ExpenseSummary
-              values={expenseSummary}
+              values={{ ...expenseSummary, otherExpenseDescription: draft.otherExpenseDescription }}
               rateAvailable={rateAvailable}
             />
           </section>
@@ -1300,7 +1321,7 @@ export function TrainingRequestWizard({
                 value={formatCurrency(foodExpenses)}
               />
               <ReviewItem
-                label="Other Expenses"
+                label={otherExpenseLabel(draft.otherExpenseDescription)}
                 value={formatCurrency(otherExpenses)}
               />
               <ReviewItem
@@ -1315,7 +1336,7 @@ export function TrainingRequestWizard({
             </ReviewSection>
 
             <ExpenseSummary
-              values={expenseSummary}
+              values={{ ...expenseSummary, otherExpenseDescription: draft.otherExpenseDescription }}
               rateAvailable={rateAvailable}
             />
 

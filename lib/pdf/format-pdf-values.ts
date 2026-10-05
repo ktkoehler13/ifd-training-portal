@@ -77,14 +77,14 @@ export function formatTransportationSelection(input: {
     return "Department Vehicle";
   }
 
-  return input.transportationNotes.trim();
+  return input.transportationNotes?.trim() ?? "";
 }
 
 export function splitRequesterNameForTal(requesterName: string): {
   firstName: string;
   lastName: string;
 } {
-  const trimmed = requesterName.trim();
+  const trimmed = requesterName?.trim() ?? "";
   if (!trimmed) {
     return { firstName: "", lastName: "" };
   }

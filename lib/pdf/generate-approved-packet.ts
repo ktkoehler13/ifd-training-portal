@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { PDFDocument, type PDFPage } from "pdf-lib";
+import { PDFDocument } from "pdf-lib";
 import {
   buildTalOriginalInitialStampValues,
   buildTrainingRequestApprovalStampValues,
@@ -9,16 +9,13 @@ import {
 } from "@/lib/pdf/build-stamp-values";
 import { createAuditTrailPages } from "@/lib/pdf/build-audit-trail";
 import { warnApprovedPacketFieldUnavailable } from "@/lib/pdf/warn-approved-packet-fields";
-import { cropSignaturePngTransparentMargins } from "@/lib/pdf/crop-signature-png";
+import { drawSignatureInBox } from "@/lib/pdf/draw-signature";
+import { createTrainingRequestPdf } from "@/lib/pdf/render-training-request";
 import {
   TAL_CONSTANTS,
   TAL_FORM_FIELDS,
   TAL_ORIGINAL_INITIAL_PLACEMENTS,
   TAL_SIGNATURE_PLACEMENTS,
-  TRAINING_REQUEST_FORM_FIELDS,
-  TRAINING_REQUEST_FORM_SIGNATURE_PLACEMENTS,
-  TRAINING_REQUEST_FORM_TEXT_PLACEMENTS,
-  type PdfImageBoxPlacement,
 } from "@/lib/pdf/field-mapping";
 import {
   formatPdfDate,
@@ -26,14 +23,11 @@ import {
 } from "@/lib/pdf/format-pdf-values";
 import {
   checkOptionalCheckbox,
-  checkRequiredCheckbox,
   PdfFormFieldError,
   setOptionalTextField,
-  uncheckOptionalCheckbox,
 } from "@/lib/pdf/pdf-form-fields";
 import {
   stampCenteredTextInBox,
-  stampTextInBox,
 } from "@/lib/pdf/stamp-pdf-text";
 import {
   stripInteractivePdfArtifacts,
@@ -59,50 +53,6 @@ export interface ApprovedPacketGenerationInput {
 }
 
 export { PdfFormFieldError, getApprovedPacketStampPlan };
-
-async function drawSignatureInBox(
-  page: PDFPage,
-  pdf: PDFDocument,
-  pngBytes: Uint8Array,
-  placement: PdfImageBoxPlacement,
-  context: string,
-): Promise<void> {
-  if (pngBytes.byteLength === 0) {
-    throw new PdfFormFieldError(`${context} signature image is empty and cannot be embedded.`);
-  }
-
-  const cropped = cropSignaturePngTransparentMargins(pngBytes);
-
-  let image;
-  try {
-    image = await pdf.embedPng(cropped);
-  } catch {
-    throw new PdfFormFieldError(`${context} signature image could not be decoded or embedded.`);
-  }
-
-  const scale = Math.min(
-    placement.width / image.width,
-    placement.height / image.height,
-  );
-  const width = image.width * scale;
-  const height = image.height * scale;
-  const x = placement.x + (placement.width - width) / 2;
-  const y = placement.y + (placement.height - height) / 2;
-
-  page.drawImage(image, { x, y, width, height });
-}
-
-function populateTrainingRequestCheckboxes(pdf: PDFDocument): void {
-  const form = pdf.getForm();
-  const fields = TRAINING_REQUEST_FORM_FIELDS;
-  const context = "Training Request Form";
-
-  checkRequiredCheckbox(form, fields.approvedCheckbox, context);
-  uncheckOptionalCheckbox(form, fields.deniedCheckbox);
-  checkOptionalCheckbox(form, fields.mtoApprovalCheckbox);
-  checkOptionalCheckbox(form, fields.deputyApprovalCheckbox);
-  setOptionalTextField(form, fields.denialReason, "");
-}
 
 function populateTalForm(pdf: PDFDocument, input: ApprovedPacketGenerationInput): void {
   const form = pdf.getForm();
@@ -134,59 +84,6 @@ function populateTalForm(pdf: PDFDocument, input: ApprovedPacketGenerationInput)
   setOptionalTextField(form, fields.lastName, student.lastName);
   setOptionalTextField(form, fields.firstName, student.firstName);
   setOptionalTextField(form, fields.email, request.requesterEmail);
-}
-
-async function stampTrainingRequestFormText(
-  pdf: PDFDocument,
-  input: ApprovedPacketGenerationInput,
-): Promise<void> {
-  const page = pdf.getPage(0);
-  const textValues = buildTrainingRequestFormStampValues(input);
-  const approvalDates = buildTrainingRequestApprovalStampValues(input);
-
-  for (const [key, placement] of Object.entries(TRAINING_REQUEST_FORM_TEXT_PLACEMENTS)) {
-    const value = textValues[key as keyof typeof TRAINING_REQUEST_FORM_TEXT_PLACEMENTS];
-    if (!value.trim()) {
-      continue;
-    }
-
-    await stampTextInBox(pdf, page, value, placement);
-  }
-
-  await stampTextInBox(
-    pdf,
-    page,
-    approvalDates.mtoApprovalDate,
-    TRAINING_REQUEST_FORM_SIGNATURE_PLACEMENTS.mtoApprovalDate,
-  );
-  await stampTextInBox(
-    pdf,
-    page,
-    approvalDates.deputyApprovalDate,
-    TRAINING_REQUEST_FORM_SIGNATURE_PLACEMENTS.deputyApprovalDate,
-  );
-}
-
-async function stampTrainingRequestSignatures(
-  pdf: PDFDocument,
-  input: ApprovedPacketGenerationInput,
-): Promise<void> {
-  const page = pdf.getPage(TRAINING_REQUEST_FORM_SIGNATURE_PLACEMENTS.mtoSignature.pageIndex);
-
-  await drawSignatureInBox(
-    page,
-    pdf,
-    input.mtoSignaturePng,
-    TRAINING_REQUEST_FORM_SIGNATURE_PLACEMENTS.mtoSignature,
-    "MTO",
-  );
-  await drawSignatureInBox(
-    page,
-    pdf,
-    input.deputySignaturePng,
-    TRAINING_REQUEST_FORM_SIGNATURE_PLACEMENTS.deputySignature,
-    "Deputy Chief",
-  );
 }
 
 async function stampTalOriginalInitials(
@@ -285,16 +182,13 @@ export async function generateApprovedPacketBytes(
     throw new PdfFormFieldError("Approved packet template is missing a required page.");
   }
 
-  populateTrainingRequestCheckboxes(trainingPdf);
   populateTalForm(talPdf, input);
 
-  const [flattenedTrainingPdf, flattenedTalPdf] = await Promise.all([
-    flattenPdfForm(trainingPdf, "Training Request Form"),
+  const [{ pdf: renderedTrainingPdf }, flattenedTalPdf] = await Promise.all([
+    createTrainingRequestPdf(trainingPdf, input),
     flattenPdfForm(talPdf, "TAL"),
   ]);
 
-  await stampTrainingRequestFormText(flattenedTrainingPdf, input);
-  await stampTrainingRequestSignatures(flattenedTrainingPdf, input);
   await stampTalOriginalInitials(flattenedTalPdf, input);
   await stampTalAgencySignature(flattenedTalPdf, input.mtoSignaturePng);
 
@@ -302,9 +196,9 @@ export async function generateApprovedPacketBytes(
   await createAuditTrailPages(auditPdf, input.request, input.actions);
 
   const mergedPdf = await PDFDocument.create();
-  const [trainingPage] = await mergedPdf.copyPages(flattenedTrainingPdf, [0]);
+  const trainingPages = await mergedPdf.copyPages(renderedTrainingPdf, renderedTrainingPdf.getPageIndices());
   const [talPage] = await mergedPdf.copyPages(flattenedTalPdf, [0]);
-  mergedPdf.addPage(trainingPage);
+  for (const trainingPage of trainingPages) mergedPdf.addPage(trainingPage);
   mergedPdf.addPage(talPage);
 
   const auditPageIndexes = Array.from(

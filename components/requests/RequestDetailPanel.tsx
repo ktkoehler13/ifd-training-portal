@@ -1,5 +1,6 @@
 "use client";
 
+import { otherExpenseLabel } from "@/lib/other-expense-description";
 import { ExpenseSummary } from "@/components/requests/ExpenseSummary";
 import { formatCurrency, formatMileageRate } from "@/lib/currency";
 import { formatDepartmentVehicle } from "@/lib/expenses";
@@ -178,7 +179,7 @@ export function RequestDetailPanel({
           value={formatCurrency(request.foodExpenses)}
         />
         <DetailItem
-          label="Other expenses"
+          label={otherExpenseLabel(request.otherExpenseDescription)}
           value={formatCurrency(request.otherExpenses)}
         />
         <DetailItem
@@ -219,6 +220,7 @@ export function RequestDetailPanel({
           rentalVehicle: request.rentalVehicle,
           foodExpenses: request.foodExpenses,
           otherExpenses: request.otherExpenses,
+          otherExpenseDescription: request.otherExpenseDescription,
           totalEstimatedExpenses: request.totalEstimatedExpenses,
         }}
       />

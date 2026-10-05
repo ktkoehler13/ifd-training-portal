@@ -5,6 +5,7 @@ import {
   type PDFFont,
   type PDFPage,
 } from "pdf-lib";
+import { wrapPdfText } from "@/lib/pdf/wrap-pdf-text";
 import { warnApprovedPacketFieldUnavailable } from "@/lib/pdf/warn-approved-packet-fields";
 import { getOnDutyDatesPdfOverflow } from "@/lib/pdf/build-stamp-values";
 import { formatOnDutyDatesForDisplay } from "@/lib/training-day-details";
@@ -245,76 +246,6 @@ export function buildAuditTrailEntries(
   );
 }
 
-function wrapText(text: string, font: PDFFont, fontSize: number, maxWidth: number): string[] {
-  const words = text.split(/\s+/).filter(Boolean);
-  if (words.length === 0) {
-    return [];
-  }
-
-  const lines: string[] = [];
-  let currentLine = words[0]!;
-
-  for (const word of words.slice(1)) {
-    const candidate = `${currentLine} ${word}`;
-    if (font.widthOfTextAtSize(candidate, fontSize) <= maxWidth) {
-      currentLine = candidate;
-    } else {
-      lines.push(currentLine);
-      currentLine = word;
-    }
-  }
-
-  lines.push(currentLine);
-  return lines;
-}
-
-function drawWrappedText(
-  page: PDFPage,
-  font: PDFFont,
-  text: string,
-  x: number,
-  y: number,
-  fontSize: number,
-  maxWidth: number,
-  lineHeight: number,
-): number {
-  const lines = wrapText(text, font, fontSize, maxWidth);
-  let cursorY = y;
-
-  for (const line of lines) {
-    page.drawText(line, {
-      x,
-      y: cursorY,
-      size: fontSize,
-      font,
-      color: rgb(0, 0, 0),
-    });
-    cursorY -= lineHeight;
-  }
-
-  return cursorY;
-}
-
-function estimateEntryHeight(
-  entry: AuditTrailEntry,
-  regularFont: PDFFont,
-  commentFont: PDFFont,
-): number {
-  let height = EVENT_LINE_HEIGHT + EVENT_BLOCK_SPACING;
-
-  if (entry.commentText && entry.commentLabel) {
-    const wrapped = wrapText(
-      `${entry.commentLabel}: ${entry.commentText}`,
-      commentFont,
-      FONT_SIZE_COMMENT,
-      COMMENT_WRAP_WIDTH,
-    );
-    height += wrapped.length * COMMENT_LINE_HEIGHT + 4;
-  }
-
-  return height;
-}
-
 function drawAuditFooter(
   page: PDFPage,
   font: PDFFont,
@@ -335,106 +266,6 @@ function drawAuditFooter(
     font,
     color: rgb(0.35, 0.35, 0.35),
   });
-}
-
-function drawSummaryBlock(
-  page: PDFPage,
-  request: TrainingRequestRecord,
-  generatedAt: Date,
-  regularFont: PDFFont,
-  boldFont: PDFFont,
-): number {
-  let cursorY = PAGE_HEIGHT - MARGIN_TOP - 34;
-
-  const summaryRows: Array<{ label: string; value: string }> = [
-    {
-      label: "Request Number:",
-      value: request.requestNumber?.trim() || "Not assigned",
-    },
-    { label: "Requester:", value: request.requesterName?.trim() || "" },
-    { label: "Badge Number:", value: request.requesterBadgeNumber?.trim() || "" },
-    { label: "Course:", value: request.courseName?.trim() || "" },
-    {
-      label: "Current Status:",
-      value: TRAINING_REQUEST_STATUS_LABELS[request.status],
-    },
-    {
-      label: "Generated:",
-      value: formatAuditGeneratedTimestamp(generatedAt),
-    },
-  ];
-
-  for (const row of summaryRows) {
-    page.drawText(row.label, {
-      x: MARGIN_LEFT,
-      y: cursorY,
-      size: FONT_SIZE_SUMMARY_LABEL,
-      font: boldFont,
-      color: rgb(0, 0, 0),
-    });
-
-    if (row.value) {
-      const labelWidth = boldFont.widthOfTextAtSize(row.label, FONT_SIZE_SUMMARY_LABEL);
-      page.drawText(row.value, {
-        x: MARGIN_LEFT + labelWidth + 6,
-        y: cursorY,
-        size: FONT_SIZE_SUMMARY_VALUE,
-        font: regularFont,
-        color: rgb(0, 0, 0),
-      });
-    }
-
-    cursorY -= SUMMARY_LINE_HEIGHT;
-  }
-
-  const overflowDates = getOnDutyDatesPdfOverflow(request);
-  if (overflowDates.length > 0) {
-    page.drawText("Additional On-Duty Dates:", {
-      x: MARGIN_LEFT,
-      y: cursorY,
-      size: FONT_SIZE_SUMMARY_LABEL,
-      font: boldFont,
-      color: rgb(0, 0, 0),
-    });
-    cursorY -= SUMMARY_LINE_HEIGHT;
-    page.drawText(overflowDates.join(", "), {
-      x: MARGIN_LEFT,
-      y: cursorY,
-      size: FONT_SIZE_SUMMARY_VALUE,
-      font: regularFont,
-      color: rgb(0, 0, 0),
-      maxWidth: CONTENT_WIDTH,
-    });
-    cursorY -= SUMMARY_LINE_HEIGHT;
-  } else if (request.onDutyDates.length > 0) {
-    page.drawText("On-Duty Dates:", {
-      x: MARGIN_LEFT,
-      y: cursorY,
-      size: FONT_SIZE_SUMMARY_LABEL,
-      font: boldFont,
-      color: rgb(0, 0, 0),
-    });
-    cursorY -= SUMMARY_LINE_HEIGHT;
-    page.drawText(formatOnDutyDatesForDisplay(request.onDutyDates), {
-      x: MARGIN_LEFT,
-      y: cursorY,
-      size: FONT_SIZE_SUMMARY_VALUE,
-      font: regularFont,
-      color: rgb(0, 0, 0),
-      maxWidth: CONTENT_WIDTH,
-    });
-    cursorY -= SUMMARY_LINE_HEIGHT;
-  }
-
-  const dividerY = cursorY - 4;
-  page.drawLine({
-    start: { x: MARGIN_LEFT, y: dividerY },
-    end: { x: PAGE_WIDTH - MARGIN_RIGHT, y: dividerY },
-    thickness: 0.75,
-    color: rgb(0.65, 0.65, 0.65),
-  });
-
-  return dividerY - 18;
 }
 
 function drawAuditHeader(
@@ -472,46 +303,6 @@ function drawAuditHeader(
   return PAGE_HEIGHT - MARGIN_TOP - 36;
 }
 
-function drawAuditEntry(
-  page: PDFPage,
-  entry: AuditTrailEntry,
-  cursorY: number,
-  regularFont: PDFFont,
-  commentFont: PDFFont,
-): number {
-  page.drawCircle({
-    x: TIMELINE_X,
-    y: cursorY - 3,
-    size: 2,
-    color: rgb(0.25, 0.25, 0.25),
-  });
-
-  page.drawText(entry.eventLine, {
-    x: EVENT_TEXT_X,
-    y: cursorY,
-    size: FONT_SIZE_EVENT,
-    font: regularFont,
-    color: rgb(0, 0, 0),
-  });
-
-  let nextY = cursorY - EVENT_LINE_HEIGHT;
-
-  if (entry.commentText && entry.commentLabel) {
-    nextY = drawWrappedText(
-      page,
-      commentFont,
-      `${entry.commentLabel}: ${entry.commentText}`,
-      COMMENT_INDENT_X,
-      nextY - 2,
-      FONT_SIZE_COMMENT,
-      COMMENT_WRAP_WIDTH,
-      COMMENT_LINE_HEIGHT,
-    );
-  }
-
-  return nextY - EVENT_BLOCK_SPACING;
-}
-
 export async function createAuditTrailPages(
   pdf: PDFDocument,
   request: TrainingRequestRecord,
@@ -521,58 +312,72 @@ export async function createAuditTrailPages(
   const entries = buildAuditTrailEntries(request, actions);
   const regularFont = await pdf.embedFont(StandardFonts.Helvetica);
   const boldFont = await pdf.embedFont(StandardFonts.HelveticaBold);
-
+  const pages: PDFPage[] = [];
+  let page = pdf.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
+  pages.push(page);
+  let cursorY = drawAuditHeader(page, false, regularFont, boldFont) + 2;
   const minimumY = MARGIN_BOTTOM + FOOTER_HEIGHT + 12;
-  const firstPageStartY = PAGE_HEIGHT - MARGIN_TOP - 150;
-  const continuedPageStartY = PAGE_HEIGHT - MARGIN_TOP - 28;
+  const continuedStartY = PAGE_HEIGHT - MARGIN_TOP - 36;
 
-  const pageLayouts: AuditTrailEntry[][] = [[]];
-  let currentPageIndex = 0;
-  let cursorY =
-    pageLayouts[0]!.length === 0 && currentPageIndex === 0
-      ? firstPageStartY
-      : continuedPageStartY;
+  function ensure(height: number) {
+    if (cursorY - height < minimumY) {
+      page = pdf.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
+      pages.push(page);
+      cursorY = drawAuditHeader(page, true, regularFont, boldFont) - 8;
+    }
+  }
+  function write(value: string, x: number, size: number, lineHeight: number) {
+    for (const line of wrapPdfText(value, regularFont, PAGE_WIDTH - MARGIN_RIGHT - x, size)) {
+      ensure(lineHeight);
+      page.drawText(line, { x, y: cursorY, font: regularFont, size, color: rgb(0, 0, 0) });
+      cursorY -= lineHeight;
+    }
+  }
+  const summaryRows = [
+    { label: "Request Number:", value: request.requestNumber?.trim() || "Not assigned" },
+    { label: "Requester:", value: request.requesterName?.trim() || "" },
+    { label: "Badge Number:", value: request.requesterBadgeNumber?.trim() || "" },
+    { label: "Course:", value: request.courseName?.trim() || "" },
+    { label: "Current Status:", value: TRAINING_REQUEST_STATUS_LABELS[request.status] },
+    { label: "Generated:", value: formatAuditGeneratedTimestamp(generatedAt) },
+  ];
+  for (const row of summaryRows) {
+    ensure(SUMMARY_LINE_HEIGHT);
+    page.drawText(row.label, { x: MARGIN_LEFT, y: cursorY, font: boldFont, size: FONT_SIZE_SUMMARY_LABEL });
+    const x = MARGIN_LEFT + boldFont.widthOfTextAtSize(row.label, FONT_SIZE_SUMMARY_LABEL) + 6;
+    write(row.value, x, FONT_SIZE_SUMMARY_VALUE, SUMMARY_LINE_HEIGHT);
+  }
+  const overflowDates = getOnDutyDatesPdfOverflow(request);
+  if ((request.onDutyDates ?? []).length > 0) {
+    ensure(SUMMARY_LINE_HEIGHT * 2);
+    page.drawText(overflowDates.length ? "Additional On-Duty Dates:" : "On-Duty Dates:", {
+      x: MARGIN_LEFT, y: cursorY, font: boldFont, size: FONT_SIZE_SUMMARY_LABEL,
+    });
+    cursorY -= SUMMARY_LINE_HEIGHT;
+    write(overflowDates.length ? overflowDates.join(", ") : formatOnDutyDatesForDisplay(request.onDutyDates), MARGIN_LEFT, FONT_SIZE_SUMMARY_VALUE, SUMMARY_LINE_HEIGHT);
+  }
+  ensure(24);
+  page.drawLine({ start: { x: MARGIN_LEFT, y: cursorY - 4 }, end: { x: PAGE_WIDTH - MARGIN_RIGHT, y: cursorY - 4 }, thickness: 0.75, color: rgb(0.65, 0.65, 0.65) });
+  cursorY -= 22;
 
   for (const entry of entries) {
-    const entryHeight = estimateEntryHeight(entry, regularFont, regularFont);
-
-    if (pageLayouts[currentPageIndex]!.length > 0 && cursorY - entryHeight < minimumY) {
-      currentPageIndex += 1;
-      pageLayouts[currentPageIndex] = [];
-      cursorY = continuedPageStartY;
+    const comment = entry.commentText && entry.commentLabel ? `${entry.commentLabel}: ${entry.commentText}` : "";
+    const height = wrapPdfText(entry.eventLine, regularFont, PAGE_WIDTH - MARGIN_RIGHT - EVENT_TEXT_X, FONT_SIZE_EVENT).length * EVENT_LINE_HEIGHT
+      + (comment ? wrapPdfText(comment, regularFont, COMMENT_WRAP_WIDTH, FONT_SIZE_COMMENT).length * COMMENT_LINE_HEIGHT + 2 : 0)
+      + EVENT_BLOCK_SPACING;
+    // Keep ordinary entries together; an entry taller than a page may continue.
+    if (height <= continuedStartY - minimumY) ensure(height);
+    else ensure(EVENT_LINE_HEIGHT);
+    page.drawCircle({ x: TIMELINE_X, y: cursorY - 3, size: 2, color: rgb(0.25, 0.25, 0.25) });
+    write(entry.eventLine, EVENT_TEXT_X, FONT_SIZE_EVENT, EVENT_LINE_HEIGHT);
+    if (comment) {
+      cursorY -= 2;
+      write(comment, COMMENT_INDENT_X, FONT_SIZE_COMMENT, COMMENT_LINE_HEIGHT);
     }
-
-    pageLayouts[currentPageIndex]!.push(entry);
-    cursorY -= entryHeight;
+    cursorY -= EVENT_BLOCK_SPACING;
   }
-
-  const totalPages = Math.max(pageLayouts.length, 1);
-
-  if (entries.length === 0) {
-    pageLayouts[0] = [];
-  }
-
-  for (let pageIndex = 0; pageIndex < totalPages; pageIndex += 1) {
-    const page = pdf.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
-    const pageEntries = pageLayouts[pageIndex] ?? [];
-    const isContinued = pageIndex > 0;
-
-    let cursorY = drawAuditHeader(page, isContinued, regularFont, boldFont);
-
-    if (pageIndex === 0) {
-      cursorY = drawSummaryBlock(page, request, generatedAt, regularFont, boldFont);
-    } else {
-      cursorY -= 8;
-    }
-
-    for (const entry of pageEntries) {
-      cursorY = drawAuditEntry(page, entry, cursorY, regularFont, regularFont);
-    }
-
-    drawAuditFooter(page, regularFont, pageIndex + 1, totalPages);
-  }
-
-  return totalPages;
+  pages.forEach((auditPage, index) => drawAuditFooter(auditPage, regularFont, index + 1, pages.length));
+  return pages.length;
 }
 
 export function serializeAuditTrailForInspection(entries: AuditTrailEntry[]): string {

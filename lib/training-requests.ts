@@ -1,3 +1,4 @@
+import { normalizeOtherExpenseDescription, validateOtherExpenseDescription } from "@/lib/other-expense-description";
 import { roundCurrency } from "@/lib/currency";
 import { calculateExpenseSummary } from "@/lib/expenses";
 import { normalizePersonnelEmail } from "@/lib/personnel";
@@ -118,6 +119,7 @@ export function mapTrainingRequestRow(row: TrainingRequestRow): TrainingRequestR
     airfare: roundCurrency(asNumber(row.airfare_cost)),
     rentalVehicle: roundCurrency(asNumber(row.rental_vehicle_cost)),
     otherExpenses: roundCurrency(asNumber(row.other_cost)),
+    otherExpenseDescription: normalizeOtherExpenseDescription(row.other_expense_description),
     mileageReimbursement: roundCurrency(asNumber(row.mileage_cost)),
     totalReimbursableMiles: Math.max(0, asNumber(row.total_reimbursable_miles)),
     gsaMileageRate: Math.max(0, asNumber(row.gsa_mileage_rate)),
@@ -164,6 +166,7 @@ export function trainingRequestRecordToDraft(
     rentalVehicle: request.rentalVehicle.toFixed(2),
     foodExpenses: request.foodExpenses.toFixed(2),
     otherExpenses: request.otherExpenses.toFixed(2),
+    otherExpenseDescription: normalizeOtherExpenseDescription(request.otherExpenseDescription),
     transportationNotes: request.transportationNotes,
     confirmedAccurate: false,
   };
@@ -175,6 +178,10 @@ export function buildTrainingRequestInput(input: {
   expenseSummary: ReturnType<typeof calculateExpenseSummary>;
   requireComplete?: boolean;
 }): TrainingRequestInsertInput {
+  if (input.requireComplete) {
+    const error = validateOtherExpenseDescription(input.expenseSummary.otherExpenses, input.draft.otherExpenseDescription);
+    if (error) throw new Error(error);
+  }
   const normalizedEmail = normalizePersonnelEmail(input.draft.departmentEmail);
   const dayDetails = buildTrainingDayDetailsFromDraft(input.draft, {
     requireComplete: input.requireComplete ?? false,
@@ -204,6 +211,7 @@ export function buildTrainingRequestInput(input: {
     airfare: input.expenseSummary.airfare,
     rentalVehicle: input.expenseSummary.rentalVehicle,
     otherExpenses: input.expenseSummary.otherExpenses,
+    otherExpenseDescription: normalizeOtherExpenseDescription(input.draft.otherExpenseDescription),
     mileageReimbursement: input.expenseSummary.mileageReimbursement,
     totalReimbursableMiles: input.expenseSummary.totalReimbursableMiles,
     gsaMileageRate: input.expenseSummary.gsaMileageRate,
@@ -237,6 +245,7 @@ export function buildTrainingRequestDatabasePayload(
     airfare_cost: input.airfare,
     rental_vehicle_cost: input.rentalVehicle,
     other_cost: input.otherExpenses,
+    other_expense_description: normalizeOtherExpenseDescription(input.otherExpenseDescription) || null,
     mileage_cost: input.mileageReimbursement,
     total_reimbursable_miles: input.totalReimbursableMiles,
     gsa_mileage_rate: input.gsaMileageRate,

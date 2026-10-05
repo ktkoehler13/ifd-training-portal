@@ -43,7 +43,7 @@ export function buildTrainingRequestFormStampValues(
     request.courseStartDate,
     request.courseEndDate,
   );
-  const onDutyDates = partitionOnDutyDatesForPdf(request.onDutyDates);
+  const onDutyDates = partitionOnDutyDatesForPdf(request.onDutyDates ?? []);
 
   return {
     requesterName: optionalText(request.requesterName),
@@ -77,7 +77,7 @@ export function buildTrainingRequestFormStampValues(
 export function getOnDutyDatesPdfOverflow(
   request: TrainingRequestRecord,
 ): string[] {
-  return partitionOnDutyDatesForPdf(request.onDutyDates).overflow;
+  return partitionOnDutyDatesForPdf(request.onDutyDates ?? []).overflow;
 }
 
 export function buildTrainingRequestApprovalStampValues(

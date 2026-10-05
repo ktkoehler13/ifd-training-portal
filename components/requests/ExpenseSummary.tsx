@@ -1,3 +1,4 @@
+import { otherExpenseLabel } from "@/lib/other-expense-description";
 import {
   formatCurrency,
   formatMileageRate,
@@ -55,7 +56,7 @@ export function ExpenseSummary({
           value={formatCurrency(values.foodExpenses)}
         />
         <SummaryRow
-          label="Other Expenses"
+          label={otherExpenseLabel(values.otherExpenseDescription)}
           value={formatCurrency(values.otherExpenses)}
         />
         <div className="border-t border-zinc-200 pt-2">

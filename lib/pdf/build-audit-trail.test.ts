@@ -1,6 +1,6 @@
-import { describe, it } from "node:test";
+import { describe, it, mock } from "node:test";
 import assert from "node:assert/strict";
-import { PDFDocument } from "pdf-lib";
+import { PDFDocument, PDFPage, type PDFPageDrawTextOptions } from "pdf-lib";
 import {
   APPROVED_PACKET_VISUAL_FIXTURE_ACTIONS,
   APPROVED_PACKET_VISUAL_FIXTURE_INPUT,
@@ -327,5 +327,44 @@ describe("audit technical failures", () => {
           mtoSignaturePng: new Uint8Array([0x00, 0x01, 0x02, 0x03]),
         }),
     );
+  });
+});
+
+
+describe("audit overflow regression", () => {
+  it("keeps long summary fields, dates, and comments within pages without text overlap", async () => {
+    const calls: Array<{ page: PDFPage; text: string; options: PDFPageDrawTextOptions }> = [];
+    const originalDraw = PDFPage.prototype.drawText;
+    const draw = mock.method(PDFPage.prototype, "drawText", function (this: PDFPage, text: string, options: PDFPageDrawTextOptions) {
+      calls.push({ page: this, text, options });
+      return originalDraw.call(this, text, options);
+    });
+    const pdf = await PDFDocument.create();
+    try {
+      await createAuditTrailPages(pdf, {
+        ...APPROVED_PACKET_VISUAL_FIXTURE_REQUEST,
+        courseName: "Long course name ".repeat(200) + "COURSE_END",
+        onDutyDates: Array.from({ length: 28 }, (_, i) => `2026-08-${String(i + 1).padStart(2, "0")}`),
+      }, [buildAction({ action: "mto_returned", comments: "X".repeat(9000) + " COMMENT_END" })]);
+    } finally {
+      draw.mock.restore();
+    }
+    assert.ok(pdf.getPageCount() > 2);
+    assert.ok(calls.some(call => call.text.includes("COURSE_END")));
+    assert.ok(calls.some(call => call.text.includes("COMMENT_END")));
+    assert.ok(calls.some(call => call.text.includes("08/28/2026")));
+    const boxes = calls.map(({ page, text, options }) => ({ page, text, x: options.x!, y: options.y!, width: options.font!.widthOfTextAtSize(text, options.size!), height: options.size! }));
+    for (const box of boxes) {
+      assert.ok(box.x >= 48 && box.x + box.width <= 564.01, `horizontal overflow: ${box.text}`);
+      assert.ok(box.y >= 42 && box.y + box.height <= 760, `vertical overflow: ${box.text}`);
+    }
+    for (let i = 0; i < boxes.length; i++) {
+      for (const right of boxes.slice(i + 1)) {
+        const left = boxes[i];
+        if (left.page !== right.page || !left.width || !right.width) continue;
+        const overlap = left.x < right.x + right.width && right.x < left.x + left.width && left.y < right.y + right.height && right.y < left.y + left.height;
+        assert.equal(overlap, false, `overlapping audit text: ${left.text} / ${right.text}`);
+      }
+    }
   });
 });

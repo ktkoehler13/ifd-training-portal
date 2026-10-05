@@ -58,6 +58,7 @@ export interface TrainingRequestRow {
   airfare_cost: number;
   rental_vehicle_cost: number;
   other_cost: number;
+  other_expense_description?: string | null;
   mileage_cost: number;
   total_reimbursable_miles: number;
   gsa_mileage_rate: number;
@@ -96,6 +97,7 @@ export interface TrainingRequestRecord {
   airfare: number;
   rentalVehicle: number;
   otherExpenses: number;
+  otherExpenseDescription?: string | null;
   mileageReimbursement: number;
   totalReimbursableMiles: number;
   gsaMileageRate: number;
@@ -130,6 +132,7 @@ export interface TrainingRequestInsertInput {
   airfare: number;
   rentalVehicle: number;
   otherExpenses: number;
+  otherExpenseDescription?: string | null;
   mileageReimbursement: number;
   totalReimbursableMiles: number;
   gsaMileageRate: number;
@@ -162,6 +165,7 @@ export interface TrainingRequestDraft {
   rentalVehicle: string;
   foodExpenses: string;
   otherExpenses: string;
+  otherExpenseDescription: string;
   transportationNotes: string;
   confirmedAccurate: boolean;
 }
@@ -177,5 +181,6 @@ export interface ExpenseSummaryValues {
   rentalVehicle: number;
   foodExpenses: number;
   otherExpenses: number;
+  otherExpenseDescription?: string | null;
   totalEstimatedExpenses: number;
 }

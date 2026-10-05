@@ -35,9 +35,9 @@ export function setRequiredTextField(
 export function setOptionalTextField(
   form: PDFForm,
   fieldName: string,
-  value: string,
+  value: string | null | undefined,
 ): void {
-  if (!value.trim()) {
+  if (!value?.trim()) {
     return;
   }
 

@@ -1,5 +1,7 @@
 import "server-only";
 
+import { validateOtherExpenseDescription } from "@/lib/other-expense-description";
+
 import { getAuthenticatedPersonnel } from "@/lib/auth/personnel";
 import { calculateExpenseSummaryFromDraft } from "@/lib/expenses";
 import { createClient } from "@/lib/supabase/server";
@@ -161,6 +163,13 @@ export async function submitTrainingRequestWithAuthoritativeGsaRate(input: {
     input.draft,
     authoritativeGsaRate,
   );
+
+  const otherExpenseError = validateOtherExpenseDescription(
+    expenseSummary.otherExpenses, input.draft.otherExpenseDescription,
+  );
+  if (otherExpenseError) {
+    throw new TrainingRequestSubmitValidationError(otherExpenseError);
+  }
 
   const insertInput = buildTrainingRequestInput({
     personnel,
