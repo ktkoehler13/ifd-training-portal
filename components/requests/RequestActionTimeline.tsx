@@ -6,6 +6,7 @@ import {
 } from "@/types/training-request-action";
 import { formatActionTimestamp } from "@/lib/training-request-actions";
 import { cn } from "@/lib/utils";
+import { getExpenseChangeRows } from "@/lib/mto-expense-review";
 
 interface RequestActionTimelineProps {
   actions: TrainingRequestActionRecord[];
@@ -73,10 +74,52 @@ export function RequestActionTimeline({
                 : null}
             </p>
           ) : null}
+          {action.expenseChanges ? (
+            <div className="mt-3 overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <caption className="sr-only">
+                  Expense changes recorded by the MTO
+                </caption>
+                <thead>
+                  <tr className="border-b border-zinc-200">
+                    <th scope="col" className="py-2 pr-4">
+                      Expense
+                    </th>
+                    <th scope="col" className="px-2 py-2">
+                      Before
+                    </th>
+                    <th scope="col" className="px-2 py-2">
+                      After
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {getExpenseChangeRows(action.expenseChanges).map((row) => (
+                    <tr
+                      key={row.key}
+                      className="border-b border-zinc-100 align-top"
+                    >
+                      <th scope="row" className="py-2 pr-4 font-medium">
+                        {row.label}
+                      </th>
+                      <td className="max-w-xs break-words px-2 py-2 whitespace-pre-wrap">
+                        {row.before}
+                      </td>
+                      <td className="max-w-xs break-words px-2 py-2 whitespace-pre-wrap">
+                        {row.after}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : null}
           {action.comments ? (
             <div className="mt-3 rounded-lg bg-zinc-50 px-3 py-2 text-sm text-zinc-700">
               <p className="text-xs font-medium tracking-wide text-zinc-500 uppercase">
-                Comments
+                {action.action === "mto_expenses_updated"
+                  ? "Reason for Changes"
+                  : "Comments"}
               </p>
               <p className="mt-1 whitespace-pre-wrap">{action.comments}</p>
             </div>

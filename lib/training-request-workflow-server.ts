@@ -331,6 +331,7 @@ export async function executeSignatureWorkflowAction(input: {
   action: WorkflowActionKind;
   comments: string | null;
   electronicSignatureConfirmed: boolean;
+  expectedUpdatedAt: string;
 }) {
   const expectedAction = mapWorkflowKindToExpectedAction(input.action);
 
@@ -353,10 +354,11 @@ export async function executeSignatureWorkflowAction(input: {
 
   const supabase = await createClient();
   const { data: reservationId, error: reserveError } = await supabase.rpc(
-    "reserve_training_request_signature_action",
+    "reserve_training_request_signature_action_for_version",
     {
       p_request_id: input.requestId,
       p_expected_action: expectedAction,
+      p_expected_updated_at: input.expectedUpdatedAt,
     },
   );
 

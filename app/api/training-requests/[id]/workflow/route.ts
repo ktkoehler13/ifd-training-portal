@@ -42,6 +42,7 @@ export async function POST(
       action?: unknown;
       comments?: unknown;
       electronicSignatureConfirmed?: unknown;
+      expectedUpdatedAt?: unknown;
     };
 
     if (!isWorkflowActionKind(body.action)) {
@@ -52,8 +53,13 @@ export async function POST(
       return badRequestResponse("This workflow action must use the signature route.");
     }
 
+    if (typeof body.expectedUpdatedAt !== "string" || !Number.isFinite(Date.parse(body.expectedUpdatedAt))) {
+      return badRequestResponse("Reload and review the current request before signing.");
+    }
+
     const updatedRequest = await executeSignatureWorkflowAction({
       requestId: id,
+      expectedUpdatedAt: body.expectedUpdatedAt,
       action: body.action,
       comments: typeof body.comments === "string" ? body.comments : null,
       electronicSignatureConfirmed: body.electronicSignatureConfirmed === true,

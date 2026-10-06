@@ -1,8 +1,10 @@
 import type { PersonnelRole } from "@/types/personnel";
+import type { ExpenseChangeSnapshot } from "@/lib/mto-expense-review";
 
 export const TRAINING_REQUEST_ACTIONS = [
   "submitted",
   "mto_approved",
+  "mto_expenses_updated",
   "mto_returned",
   "mto_denied",
   "deputy_chief_approved",
@@ -21,6 +23,7 @@ export const TRAINING_REQUEST_ACTION_LABELS: Record<
 > = {
   submitted: "Submitted",
   mto_approved: "MTO Approved",
+  mto_expenses_updated: "Estimated Expenses Updated by MTO",
   mto_returned: "Returned by MTO",
   mto_denied: "Denied by MTO",
   deputy_chief_approved: "Deputy Chief Approved",
@@ -31,6 +34,7 @@ export const TRAINING_REQUEST_ACTION_LABELS: Record<
 };
 
 export interface TrainingRequestActionRow {
+  expense_changes?: ExpenseChangeSnapshot | null;
   id: string;
   training_request_id: string;
   actor_personnel_id: string;
@@ -51,6 +55,7 @@ export interface TrainingRequestActionRow {
 }
 
 export interface TrainingRequestActionRecord {
+  expenseChanges?: ExpenseChangeSnapshot | null;
   id: string;
   trainingRequestId: string;
   actorPersonnelId: string;

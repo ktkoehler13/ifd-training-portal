@@ -21,6 +21,7 @@ export function mapTrainingRequestActionRow(
   row: TrainingRequestActionRow,
 ): TrainingRequestActionRecord {
   return {
+    expenseChanges: row.expense_changes ?? null,
     id: row.id,
     trainingRequestId: row.training_request_id,
     actorPersonnelId: row.actor_personnel_id,

@@ -6,6 +6,7 @@ import {
   type PDFPage,
 } from "pdf-lib";
 import { wrapPdfText } from "@/lib/pdf/wrap-pdf-text";
+import { formatExpenseChangeSummary } from "@/lib/mto-expense-review";
 import { warnApprovedPacketFieldUnavailable } from "@/lib/pdf/warn-approved-packet-fields";
 import { getOnDutyDatesPdfOverflow } from "@/lib/pdf/build-stamp-values";
 import { formatOnDutyDatesForDisplay } from "@/lib/training-day-details";
@@ -56,6 +57,7 @@ const SIGNED_APPROVAL_ACTIONS = new Set<TrainingRequestActionType>([
 export const AUDIT_ACTION_PHRASES: Record<TrainingRequestActionType, string> = {
   submitted: "Submitted request",
   mto_approved: "Approved request",
+  mto_expenses_updated: "Updated estimated expenses",
   mto_returned: "Returned request for correction",
   mto_denied: "Denied request",
   deputy_chief_approved: "Approved request",
@@ -189,6 +191,7 @@ export function getAuditCommentLabel(
 
   switch (action.action) {
     case "mto_denied":
+    case "mto_expenses_updated":
     case "deputy_chief_denied":
       return "Reason";
     case "mto_returned":
@@ -216,7 +219,7 @@ export function buildAuditTrailEntry(
   const actionPhrase = formatAuditAction(action);
   const timestamp = formatAuditTimestamp(getAuditTimestampSource(action));
   const commentLabel = getAuditCommentLabel(action);
-  const commentText = action.comments?.trim() || null;
+  const commentText = [action.comments?.trim(), formatExpenseChangeSummary(action.expenseChanges)].filter(Boolean).join("\n") || null;
 
   if (!action.actorName?.trim()) {
     warnApprovedPacketFieldUnavailable(requestId, "auditActorName");

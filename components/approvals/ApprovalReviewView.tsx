@@ -4,6 +4,8 @@ import Link from "next/link";
 import { startTransition, useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { WorkflowActionDialog } from "@/components/approvals/WorkflowActionDialog";
+import { MtoExpenseEditor } from "@/components/approvals/MtoExpenseEditor";
+import { canEditMtoExpenses } from "@/lib/mto-expense-review";
 import { RequestActionTimeline } from "@/components/requests/RequestActionTimeline";
 import { RequestDetailPanel } from "@/components/requests/RequestDetailPanel";
 import { AuthGate } from "@/components/layout/AuthGate";
@@ -55,6 +57,7 @@ function ApprovalReviewContent({
     null,
   );
   const [actionError, setActionError] = useState<string | null>(null);
+  const [isEditingExpenses, setIsEditingExpenses] = useState(false);
 
   const loadReview = useCallback(async () => {
     setIsLoading(true);
@@ -122,6 +125,7 @@ function ApprovalReviewContent({
           request.id,
           input.comments,
           input.electronicSignatureConfirmed,
+          request.updatedAt,
         );
         break;
       case "mto_return":
@@ -132,6 +136,7 @@ function ApprovalReviewContent({
           request.id,
           input.comments,
           input.electronicSignatureConfirmed,
+          request.updatedAt,
         );
         break;
       case "deputy_approve":
@@ -139,6 +144,7 @@ function ApprovalReviewContent({
           request.id,
           input.comments,
           input.electronicSignatureConfirmed,
+          request.updatedAt,
         );
         break;
       case "deputy_return":
@@ -149,6 +155,7 @@ function ApprovalReviewContent({
           request.id,
           input.comments,
           input.electronicSignatureConfirmed,
+          request.updatedAt,
         );
         break;
       default:
@@ -213,14 +220,37 @@ function ApprovalReviewContent({
 
             <RequestDetailPanel request={request} />
 
-            {showMtoActions || showDeputyActions ? (
+            {canEditMtoExpenses(personnel.role, request) ? (
+              isEditingExpenses ? (
+                <MtoExpenseEditor
+                  key={request.updatedAt}
+                  request={request}
+                  onCancel={() => setIsEditingExpenses(false)}
+                  onSaved={async () => {
+                    setIsEditingExpenses(false);
+                    await loadReview();
+                  }}
+                />
+              ) : (
+                <div>
+                  <Button
+                    variant="secondary"
+                    onClick={() => setIsEditingExpenses(true)}
+                  >
+                    Edit Estimated Expenses
+                  </Button>
+                </div>
+              )
+            ) : null}
+
+            {!isEditingExpenses && (showMtoActions || showDeputyActions) ? (
               <section className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm shadow-zinc-200/60">
                 <h2 className="text-lg font-semibold text-zinc-900">
                   Workflow Actions
                 </h2>
                 <p className="mt-2 text-sm text-zinc-600">
-                  Actions are available only when your exact personnel role matches
-                  the current workflow step.
+                  Actions are available only when your exact personnel role
+                  matches the current workflow step.
                 </p>
                 {actionError ? (
                   <p className="mt-4 text-sm text-red-700" role="alert">
@@ -228,24 +258,32 @@ function ApprovalReviewContent({
                   </p>
                 ) : null}
                 <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-                  <Button onClick={() => setPendingAction(
-                    showMtoActions ? "mto_approve" : "deputy_approve",
-                  )}>
+                  <Button
+                    onClick={() =>
+                      setPendingAction(
+                        showMtoActions ? "mto_approve" : "deputy_approve",
+                      )
+                    }
+                  >
                     Sign and Approve
                   </Button>
                   <Button
                     variant="secondary"
-                    onClick={() => setPendingAction(
-                      showMtoActions ? "mto_return" : "deputy_return",
-                    )}
+                    onClick={() =>
+                      setPendingAction(
+                        showMtoActions ? "mto_return" : "deputy_return",
+                      )
+                    }
                   >
                     Return for Correction
                   </Button>
                   <Button
                     variant="danger"
-                    onClick={() => setPendingAction(
-                      showMtoActions ? "mto_deny" : "deputy_deny",
-                    )}
+                    onClick={() =>
+                      setPendingAction(
+                        showMtoActions ? "mto_deny" : "deputy_deny",
+                      )
+                    }
                   >
                     Deny
                   </Button>
@@ -262,13 +300,15 @@ function ApprovalReviewContent({
               </div>
             </section>
 
-            {isAdministrativeRole(personnel.role) && notifications.length > 0 ? (
+            {isAdministrativeRole(personnel.role) &&
+            notifications.length > 0 ? (
               <section className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm shadow-zinc-200/60">
                 <h2 className="text-lg font-semibold text-zinc-900">
                   Email Notification Delivery
                 </h2>
                 <p className="mt-2 text-sm text-zinc-600">
-                  Delivery status is shown for administrative troubleshooting only.
+                  Delivery status is shown for administrative troubleshooting
+                  only.
                 </p>
                 <div className="mt-5 overflow-x-auto">
                   <table className="min-w-full text-left text-sm">

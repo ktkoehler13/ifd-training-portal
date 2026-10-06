@@ -379,6 +379,31 @@ delete from public.training_requests where request_number like 'IFD-%';
 
 Drafts remain editable by the requester only. Submitted requests follow the approval workflow below.
 
+### Editing estimates during MTO review
+
+Active MTO personnel can select **Edit Estimated Expenses** while a request is
+pending MTO review. They can revise registration, lodging, airfare, rental
+vehicle, meals, Other Expense and its description, and reimbursable miles. The
+request's stored GSA rate and department-vehicle choice remain fixed. Mileage and
+the total are calculated automatically. A reason is required; original and
+revised values are recorded with the reviewer and timestamp in the request
+history and the PDF audit trail. Saving does not approve the request.
+
+Apply `supabase/migrations/20261005210000_mto_expense_review.sql` after
+`20261005180000_add_other_expense_description.sql`, before deploying this UI.
+The migration adds an expense-history column and narrowly scoped RPCs without
+granting MTOs general request-update access. It rejects stale saves and stale
+signature attempts, and blocks expense editing while a signature reservation is
+active (up to 15 minutes if a signing attempt is abandoned). Existing approval
+snapshots and the TAL layout are unchanged. Historical missing Other Expense
+descriptions remain valid when that amount is unchanged; changing a positive
+Other Expense requires a description. Previously opened review tabs must be
+refreshed before signing after this release.
+
+`npm test` includes isolated PostgreSQL tests that apply every migration and
+exercise the actual RLS policies and workflow functions; no production records
+are used.
+
 ## Approval Workflow
 
 Training requests move through role-specific signing steps. MTO, Deputy Chief, and Admin have equal administrative permissions for personnel management, but workflow signing remains role-specific:

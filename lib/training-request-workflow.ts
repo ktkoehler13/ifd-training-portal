@@ -1,3 +1,4 @@
+import type { MtoExpenseValues } from "@/lib/mto-expense-review";
 import { createClient } from "@/lib/supabase/client";
 import {
   mapTrainingRequestRow,
@@ -43,6 +44,7 @@ async function callSignatureWorkflowApi(
   action: WorkflowActionKind,
   comments: string | null,
   electronicSignatureConfirmed: boolean,
+  expectedUpdatedAt: string,
 ): Promise<TrainingRequestRecord> {
   const response = await fetch(
     `/api/training-requests/${encodeURIComponent(requestId)}/workflow`,
@@ -55,6 +57,7 @@ async function callSignatureWorkflowApi(
         action,
         comments,
         electronicSignatureConfirmed,
+        expectedUpdatedAt,
       }),
     },
   );
@@ -95,12 +98,14 @@ export async function mtoApproveTrainingRequest(
   requestId: string,
   comments: string | null | undefined,
   electronicSignatureConfirmed: boolean,
+  expectedUpdatedAt: string,
 ): Promise<TrainingRequestRecord> {
   return callSignatureWorkflowApi(
     requestId,
     "mto_approve",
     comments?.trim() || null,
     electronicSignatureConfirmed,
+    expectedUpdatedAt,
   );
 }
 
@@ -118,12 +123,14 @@ export async function mtoDenyTrainingRequest(
   requestId: string,
   comments: string,
   electronicSignatureConfirmed: boolean,
+  expectedUpdatedAt: string,
 ): Promise<TrainingRequestRecord> {
   return callSignatureWorkflowApi(
     requestId,
     "mto_deny",
     comments.trim(),
     electronicSignatureConfirmed,
+    expectedUpdatedAt,
   );
 }
 
@@ -131,12 +138,14 @@ export async function deputyApproveTrainingRequest(
   requestId: string,
   comments: string | null | undefined,
   electronicSignatureConfirmed: boolean,
+  expectedUpdatedAt: string,
 ): Promise<TrainingRequestRecord> {
   return callSignatureWorkflowApi(
     requestId,
     "deputy_approve",
     comments?.trim() || null,
     electronicSignatureConfirmed,
+    expectedUpdatedAt,
   );
 }
 
@@ -154,12 +163,14 @@ export async function deputyDenyTrainingRequest(
   requestId: string,
   comments: string,
   electronicSignatureConfirmed: boolean,
+  expectedUpdatedAt: string,
 ): Promise<TrainingRequestRecord> {
   return callSignatureWorkflowApi(
     requestId,
     "deputy_deny",
     comments.trim(),
     electronicSignatureConfirmed,
+    expectedUpdatedAt,
   );
 }
 
@@ -226,4 +237,20 @@ export function canPerformDeputyChiefReview(
   status: TrainingRequestRecord["status"],
 ): boolean {
   return role === "deputy_chief" && status === "pending_deputy_chief";
+}
+
+export async function mtoUpdateTrainingRequestExpenses(
+  request: TrainingRequestRecord,
+  expenses: MtoExpenseValues,
+  reason: string,
+): Promise<TrainingRequestRecord> {
+  const { data, error } = await createClient().rpc("mto_update_training_request_expenses", {
+    p_request_id: request.id,
+    p_expected_updated_at: request.updatedAt,
+    p_expenses: expenses,
+    p_reason: reason,
+  });
+  if (error) throw new Error(getTrainingRequestErrorMessage(error));
+  if (!data) throw new Error("Unable to confirm expense changes. Reload the request to check whether they were saved.");
+  return mapWorkflowRow(data);
 }
