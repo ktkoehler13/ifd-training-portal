@@ -7,6 +7,7 @@ import { AuthGate } from "@/components/layout/AuthGate";
 import { SignOutButton } from "@/components/auth/SignOutButton";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { getRequestReturnPath } from "@/lib/auth/request-return-path";
 import { PASSWORD_CHANGE_SUCCESS_MESSAGE } from "@/lib/auth/password";
 import { PASSWORD_SETUP_COMPLETE_SUCCESS_MESSAGE } from "@/lib/auth/password-setup-messages";
 import type { AuthenticatedPersonnel } from "@/lib/auth/personnel";
@@ -84,7 +85,7 @@ function ChangePasswordContent({ personnel }: ChangePasswordContentProps) {
       setConfirmPassword("");
 
       if (forcedPasswordSetup) {
-        window.location.assign("/dashboard");
+        window.location.assign(getRequestReturnPath(searchParams.get("next")) ?? "/dashboard");
       }
     } catch {
       setError("Unable to update password. Try again later.");

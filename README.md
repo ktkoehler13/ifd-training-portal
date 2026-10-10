@@ -522,39 +522,78 @@ Workflow commits even if email delivery is temporarily unavailable. Failed sends
 
 ### Edge Function: `send-training-request-notifications`
 
-Deploy the function from:
+The sender is disabled by default. Deploy `supabase/functions/send-training-request-notifications/`
+with gateway JWT verification enabled. The handler additionally requires
+a verified project service-role credential: normal user tokens and the public anon
+key cannot dispatch mail. The browser never calls this function.
 
-`supabase/functions/send-training-request-notifications/index.ts`
+Required Supabase Edge Function settings:
 
-Required Supabase Edge Function secrets:
+- `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` (default project secrets)
+- `RESEND_API_KEY` (use a sending-only key scoped to the verified sending domain)
+- `RESEND_FROM_EMAIL` (for example, `IFD Training Portal <notifications@your-verified-domain.org>`)
+- `APP_BASE_URL=https://ifd-training-portal.vercel.app`
+- `NOTIFICATIONS_ENABLED=false` until sender verification and delivery testing finish
+- `NOTIFICATIONS_START_AT` (explicit UTC ISO timestamp for activation)
 
-- `SUPABASE_URL`
-- `SUPABASE_SERVICE_ROLE_KEY`
-- `RESEND_API_KEY`
-- `RESEND_FROM_EMAIL`
-- `APP_BASE_URL`
+Keep secrets out of Git and `NEXT_PUBLIC_*` variables. Apply
+`20261008180000_training_notification_delivery.sql` before activating delivery.
+It adds the `skipped` delivery state and a service-only authorization check
+without changing request/approval records.
 
-Do not place service-role or Resend secrets in `NEXT_PUBLIC_*` variables.
+Delivery covers MTO review, Deputy Chief review, requester corrections, and
+approved/denied outcomes. Resubmissions create a new MTO alert. Expense edits do
+not create mail. Corrections and denials include the reviewer comments. Each
+HTML and plain-text message names the request, requester, course, and action,
+and links to a protected portal page. Request links survive normal sign-in and
+required password changes; only recognized request paths are accepted as return
+URLs. Approval and signature actions still happen inside the portal.
 
-Supported delivery options:
+Before sending, the worker verifies that the request is still at the event's
+stage, that the source is the latest workflow action (expense edits do not
+supersede it), and that the recipient is active with the correct role or requester
+identity and email address. Older, superseded, or ineligible alerts become
+`skipped` with an explanation. Nothing older than `NOTIFICATIONS_START_AT` is
+sent. This prevents historical test queues from being mailed on first activation.
 
-1. **Database webhook (preferred):** invoke the Edge Function when a row with `status = pending` is inserted into `public.training_request_notifications`
-2. **Scheduled invocation:** run the Edge Function periodically to process pending rows
+A batch claims up to ten rows with the existing database lock, sends through
+Resend with each notification UUID as its idempotency key, and records provider
+acceptance as `sent`. This status means accepted by the provider, not guaranteed
+inbox delivery. Temporary failures retry up to five attempts with backoff.
+Retries older than 23 hours from notification creation are skipped for manual
+review to avoid replaying a provider-accepted email after Resend's 24-hour
+idempotency window. Database acknowledgement failures return a service error for
+monitoring; they are not silently reported as success.
 
-Example webhook target:
+For automatic processing and retries, use the Supabase scheduler setup in
+`supabase/ops/schedule-training-notifications.sql`. It runs every minute and reads
+its existing project credential from Vault, never from a literal in a job or
+migration. The script requires its two named Vault secrets before scheduling.
+This is application infrastructure and runs independently of an open browser.
+The endpoint is:
 
 `https://<project-ref>.supabase.co/functions/v1/send-training-request-notifications`
 
-The function claims pending rows safely, sends email through Resend, marks successful rows `sent`, and records failed attempts without exposing provider secrets to the browser.
+Rollout order:
 
-Set `APP_BASE_URL` to the deployed application origin, for example:
+1. Register/verify the sending domain in Resend, then configure the sender secrets.
+2. Apply the migration and deploy the function with delivery disabled.
+3. Set an activation timestamp. Confirm the 18 historical pending alerts observed
+   before rollout will be skipped rather than mailed.
+4. Test delivery with a controlled request and named test recipient before
+   enabling the schedule for routine requests. Check both the provider result
+   and the recipient inbox. Do not submit or approve a real training request for a test.
+5. Enable the scheduler and `NOTIFICATIONS_ENABLED=true` after the controlled test.
+   Monitor delivery status and provider failures. Pause delivery by setting
+   `NOTIFICATIONS_ENABLED=false`; workflow actions continue to queue normally.
 
-`https://training.example.gov`
+Local verification:
 
-Email links use:
-
-- `APP_BASE_URL/approvals/[request-id]` for reviewer alerts
-- `APP_BASE_URL/requests/[request-id]/confirmation` for requester alerts
+- `npm test` includes HTML escaping, all five events, protected links, return-path
+  validation, service-only dispatch, activation/backlog checks, recipient and
+  workflow eligibility, delivery acknowledgements and retry failures.
+- `npx tsc --noEmit --strict --target es2022 --module esnext --moduleResolution bundler --allowImportingTsExtensions --skipLibCheck supabase/functions/send-training-request-notifications/handler.ts supabase/functions/send-training-request-notifications/email.ts`
+  also checks the portable Edge Function code (excluded from the Next build).
 
 ### Approval workflow test procedure
 

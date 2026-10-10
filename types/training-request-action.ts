@@ -80,6 +80,7 @@ export const TRAINING_REQUEST_NOTIFICATION_STATUSES = [
   "processing",
   "sent",
   "failed",
+  "skipped",
 ] as const;
 
 export type TrainingRequestNotificationStatus =

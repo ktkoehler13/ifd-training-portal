@@ -310,7 +310,7 @@ describe("forced password setup", () => {
       loginServerSource,
       /mustChangePassword:[\s\S]*refreshedPersonnel\?\.mustChangePassword/,
     );
-    assert.match(loginRouteSource, /\/settings\/password\?required=1/);
+    assert.match(loginRouteSource, /passwordSetupReturnPath/);
   });
 
   it("does not render Current Password during forced setup", () => {
@@ -362,14 +362,14 @@ describe("forced password setup", () => {
     assert.match(middlewareSource, /isPasswordSetupPath/);
     assert.match(middlewareSource, /redirectToPasswordSetup/);
     assert.match(middlewareSource, /request\.nextUrl\.clone\(\)/);
-    assert.match(middlewareSource, /searchParams\.set\("required", "1"\)/);
+    assert.match(middlewareSource, /passwordSetupReturnPath/);
   });
 });
 
 describe("must_change_password redirect behavior", () => {
   it("redirects users with mustChangePassword to the password settings page", () => {
     assert.match(authGateSource, /mustChangePassword/);
-    assert.match(authGateSource, /\/settings\/password\?required=1/);
+    assert.match(authGateSource, /passwordSetupReturnPath/);
   });
 
   it("redirects successful logins with temporary passwords to password setup", () => {

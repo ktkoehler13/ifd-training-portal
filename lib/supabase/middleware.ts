@@ -2,6 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { reconcileForcedPasswordSetupIfPending } from "@/lib/auth/forced-password-setup-reconciliation";
 import { normalizePersonnelEmail } from "@/lib/personnel";
+import { getRequestReturnPath, passwordSetupReturnPath } from "@/lib/auth/request-return-path";
 import { getSupabaseEnv } from "@/lib/supabase/env";
 
 const PASSWORD_SETUP_PATH = "/settings/password";
@@ -32,8 +33,11 @@ async function resolveMustChangePassword(
 
 function redirectToPasswordSetup(request: NextRequest): NextResponse {
   const redirectUrl = request.nextUrl.clone();
-  redirectUrl.pathname = PASSWORD_SETUP_PATH;
-  redirectUrl.searchParams.set("required", "1");
+  const next = getRequestReturnPath(request.nextUrl.pathname)
+    ?? getRequestReturnPath(request.nextUrl.searchParams.get("next"));
+  const destination = new URL(passwordSetupReturnPath(next), request.url);
+  redirectUrl.pathname = destination.pathname;
+  redirectUrl.search = destination.search;
   return NextResponse.redirect(redirectUrl);
 }
 
@@ -93,7 +97,10 @@ export async function updateSession(request: NextRequest) {
   if (isProtectedRoute && !user) {
     const redirectUrl = request.nextUrl.clone();
     redirectUrl.pathname = "/";
+    redirectUrl.search = "";
     redirectUrl.searchParams.set("reason", "sign-in-required");
+    const next = getRequestReturnPath(pathname);
+    if (next) redirectUrl.searchParams.set("next", next);
     return NextResponse.redirect(redirectUrl);
   }
 
@@ -112,7 +119,7 @@ export async function updateSession(request: NextRequest) {
     }
 
     const redirectUrl = request.nextUrl.clone();
-    redirectUrl.pathname = "/dashboard";
+    redirectUrl.pathname = getRequestReturnPath(request.nextUrl.searchParams.get("next")) ?? "/dashboard";
     redirectUrl.search = "";
     return NextResponse.redirect(redirectUrl);
   }

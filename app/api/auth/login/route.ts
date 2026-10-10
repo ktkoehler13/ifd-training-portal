@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { getRequestReturnPath, passwordSetupReturnPath } from "@/lib/auth/request-return-path";
 import { INVALID_CREDENTIALS_MESSAGE } from "@/lib/auth/password";
 import {
   isLoginRateLimited,
@@ -19,12 +20,13 @@ function getClientIpAddress(request: NextRequest): string {
 }
 
 export async function POST(request: NextRequest) {
-  let body: { badgeNumber?: unknown; password?: unknown };
+  let body: { badgeNumber?: unknown; password?: unknown; next?: unknown };
 
   try {
     body = (await request.json()) as {
       badgeNumber?: unknown;
       password?: unknown;
+      next?: unknown;
     };
   } catch {
     return NextResponse.json(
@@ -70,7 +72,7 @@ export async function POST(request: NextRequest) {
   return NextResponse.json({
     ok: true,
     redirectTo: result.mustChangePassword
-      ? "/settings/password?required=1"
-      : "/dashboard",
+      ? passwordSetupReturnPath(body.next)
+      : getRequestReturnPath(body.next) ?? "/dashboard",
   });
 }

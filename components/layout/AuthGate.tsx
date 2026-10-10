@@ -3,6 +3,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
+import { passwordSetupReturnPath } from "@/lib/auth/request-return-path";
 import { AUTH_MESSAGES } from "@/lib/auth/messages";
 import { isAdministrativeRole } from "@/lib/auth/roles";
 import {
@@ -60,7 +61,7 @@ export function AuthGate({ children }: AuthGateProps) {
       personnel?.mustChangePassword &&
       !pathname.startsWith("/settings/password")
     ) {
-      router.replace("/settings/password?required=1");
+      router.replace(passwordSetupReturnPath(pathname));
     }
   }, [pathname, personnel, router, status]);
 

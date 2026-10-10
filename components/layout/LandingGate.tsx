@@ -78,6 +78,7 @@ export function LandingGate() {
         body: JSON.stringify({
           badgeNumber: trimmedBadge,
           password,
+          next: searchParams.get("next"),
         }),
       });
 

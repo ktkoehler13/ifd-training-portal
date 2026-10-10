@@ -54,6 +54,8 @@ export function formatNotificationStatus(
       return "Sent";
     case "failed":
       return "Failed";
+    case "skipped":
+      return "Skipped";
     default:
       return status;
   }
