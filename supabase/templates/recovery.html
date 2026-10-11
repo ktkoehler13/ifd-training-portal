@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Reset your IFD Training Portal password</title></head>
+<body style="font-family:Arial,sans-serif;color:#18181b;line-height:1.6;max-width:560px;margin:32px auto;padding:24px">
+  <h1 style="font-size:24px">IFD Training Portal</h1>
+  <h2 style="font-size:20px">Reset your password</h2>
+  <p>We received a request to set or reset your password. Follow the link below to choose a new password.</p>
+  {{ if eq .RedirectTo (printf "%s/reset-password" .SiteURL) }}
+  <p><a href="{{ .RedirectTo }}?token_hash={{ .TokenHash }}" style="display:inline-block;background:#b91c1c;color:white;padding:12px 20px;border-radius:8px;text-decoration:none">Reset password</a></p>
+  {{ else }}
+  <p><a href="{{ .ConfirmationURL }}" style="display:inline-block;background:#b91c1c;color:white;padding:12px 20px;border-radius:8px;text-decoration:none">Set password</a></p>
+  {{ end }}
+  <p>This link can be used once and expires. If you did not request a password reset, you can ignore this email. Your password will stay the same.</p>
+</body>
+</html>

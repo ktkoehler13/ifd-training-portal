@@ -25,6 +25,7 @@ import { normalizePersonnelEmail } from "@/lib/personnel";
 import { sendGoTruePasswordRecoveryEmail } from "@/lib/auth/gotrue-recover";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceRoleClient } from "@/lib/supabase/service";
+import { hasRecentRecoveryAuthentication } from "@/lib/auth/password-recovery-session";
 
 const PASSWORD_RECOVERY_COOKIE_NAME = "ifd_password_recovery";
 const PASSWORD_RECOVERY_COOKIE_MAX_AGE_SECONDS = 60 * 30;
@@ -158,7 +159,6 @@ export async function requestPasswordRecovery(input: {
   }
 
   const redirectTo = getPasswordRecoveryRedirectUrl(input.requestOrigin);
-  console.log("Password recovery redirect URL:", redirectTo);
   const emailResult = await sendGoTruePasswordRecoveryEmail({
     email: normalizePersonnelEmail(personnel.email),
     redirectTo,
@@ -192,10 +192,14 @@ async function verifyRecoverySession(): Promise<boolean> {
     return false;
   }
 
+  const { data: verified, error: claimsError } = await supabase.auth.getClaims();
+  if (claimsError || !hasRecentRecoveryAuthentication(verified?.claims, user.id)) {
+    return false;
+  }
+
   const personnel = await getAuthenticatedPersonnel();
 
   if (!personnel) {
-    await clearPasswordRecoverySession();
     return false;
   }
 
@@ -203,7 +207,6 @@ async function verifyRecoverySession(): Promise<boolean> {
     normalizePersonnelEmail(user.email) !==
     normalizePersonnelEmail(personnel.email)
   ) {
-    await clearPasswordRecoverySession();
     return false;
   }
 
@@ -253,7 +256,12 @@ export async function establishPasswordRecoverySessionFromAuthUser(): Promise<bo
     error,
   } = await supabase.auth.getUser();
 
-  if (error || !user?.email || !user.recovery_sent_at) {
+  if (error || !user?.email) {
+    return false;
+  }
+
+  const { data: verified, error: claimsError } = await supabase.auth.getClaims();
+  if (claimsError || !hasRecentRecoveryAuthentication(verified?.claims, user.id)) {
     return false;
   }
 
@@ -272,6 +280,14 @@ export async function establishPasswordRecoverySessionFromAuthUser(): Promise<bo
 
   await markPasswordRecoverySession();
   return true;
+}
+
+export async function verifyPasswordRecoveryToken(tokenHash: string): Promise<boolean> {
+  if (!/^[a-f0-9]{40,128}$/i.test(tokenHash)) return false;
+  const supabase = await createClient();
+  const { error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type: "recovery" });
+  if (error) return false;
+  return establishPasswordRecoverySessionFromAuthUser();
 }
 
 export async function completePasswordRecovery(input: {

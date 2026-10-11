@@ -1,5 +1,7 @@
 "use client";
 
+import { PortalHeading } from "@/components/layout/PortalBrand";
+
 import Link from "next/link";
 import { startTransition, useCallback, useEffect, useState } from "react";
 import { AdminGate } from "@/components/layout/AuthGate";
@@ -7,6 +9,7 @@ import { SignOutButton } from "@/components/auth/SignOutButton";
 import { Button } from "@/components/ui/Button";
 import { Field } from "@/components/ui/Field";
 import { Input } from "@/components/ui/Input";
+import { DeputyChiefApprovalSettings } from "@/components/admin/DeputyChiefApprovalSettings";
 import { formatMileageRate } from "@/lib/currency";
 import {
   formatGsaMileageRateSettingInput,
@@ -28,14 +31,14 @@ export function SystemSettingsView() {
         <div className="flex flex-1 flex-col bg-zinc-100">
           <header className="border-b border-zinc-200 bg-white">
             <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 px-4 py-5 sm:flex-row sm:items-start sm:justify-between sm:px-6">
-              <div>
+              <PortalHeading>
                 <h1 className="text-xl font-semibold tracking-tight text-zinc-900 sm:text-2xl">
                   System Settings
                 </h1>
                 <p className="mt-1 text-sm text-zinc-600">
                   Manage application-wide configuration for the Training Bureau.
                 </p>
-              </div>
+              </PortalHeading>
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                 <Link
                   href="/dashboard"
@@ -50,6 +53,7 @@ export function SystemSettingsView() {
 
           <div className="mx-auto w-full max-w-5xl flex-1 px-4 py-8 sm:px-6">
             <GsaMileageRateSettings personnelLabel={personnel.email} />
+            <DeputyChiefApprovalSettings />
           </div>
         </div>
       )}

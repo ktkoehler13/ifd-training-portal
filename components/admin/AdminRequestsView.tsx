@@ -1,5 +1,7 @@
 "use client";
 
+import { PortalHeading } from "@/components/layout/PortalBrand";
+
 import Link from "next/link";
 import { startTransition, useCallback, useEffect, useState } from "react";
 import { AdminGate } from "@/components/layout/AuthGate";
@@ -48,7 +50,7 @@ function AdminRequestsContent() {
     <div className="flex flex-1 flex-col bg-zinc-100">
       <header className="border-b border-zinc-200 bg-white">
         <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 px-4 py-5 sm:flex-row sm:items-start sm:justify-between sm:px-6">
-          <div>
+          <PortalHeading>
             <h1 className="text-xl font-semibold tracking-tight text-zinc-900 sm:text-2xl">
               Administrative Request View
             </h1>
@@ -56,7 +58,7 @@ function AdminRequestsContent() {
               View all training requests across the department. Signing actions
               remain limited to MTO and Deputy Chief workflow roles.
             </p>
-          </div>
+          </PortalHeading>
           <Link
             href="/dashboard"
             className="inline-flex h-11 items-center justify-center rounded-xl border border-zinc-200 bg-white px-5 text-sm font-semibold text-zinc-800 shadow-sm transition-colors hover:bg-zinc-50"

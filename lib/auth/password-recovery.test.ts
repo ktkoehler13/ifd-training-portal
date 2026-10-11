@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { hasRecentRecoveryAuthentication, RECOVERY_SESSION_SECONDS } from "./password-recovery-session";
 import {
   PASSWORD_MISMATCH_MESSAGE,
   validatePermanentPassword,
@@ -107,7 +108,7 @@ describe("password recovery reset page", () => {
       path.join(process.cwd(), "app/reset-password/page.tsx"),
       "utf8",
     );
-    assert.match(resetPageSource, /invalid-link/);
+    assert.doesNotMatch(resetPageSource, /exchangePasswordRecoveryCode/);
   });
 
   it("does not require current password during recovery", () => {
@@ -125,6 +126,37 @@ describe("password recovery reset page", () => {
     );
     assert.match(landingGateSource, /password-reset/);
     assert.match(recoveryServerSource, /clearPasswordRecoverySession/);
+  });
+});
+
+describe("verified recovery authentication", () => {
+  const now = 1_800_000_000;
+  const claims = { sub: "user", amr: [{ method: "recovery", timestamp: now - 60 }] };
+  it("accepts only a recent verified recovery event for the authenticated user", () => {
+    assert.equal(hasRecentRecoveryAuthentication(claims, "user", now), true);
+    assert.equal(hasRecentRecoveryAuthentication(claims, "other-user", now), false);
+    for (const method of ["password", "magiclink", "otp"]) {
+      assert.equal(hasRecentRecoveryAuthentication({ ...claims, amr: [{ method, timestamp: now }] }, "user", now), false);
+    }
+  });
+  it("rejects missing, expired, future and malformed recovery proof", () => {
+    for (const amr of [null, {}, [], [{ method: "recovery", timestamp: "1800000000" }],
+      [{ method: "recovery", timestamp: now + 1 }], [{ method: "recovery", timestamp: now - RECOVERY_SESSION_SECONDS }]]) {
+      assert.equal(hasRecentRecoveryAuthentication({ sub: "user", amr }, "user", now), false);
+    }
+    assert.equal(hasRecentRecoveryAuthentication(null, "user", now), false);
+  });
+  it("verifies token hashes only on user-initiated POSTs and checks claims on the server", () => {
+    assert.match(recoverySessionRouteSource, /export async function POST/);
+    assert.match(recoverySessionRouteSource, /verifyPasswordRecoveryToken/);
+    assert.match(recoveryServerSource, /auth\.verifyOtp\(\{ token_hash: tokenHash, type: "recovery" \}\)/);
+    assert.match(recoveryServerSource, /auth\.getClaims/);
+    assert.doesNotMatch(recoveryServerSource, /user\.recovery_sent_at/);
+    assert.match(recoveryResetViewSource, /Continue to reset password/);
+    const template = readFileSync("supabase/templates/recovery.html", "utf8");
+    assert.match(template, /\{\{ \.RedirectTo \}\}\?token_hash=\{\{ \.TokenHash \}\}/);
+    assert.match(template, /if eq \.RedirectTo \(printf "%s\/reset-password" \.SiteURL\)/);
+    assert.match(template, /\.ConfirmationURL/); // Keep legacy password-setup callbacks working.
   });
 });
 

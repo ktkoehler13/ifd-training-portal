@@ -795,3 +795,21 @@ npm run test
 
 - [Next.js Documentation](https://nextjs.org/docs)
 - [Supabase Documentation](https://supabase.com/docs)
+
+### Password recovery email delivery and link confirmation
+
+Account emails use Supabase Auth's SMTP configuration, separately from the request-notification Edge Function. Configure Resend SMTP with a sending-only key restricted to `ifdtraining.org`, host `smtp.resend.com`, port `465`, username `resend`, sender `notifications@ifdtraining.org`, and sender name `IFD Training Portal`. Store the key only in Supabase's encrypted SMTP settings, never in this repository or public environment variables.
+
+After deploying the updated website, set the Supabase **Reset password** email template to `supabase/templates/recovery.html` (subject: `Reset your IFD Training Portal password`). The template uses the token-hash confirmation flow when the destination is `<Site URL>/reset-password`, and preserves the existing confirmation link for the separate legacy password-setup flow. The Site URL must be `https://ifdtraining.org` without a trailing slash, and `APP_BASE_URL` and allowed recovery redirects must agree with it.
+
+Opening the new email link shows a confirmation screen. Only pressing **Continue to reset password** consumes the one-time token via a POST, so a simple email-scanner GET does not consume it. The server verifies a recent Supabase `recovery` authentication event for the current user before accepting a password change; an old `recovery_sent_at` timestamp is not sufficient. Password validation, active-personnel checks, generic badge responses, and sign-out after successful reset remain in place. Old incompatible reset emails should be replaced by requesting a new email after rollout.
+
+Production acceptance still requires an authorized tester to request a reset, receive the email, choose their own new password, sign in with it, and check that reuse of the link fails. Do not log or include real reset tokens in screenshots or reports.
+
+### Primary Deputy Chief for approval email alerts
+
+Apply `20261011120000_primary_deputy_chief_notifications.sql`, deploy the updated `send-training-request-notifications` Edge Function, and deploy the website. In **System Settings → Deputy Chief approval alerts**, select the active DC responsible for routine reviews. Only that DC receives new Deputy Chief review emails; other active DCs retain their review queues and signed approve/return/deny permissions as backups. Notifications about a DC's own request still follow the normal requester rules.
+
+The migration preserves the existing all-active-DC routing until an administrator explicitly selects someone; it never guesses who should be primary. The selection is saved transactionally with an audit entry. Outstanding unsent current alerts are transferred without changing their age; historical skipped alerts and previously sent emails are not replayed. The dispatcher rechecks the selection before sending. An email already handed to the provider cannot be recalled. Select a replacement before deactivating, deleting, or changing the role of the current primary DC.
+
+No training-request content, existing approval/signature snapshots, PDF layout, or TAL layout is changed by this setting.

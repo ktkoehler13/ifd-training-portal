@@ -1,5 +1,7 @@
 "use client";
 
+import { PortalHeading } from "@/components/layout/PortalBrand";
+
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { TrainingRequestWizard } from "@/components/requests/TrainingRequestWizard";
@@ -20,14 +22,14 @@ export function NewRequestView({ currentGsaMileageRate }: NewRequestViewProps) {
         <div className="flex flex-1 flex-col bg-zinc-100">
           <header className="border-b border-zinc-200 bg-white">
             <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 px-4 py-5 sm:flex-row sm:items-start sm:justify-between sm:px-6">
-              <div>
+              <PortalHeading>
                 <h1 className="text-xl font-semibold tracking-tight text-zinc-900 sm:text-2xl">
                   New Training Request
                 </h1>
                 <p className="mt-1 text-sm text-zinc-600">
                   Complete each step to submit a request to the Training Bureau.
                 </p>
-              </div>
+              </PortalHeading>
               <Link
                 href="/dashboard"
                 className="inline-flex h-11 w-full shrink-0 items-center justify-center rounded-xl border border-zinc-200 bg-white px-5 text-sm font-semibold text-zinc-800 shadow-sm transition-colors hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 focus-visible:ring-offset-2 sm:w-auto"

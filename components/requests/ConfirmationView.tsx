@@ -1,5 +1,7 @@
 "use client";
 
+import { PortalHeading } from "@/components/layout/PortalBrand";
+
 import { startTransition, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { RequestActionTimeline } from "@/components/requests/RequestActionTimeline";
@@ -155,7 +157,7 @@ function ConfirmationContent({
             </>
           ) : request ? (
             <>
-              <div className="mb-6">
+              <PortalHeading className="mb-6">
                 <h1 className="text-2xl font-semibold tracking-tight text-zinc-900">
                   {getPageHeading(request)}
                 </h1>
@@ -166,7 +168,7 @@ function ConfirmationContent({
                     ? ` · Next action: ${formatCurrentActionRole(request.currentActionRole)}`
                     : null}
                 </p>
-              </div>
+              </PortalHeading>
 
               {showCorrectionAlert ? (
                 <div className="mb-6 space-y-4">

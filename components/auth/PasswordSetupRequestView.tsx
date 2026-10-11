@@ -1,5 +1,7 @@
 "use client";
 
+import { PortalLogo } from "@/components/layout/PortalBrand";
+
 import Link from "next/link";
 import { FormEvent, useState } from "react";
 import { useSearchParams } from "next/navigation";
@@ -84,9 +86,7 @@ export function PasswordSetupRequestView() {
     <div className="flex flex-1 items-center justify-center bg-zinc-100 px-4 py-12">
       <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-lg shadow-zinc-200/60 sm:p-10">
         <div className="mb-8 text-center">
-          <div className="mb-4 text-5xl" aria-hidden="true">
-            🚒
-          </div>
+          <PortalLogo large />
           <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 sm:text-3xl">
             Create password access
           </h1>

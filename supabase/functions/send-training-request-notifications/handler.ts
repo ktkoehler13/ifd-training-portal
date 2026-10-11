@@ -84,6 +84,13 @@ export function createNotificationHandler(config: DeliveryConfig, fetcher: Fetch
             || (role ? recipient.role !== role || training.current_action_role !== role : recipient.id !== training.requester_personnel_id)) {
             skipReason = "Recipient is no longer eligible for this alert";
           }
+          if (!skipReason && role === "deputy_chief") {
+            const settings = await database<{ value: string }[]>("system_settings?key=eq.primary_approval_deputy_chief&select=value");
+            if (settings.length !== 1) throw new Error("Deputy Chief approval setting is missing");
+            if (settings[0].value && settings[0].value !== recipient?.id) {
+              skipReason = "Deputy Chief approval recipient changed";
+            }
+          }
         }
         if (skipReason) {
           await update(notification, { status: "skipped", last_error: skipReason, processing_started_at: null });

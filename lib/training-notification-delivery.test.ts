@@ -9,7 +9,7 @@ const request: EmailRequest = { id, request_number: "Owner, R, Training, 2026.1"
 const notification: EmailNotification = { id: "alert", training_request_id: id, source_action_id: "action", recipient_personnel_id: "mto", recipient_email: "mto@example.test", event_type: "pending_mto", attempts: 1, created_at: "2026-10-08T15:00:00Z" };
 const config: DeliveryConfig = { supabaseUrl: "https://database.test", serviceRoleKey: "test-service-key", resendApiKey: "test-email-key", fromEmail: "Training <notifications@example.test>", appBaseUrl: "https://portal.test", enabled: "true", startAt: "2026-10-08T14:00:00Z" };
 const now = Date.parse("2026-10-08T15:00:00Z");
-function harness(options: { config?: Partial<DeliveryConfig>; notification?: Partial<EmailNotification>; request?: Partial<EmailRequest>; recipient?: object; action?: object; providerStatus?: number; patchFailure?: boolean; claimFailure?: boolean } = {}) {
+function harness(options: { config?: Partial<DeliveryConfig>; notification?: Partial<EmailNotification>; request?: Partial<EmailRequest>; recipient?: object; action?: object; providerStatus?: number; patchFailure?: boolean; claimFailure?: boolean; primaryDeputy?: string; missingDeputySetting?: boolean } = {}) {
   const calls: { url: string; init?: RequestInit }[] = [];
   const patches: Record<string, unknown>[] = [];
   const sent: Record<string, unknown>[] = [];
@@ -23,6 +23,7 @@ function harness(options: { config?: Partial<DeliveryConfig>; notification?: Par
     if (init?.method === "PATCH") { patches.push(JSON.parse(String(init.body))); return new Response(null, { status: options.patchFailure ? 500 : 204 }); }
     if (url.startsWith("https://api.resend.com/")) { sent.push(JSON.parse(String(init?.body))); return Response.json({ id: "email" }, { status: options.providerStatus ?? 200 }); }
     if (url.includes("/training_requests?")) return Response.json([{ ...request, ...options.request }]);
+    if (url.includes("/system_settings?")) return Response.json(options.missingDeputySetting ? [] : [{ value: options.primaryDeputy ?? "" }]);
     if (url.includes("/training_request_actions?")) return Response.json([{ id: "action", comments: "Correct the course dates", ...options.action }]);
     if (url.includes("/personnel?")) return Response.json([{ id: "mto", email: "mto@example.test", role: "mto", active: true, ...options.recipient }]);
     throw new Error(`Unexpected request: ${url}`);
@@ -88,6 +89,19 @@ describe("notification dispatcher", () => {
     const options={notification:{event_type:"approved",recipient_personnel_id:"owner",recipient_email:"owner@example.test"},request:{status:"approved",current_action_role:null},recipient:{id:"owner",email:"owner@example.test",role:"firefighter"}};
     const h=harness(options); await h.run(); assert.equal(h.sent.length,1);
     const wrong=harness({...options,recipient:{...options.recipient,id:"other"}}); await wrong.run(); assert.equal(wrong.sent.length,0);
+  });
+  it("rechecks the selected Deputy Chief immediately before sending queued mail", async () => {
+    const options = { notification: { event_type: "pending_deputy_chief" },
+      request: { status: "pending_deputy_chief", current_action_role: "deputy_chief" },
+      recipient: { role: "deputy_chief" } };
+    const selected = harness({ ...options, primaryDeputy: "mto" });
+    await selected.run(); assert.equal(selected.sent.length, 1);
+    const backup = harness({ ...options, primaryDeputy: "other-dc" });
+    await backup.run(); assert.equal(backup.sent.length, 0);
+    assert.equal(backup.patches[0].status, "skipped");
+    const unavailable = harness({ ...options, missingDeputySetting: true });
+    await unavailable.run(); assert.equal(unavailable.sent.length, 0);
+    assert.equal(unavailable.patches[0].status, "failed");
   });
   it("retries a temporary provider failure without marking sent", async () => {
     const h=harness({providerStatus:429}); await h.run(); assert.equal(h.patches[0].status,"failed"); assert.equal(h.patches[0].next_attempt_at,"2026-10-08T15:05:00.000Z");

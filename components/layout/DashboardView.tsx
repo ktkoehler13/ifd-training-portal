@@ -1,5 +1,7 @@
 "use client";
 
+import { PortalHeading } from "@/components/layout/PortalBrand";
+
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { AuthGate } from "@/components/layout/AuthGate";
@@ -173,14 +175,14 @@ function DashboardContent({ personnel }: { personnel: AuthenticatedPersonnel }) 
     <div className="flex flex-1 flex-col bg-zinc-100">
       <header className="border-b border-zinc-200 bg-white">
         <div className="mx-auto flex w-full max-w-5xl items-start justify-between gap-4 px-4 py-5 sm:px-6">
-          <div>
+          <PortalHeading>
             <h1 className="text-xl font-semibold tracking-tight text-zinc-900 sm:text-2xl">
               IFD Training Portal
             </h1>
             <p className="mt-1 text-sm text-zinc-600">
               Training Bureau Dashboard
             </p>
-          </div>
+          </PortalHeading>
           <SignOutButton className="shrink-0 px-5" />
         </div>
       </header>
@@ -196,8 +198,8 @@ function DashboardContent({ personnel }: { personnel: AuthenticatedPersonnel }) 
         <section className="rounded-2xl bg-white p-6 shadow-sm shadow-zinc-200/60 sm:p-8">
           <h2 className="text-lg font-semibold text-zinc-900">Welcome</h2>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-600">
-            You are signed in with secure email authentication. Use the actions
-            below to manage training requests and approvals.
+            Use the actions below to submit training requests, check their status,
+            and complete reviews.
           </p>
         </section>
 

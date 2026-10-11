@@ -1,5 +1,7 @@
 "use client";
 
+import { PortalLogo } from "@/components/layout/PortalBrand";
+
 import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
@@ -19,11 +21,15 @@ export function PasswordRecoveryResetView({
   initialHasRecoverySession,
 }: PasswordRecoveryResetViewProps) {
   const searchParams = useSearchParams();
+  const tokenHash = searchParams.get("token_hash");
+  const code = searchParams.get("code");
+  const [linkVerified, setLinkVerified] = useState(false);
+  const pendingLink = Boolean(tokenHash || code) && !linkVerified;
   const [hasRecoverySession, setHasRecoverySession] = useState(
     initialHasRecoverySession,
   );
   const [isCheckingSession, setIsCheckingSession] = useState(
-    !initialHasRecoverySession,
+    !initialHasRecoverySession && !pendingLink,
   );
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -35,80 +41,58 @@ export function PasswordRecoveryResetView({
   const reason = searchParams.get("reason");
   const linkInvalid =
     reason === "invalid-link" ||
-    (!isCheckingSession && !hasRecoverySession);
+    (!pendingLink && !isCheckingSession && !hasRecoverySession);
 
   useEffect(() => {
+    if (pendingLink || initialHasRecoverySession) return;
     let cancelled = false;
     const supabase = createClient();
 
-    async function syncRecoverySession() {
-      const {
-        data: { subscription },
-      } = supabase.auth.onAuthStateChange(async (event) => {
-        if (event === "PASSWORD_RECOVERY") {
-          const response = await fetch("/api/auth/reset-password/session", {
-            method: "POST",
-          });
-          if (!cancelled && response.ok) {
-            setHasRecoverySession(true);
-            setIsCheckingSession(false);
-          }
-        }
-      });
-
-      if (initialHasRecoverySession) {
-        setIsCheckingSession(false);
-        return () => {
-          cancelled = true;
-          subscription.unsubscribe();
-        };
-      }
-
+    async function establishSession() {
       try {
-        const sessionResponse = await fetch("/api/auth/reset-password/session");
-        const sessionPayload = (await sessionResponse.json()) as {
-          hasRecoverySession?: boolean;
-        };
-
-        if (!cancelled && sessionPayload.hasRecoverySession) {
-          setHasRecoverySession(true);
-          setIsCheckingSession(false);
-          return;
-        }
-
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
-
-        if (session?.user.recovery_sent_at) {
-          const establishResponse = await fetch(
-            "/api/auth/reset-password/session",
-            { method: "POST" },
-          );
-
-          if (!cancelled && establishResponse.ok) {
-            setHasRecoverySession(true);
-          }
-        }
+        // The server verifies this session used a recent recovery link.
+        const response = await fetch("/api/auth/reset-password/session", { method: "POST" });
+        if (!cancelled) setHasRecoverySession(response.ok);
+      } catch {
+        if (!cancelled) setError(PASSWORD_RECOVERY_FAILED_MESSAGE);
       } finally {
-        if (!cancelled) {
-          setIsCheckingSession(false);
-        }
+        if (!cancelled) setIsCheckingSession(false);
       }
-
-      return () => {
-        cancelled = true;
-        subscription.unsubscribe();
-      };
     }
 
-    const cleanupPromise = syncRecoverySession();
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "PASSWORD_RECOVERY") void establishSession();
+    });
+    void supabase.auth.getSession().then(establishSession).catch(() => {
+      if (!cancelled) setIsCheckingSession(false);
+    });
+    return () => { cancelled = true; subscription.unsubscribe(); };
+  }, [initialHasRecoverySession, pendingLink]);
 
-    return () => {
-      cancelled = true;
-      void cleanupPromise.then((cleanup) => cleanup?.());
-    };
-  }, [initialHasRecoverySession]);
+  async function verifyLink() {
+    if (isSubmitting) return;
+    setIsSubmitting(true);
+    setError(null);
+    try {
+      const response = await fetch("/api/auth/reset-password/session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(tokenHash ? { tokenHash } : { code }),
+      });
+      if (!response.ok) {
+        setError(PASSWORD_RECOVERY_LINK_INVALID_MESSAGE);
+        return;
+      }
+      window.history.replaceState(null, "", "/reset-password");
+      setHasRecoverySession(true);
+      setLinkVerified(true);
+      setIsCheckingSession(false);
+    } catch {
+      setError(PASSWORD_RECOVERY_FAILED_MESSAGE);
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -148,6 +132,27 @@ export function PasswordRecoveryResetView({
     } finally {
       setIsSubmitting(false);
     }
+  }
+
+  if (pendingLink) {
+    return (
+      <div className="flex flex-1 items-center justify-center bg-zinc-100 px-4 py-12">
+        <div className="w-full max-w-md rounded-2xl bg-white p-8 text-center shadow-lg sm:p-10">
+          <PortalLogo large />
+          <h1 className="text-2xl font-semibold text-zinc-900">Reset your password</h1>
+          <p className="mt-3 text-sm leading-6 text-zinc-600">
+            Continue to verify your email link and choose a new password.
+          </p>
+          {error ? <p className="mt-4 text-sm text-red-700" role="alert">{error}</p> : null}
+          <Button className="mt-6 w-full" onClick={verifyLink} disabled={isSubmitting}>
+            {isSubmitting ? "Verifying…" : "Continue to reset password"}
+          </Button>
+          <Link href="/forgot-password" className="mt-4 block text-sm font-semibold text-red-700">
+            Request a new reset email
+          </Link>
+        </div>
+      </div>
+    );
   }
 
   if (isCheckingSession) {
@@ -193,9 +198,7 @@ export function PasswordRecoveryResetView({
     <div className="flex flex-1 items-center justify-center bg-zinc-100 px-4 py-12">
       <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-lg shadow-zinc-200/60 sm:p-10">
         <div className="mb-8 text-center">
-          <div className="mb-4 text-5xl" aria-hidden="true">
-            🚒
-          </div>
+          <PortalLogo large />
           <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 sm:text-3xl">
             Choose a new password
           </h1>

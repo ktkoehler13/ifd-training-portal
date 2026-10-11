@@ -1,5 +1,7 @@
 "use client";
 
+import { PortalHeading } from "@/components/layout/PortalBrand";
+
 import Link from "next/link";
 import { startTransition, useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -123,14 +125,14 @@ function MyRequestsContent({ personnel }: { personnel: AuthenticatedPersonnel })
     <div className="flex flex-1 flex-col bg-zinc-100">
       <header className="border-b border-zinc-200 bg-white">
         <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 px-4 py-5 sm:flex-row sm:items-start sm:justify-between sm:px-6">
-          <div>
+          <PortalHeading>
             <h1 className="text-xl font-semibold tracking-tight text-zinc-900 sm:text-2xl">
               My Requests
             </h1>
             <p className="mt-1 text-sm text-zinc-600">
               Review your saved drafts and submitted training requests.
             </p>
-          </div>
+          </PortalHeading>
           <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
             <Link
               href="/dashboard"

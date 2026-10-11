@@ -1,30 +1,10 @@
 import { Suspense } from "react";
-import { redirect } from "next/navigation";
 import { PasswordRecoveryResetView } from "@/components/auth/PasswordRecoveryResetView";
 import {
-  exchangePasswordRecoveryCode,
   hasPasswordRecoverySession,
 } from "@/lib/auth/password-recovery-server";
 
-interface ResetPasswordPageProps {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-}
-
-async function ResetPasswordPageContent({
-  searchParams,
-}: ResetPasswordPageProps) {
-  const params = await searchParams;
-  const code = typeof params.code === "string" ? params.code : null;
-
-  if (code) {
-    const exchanged = await exchangePasswordRecoveryCode(code);
-    if (exchanged.ok) {
-      redirect("/reset-password");
-    }
-
-    redirect("/reset-password?reason=invalid-link");
-  }
-
+async function ResetPasswordPageContent() {
   const initialHasRecoverySession = await hasPasswordRecoverySession();
 
   return (
@@ -44,7 +24,7 @@ async function ResetPasswordPageContent({
   );
 }
 
-export default function ResetPasswordPage(props: ResetPasswordPageProps) {
+export default function ResetPasswordPage() {
   return (
     <Suspense
       fallback={
@@ -55,7 +35,7 @@ export default function ResetPasswordPage(props: ResetPasswordPageProps) {
         </div>
       }
     >
-      <ResetPasswordPageContent searchParams={props.searchParams} />
+      <ResetPasswordPageContent />
     </Suspense>
   );
 }

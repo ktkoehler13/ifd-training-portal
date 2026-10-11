@@ -1,5 +1,7 @@
 "use client";
 
+import { PortalHeading } from "@/components/layout/PortalBrand";
+
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { startTransition, useCallback, useEffect, useMemo, useState } from "react";
@@ -300,7 +302,7 @@ function UserManagementContent({ currentPersonnel }: UserManagementContentProps)
       <div className="flex flex-1 flex-col bg-zinc-100">
         <header className="border-b border-zinc-200 bg-white">
           <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 px-4 py-5 sm:flex-row sm:items-start sm:justify-between sm:px-6">
-            <div>
+            <PortalHeading>
               <h1 className="text-xl font-semibold tracking-tight text-zinc-900 sm:text-2xl">
                 User Management
               </h1>
@@ -308,7 +310,7 @@ function UserManagementContent({ currentPersonnel }: UserManagementContentProps)
                 Manage personnel records and password-based Supabase Auth
                 accounts keyed by badge number and department email.
               </p>
-            </div>
+            </PortalHeading>
             <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
               <Link
                 href="/dashboard"
