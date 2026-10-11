@@ -63,6 +63,7 @@ function getQuickActionCards(
     title: string;
     description: string;
     href: string | null;
+    hasPendingAction?: boolean;
   }> = [baseActionCards[0], baseActionCards[1]];
 
   if (personnel.role === "mto" || personnel.role === "deputy_chief") {
@@ -75,10 +76,13 @@ function getQuickActionCards(
     cards.push({
       title: "Requests Requiring My Action",
       description:
-        pendingApprovalCount && pendingApprovalCount > 0
-          ? `${pendingApprovalCount} request${pendingApprovalCount === 1 ? "" : "s"} awaiting your review.`
+        pendingApprovalCount !== null
+          ? pendingApprovalCount > 0
+            ? `${pendingApprovalCount} request${pendingApprovalCount === 1 ? "" : "s"} awaiting your review.`
+            : "No requests currently require your review."
           : "Review training requests currently assigned to your workflow role.",
       href: "/approvals",
+      hasPendingAction: pendingApprovalCount !== null && pendingApprovalCount > 0,
     });
   }
 
@@ -119,8 +123,14 @@ function DashboardContent({ personnel }: { personnel: AuthenticatedPersonnel }) 
     }
 
     let cancelled = false;
+    let loading = false;
 
     async function loadCount() {
+      if (cancelled || loading) {
+        return;
+      }
+
+      loading = true;
       try {
         const count =
           personnel.role === "mto"
@@ -135,13 +145,27 @@ function DashboardContent({ personnel }: { personnel: AuthenticatedPersonnel }) 
         if (!cancelled) {
           setPendingApprovalCount(null);
         }
+      } finally {
+        loading = false;
+      }
+    }
+
+    function refreshVisibleCount() {
+      if (document.visibilityState === "visible") {
+        void loadCount();
       }
     }
 
     void loadCount();
+    const refreshInterval = window.setInterval(refreshVisibleCount, 60_000);
+    window.addEventListener("focus", refreshVisibleCount);
+    document.addEventListener("visibilitychange", refreshVisibleCount);
 
     return () => {
       cancelled = true;
+      window.clearInterval(refreshInterval);
+      window.removeEventListener("focus", refreshVisibleCount);
+      document.removeEventListener("visibilitychange", refreshVisibleCount);
     };
   }, [personnel.role]);
 
@@ -197,10 +221,20 @@ function DashboardContent({ personnel }: { personnel: AuthenticatedPersonnel }) 
               if (card.href) {
                 return (
                   <Link key={card.title} href={card.href} className={className}>
-                    <h3 className="text-base font-semibold text-zinc-900">
-                      {card.title}
+                    <h3 className="flex items-start gap-3 text-base font-semibold text-zinc-900">
+                      <span className="flex-1">{card.title}</span>
+                      {card.hasPendingAction ? (
+                        <span
+                          aria-hidden="true"
+                          className="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full bg-red-600 ring-2 ring-red-100"
+                        />
+                      ) : null}
                     </h3>
-                    <p className="mt-2 text-sm leading-6 text-zinc-600">
+                    <p
+                      className="mt-2 text-sm leading-6 text-zinc-600"
+                      aria-live={card.href === "/approvals" ? "polite" : undefined}
+                      aria-atomic={card.href === "/approvals" ? true : undefined}
+                    >
                       {card.description}
                     </p>
                   </Link>

@@ -9,6 +9,7 @@ import {
   formatTrainingRequestStatus,
 } from "@/lib/training-requests";
 import { listAllTrainingRequestsForAdmin } from "@/lib/training-request-workflow";
+import { cn } from "@/lib/utils";
 import type { TrainingRequestRecord } from "@/types/training-request";
 
 function AdminRequestsContent() {
@@ -97,9 +98,15 @@ function AdminRequestsContent() {
                   {requests.map((request) => (
                     <tr
                       key={request.id}
-                      className="border-b border-zinc-100 last:border-b-0"
+                      className={cn(
+                        "border-b border-zinc-100 last:border-b-0",
+                        (request.status === "pending_mto" ||
+                          request.status === "pending_deputy_chief" ||
+                          request.status === "returned_for_correction") &&
+                          "font-bold",
+                      )}
                     >
-                      <td className="px-4 py-4 align-top font-medium text-zinc-900">
+                      <td className="px-4 py-4 align-top text-zinc-900">
                         {formatTrainingRequestIdentifier(request)}
                       </td>
                       <td className="px-4 py-4 align-top text-zinc-700">
