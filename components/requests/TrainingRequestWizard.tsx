@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useState, type ReactNode } from "react";
+import { FormEvent, useEffect, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { otherExpenseLabel, validateOtherExpenseDescription } from "@/lib/other-expense-description";
 import { ExpenseSummary } from "@/components/requests/ExpenseSummary";
@@ -132,6 +132,7 @@ export function TrainingRequestWizard({
 }: TrainingRequestWizardProps) {
   const router = useRouter();
   const [step, setStep] = useState(1);
+  const formRef = useRef<HTMLFormElement>(null);
   const [draft, setDraft] = useState<TrainingRequestDraft>(() =>
     createInitialDraft(personnel),
   );
@@ -259,6 +260,14 @@ export function TrainingRequestWizard({
       cancelled = true;
     };
   }, [draftId, personnel.id]);
+
+  useEffect(() => {
+    if (isLoadingDraft) return;
+    const heading = formRef.current?.querySelector<HTMLElement>(`#step-${step}-heading`);
+    if (!heading) return;
+    heading.focus({ preventScroll: true });
+    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+  }, [step, isLoadingDraft]);
 
   function updateField<K extends keyof TrainingRequestDraft>(
     key: K,
@@ -515,6 +524,7 @@ export function TrainingRequestWizard({
 
   function handleBack() {
     setErrors({});
+    if (step === TOTAL_STEPS) updateField("confirmedAccurate", false);
     setStep((current) => Math.max(current - 1, 1));
   }
 
@@ -532,6 +542,11 @@ export function TrainingRequestWizard({
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (isSubmitting || isSavingDraft) return;
+    if (step < TOTAL_STEPS) {
+      handleNext();
+      return;
+    }
 
     const nextErrors = {
       ...validateStep(2),
@@ -626,6 +641,7 @@ export function TrainingRequestWizard({
       <WizardProgress currentStep={step} />
 
       <form
+        ref={formRef}
         onSubmit={handleSubmit}
         className="rounded-2xl bg-white p-6 shadow-sm shadow-zinc-200/60 sm:p-8"
         noValidate
@@ -643,7 +659,8 @@ export function TrainingRequestWizard({
             <div>
               <h2
                 id="step-1-heading"
-                className="text-lg font-semibold text-zinc-900"
+                tabIndex={-1}
+                className="text-lg font-semibold text-zinc-900 focus:outline-none"
               >
                 Requester Information
               </h2>
@@ -724,7 +741,8 @@ export function TrainingRequestWizard({
             <div>
               <h2
                 id="step-2-heading"
-                className="text-lg font-semibold text-zinc-900"
+                tabIndex={-1}
+                className="text-lg font-semibold text-zinc-900 focus:outline-none"
               >
                 Course and Duty Information
               </h2>
@@ -919,7 +937,8 @@ export function TrainingRequestWizard({
             <div>
               <h2
                 id="step-3-heading"
-                className="text-lg font-semibold text-zinc-900"
+                tabIndex={-1}
+                className="text-lg font-semibold text-zinc-900 focus:outline-none"
               >
                 Expenses and Travel
               </h2>
@@ -1178,7 +1197,8 @@ export function TrainingRequestWizard({
             <div>
               <h2
                 id="step-4-heading"
-                className="text-lg font-semibold text-zinc-900"
+                tabIndex={-1}
+                className="text-lg font-semibold text-zinc-900 focus:outline-none"
               >
                 Review and Submit
               </h2>
@@ -1339,12 +1359,18 @@ export function TrainingRequestWizard({
               values={{ ...expenseSummary, otherExpenseDescription: draft.otherExpenseDescription }}
               rateAvailable={rateAvailable}
             />
+          </section>
+        ) : null}
 
-            <div className="space-y-2 rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-4">
+        <div className="mt-8 flex flex-col gap-3">
+          {step === TOTAL_STEPS ? (
+            <div className="space-y-3 rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-4">
+              <h3 className="text-sm font-semibold text-zinc-900">Confirm before submitting</h3>
               <label className="flex items-start gap-3 text-sm text-zinc-800">
                 <input
+                  id="confirmedAccurate"
                   type="checkbox"
-                  className="mt-1 h-4 w-4 rounded border-zinc-300 text-red-700 focus:ring-red-700"
+                  className="mt-0.5 h-5 w-5 shrink-0 rounded border-zinc-300 text-red-700 focus:ring-red-700"
                   checked={draft.confirmedAccurate}
                   onChange={(event) =>
                     updateField("confirmedAccurate", event.target.checked)
@@ -1371,10 +1397,7 @@ export function TrainingRequestWizard({
                 </p>
               ) : null}
             </div>
-          </section>
-        ) : null}
-
-        <div className="mt-8 flex flex-col gap-3">
+          ) : null}
           <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-between">
             <Button
               type="button"
@@ -1388,6 +1411,7 @@ export function TrainingRequestWizard({
 
             {step < TOTAL_STEPS ? (
               <Button
+                key="continue"
                 type="button"
                 onClick={handleNext}
                 disabled={isSubmitting || isSavingDraft}
@@ -1397,8 +1421,9 @@ export function TrainingRequestWizard({
               </Button>
             ) : (
               <Button
+                key="submit"
                 type="submit"
-                disabled={isSubmitting || isSavingDraft}
+                disabled={!draft.confirmedAccurate || isSubmitting || isSavingDraft}
                 className="w-full sm:w-auto sm:min-w-36"
               >
                 {isSubmitting
