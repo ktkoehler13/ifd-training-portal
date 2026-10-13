@@ -24,6 +24,7 @@ import {
   normalizePersonnelEmail,
   SELF_ACCOUNT_PROTECTION_MESSAGE,
 } from "@/lib/personnel";
+import { hasOtherPersonnelChanges, SEPARATE_EMAIL_CHANGE_MESSAGE } from "@/lib/auth/personnel-email-update";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import type {
@@ -204,27 +205,27 @@ function UserManagementContent({ currentPersonnel }: UserManagementContentProps)
       throw new Error(SELF_ACCOUNT_PROTECTION_MESSAGE);
     }
 
-    const supabase = createClient();
-    const { data, error } = await supabase
-      .from("personnel")
-      .update({
-        first_name: input.firstName,
-        last_name: input.lastName,
-        badge_number: input.badgeNumber,
-        email: input.email,
-        title: input.title,
-        role: input.role,
-        active: input.active,
-      })
-      .eq("id", userId)
-      .select("*")
-      .single();
-
-    if (error) {
-      throw new Error(getPersonnelErrorMessage(error));
+    if (!targetUser) throw new Error("Personnel record not found. Refresh and try again.");
+    const emailChanged = normalizePersonnelEmail(input.email) !== targetUser.email;
+    let updated: PersonnelRecord;
+    if (emailChanged) {
+      if (hasOtherPersonnelChanges(targetUser, input)) throw new Error(SEPARATE_EMAIL_CHANGE_MESSAGE);
+      const response = await fetch(`/api/admin/personnel/${encodeURIComponent(userId)}/email`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: input.email, expectedEmail: targetUser.email }),
+      });
+      const payload = await response.json() as { personnel?: PersonnelRecord; error?: string };
+      if (!response.ok || !payload.personnel) throw new Error(payload.error ?? "Unable to change the email.");
+      updated = payload.personnel;
+    } else {
+      const supabase = createClient();
+      const { data, error } = await supabase.from("personnel").update({
+        first_name: input.firstName, last_name: input.lastName,
+        badge_number: input.badgeNumber, title: input.title, role: input.role, active: input.active,
+      }).eq("id", userId).select("*").single();
+      if (error) throw new Error(getPersonnelErrorMessage(error));
+      updated = mapPersonnelRow(data as PersonnelRow);
     }
-
-    const updated = mapPersonnelRow(data as PersonnelRow);
     const emailChangedOnSelf =
       isSelfEdit &&
       normalizePersonnelEmail(input.email) !==

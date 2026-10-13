@@ -176,6 +176,7 @@ function EditUserModalContent({
           aria-labelledby="edit-user-title"
           className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-6 shadow-xl sm:p-8"
         >
+          <p className="mb-4 text-sm text-zinc-600">Save email changes separately from other profile changes. Changing an email keeps the existing password.</p>
           <div className="flex items-start justify-between gap-4">
             <div>
               <h2 id="edit-user-title" className="text-lg font-semibold text-zinc-900">

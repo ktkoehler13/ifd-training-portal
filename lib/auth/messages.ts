@@ -6,7 +6,7 @@ export const AUTH_MESSAGES = {
   configError:
     "Authentication is temporarily unavailable. Contact the Training Bureau.",
   emailUpdatedSignInRequired:
-    "Email updated. Sign in again using your badge number and password.",
+    "Email updated. Your password is unchanged. Sign in again using your badge number and existing password.",
   passwordUpdatedSignInRequired:
     "Password updated. Sign in again with your new password.",
 } as const;

@@ -813,3 +813,12 @@ Apply `20261011120000_primary_deputy_chief_notifications.sql`, deploy the update
 The migration preserves the existing all-active-DC routing until an administrator explicitly selects someone; it never guesses who should be primary. The selection is saved transactionally with an audit entry. Outstanding unsent current alerts are transferred without changing their age; historical skipped alerts and previously sent emails are not replayed. The dispatcher rechecks the selection before sending. An email already handed to the provider cannot be recalled. Select a replacement before deactivating, deleting, or changing the role of the current primary DC.
 
 No training-request content, existing approval/signature snapshots, PDF layout, or TAL layout is changed by this setting.
+
+
+### Personnel email changes
+
+Apply `supabase/migrations/20261013160000_personnel_auth_email_sync.sql` before deploying the email-edit route. It links existing personnel to their current Auth user ID, synchronizes confirmed Auth email changes into personnel within the same database transaction, and rejects direct profile-only email changes (including from older browser tabs). Existing passwords and historical request/approval snapshots stay unchanged. Auth account deletion clears the link without deleting personnel history.
+
+In User Management, save an email change separately from name, badge, rank, role, or status changes. The server updates the existing Auth account through the admin API and verifies both records agree before reporting success. Editing your own email signs you out; sign back in with the same badge and password. Password reset then targets the updated address.
+
+If a historical profile is already out of sync, reconcile it with the correct original Auth account before applying this migration. Never infer an account link from a matching name, create a replacement Auth account, or reset a password just to repair an email mismatch. Unmatched profiles remain unlinked and email edits fail safely until repaired. Backfill only an unambiguous confirmed account association.

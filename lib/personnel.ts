@@ -110,7 +110,7 @@ export const SELF_EDIT_NOTICE =
   "You cannot deactivate or delete your own signed-in account. Changing your email will sign you out.";
 
 export const SELF_EDIT_EMAIL_CONFIRM_MESSAGE =
-  "Changing your email will sign you out. Sign in again with your badge number and the password for the updated account.";
+  "Changing your email will sign you out. Your password stays the same. Sign in again with your badge number and existing password.";
 
 export const SELF_EDIT_IDENTITY_CONFIRM_MESSAGE =
   "Changing your own badge number or role can affect how your account is identified and authorized. Continue only if you intend to make this change.";
@@ -139,7 +139,8 @@ export function getSelfEditChanges(
   const roleChanged = values.role !== user.role;
   const activeChanged = values.active !== user.active;
   const hasChanges =
-    emailChanged || badgeChanged || titleChanged || roleChanged || activeChanged;
+    emailChanged || badgeChanged || titleChanged || roleChanged || activeChanged ||
+    values.firstName.trim() !== (user.firstName ?? "") || values.lastName.trim() !== (user.lastName ?? "");
 
   return {
     emailChanged,
