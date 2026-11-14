@@ -1,4 +1,6 @@
 import "server-only";
+import { loadRequesterSubmissionSignature, submitWithRequesterSignature } from "@/lib/requester-submission-signature-server";
+import { validateStateCourseDetails } from "@/lib/state-course-details";
 
 import { validateOtherExpenseDescription } from "@/lib/other-expense-description";
 
@@ -123,6 +125,20 @@ export async function submitTrainingRequestWithAuthoritativeGsaRate(input: {
     );
   }
 
+  const stateErrors = validateStateCourseDetails(input.draft, input.draft.isOfpcCourse);
+  if (Object.keys(stateErrors).length) {
+    throw new TrainingRequestSubmitValidationError(Object.values(stateErrors)[0]!);
+  }
+
+  let requesterSignaturePng: Uint8Array | null = null;
+  if (input.draft.isOfpcCourse === true) {
+    if (input.draft.requesterSignatureConfirmed !== true || input.draft.confirmedAccurate !== true) {
+      throw new TrainingRequestSubmitValidationError("Confirm the information and authorize your saved signature before submitting.");
+    }
+    try { requesterSignaturePng = await loadRequesterSubmissionSignature(personnel.id); }
+    catch (error) { throw new TrainingRequestSubmitValidationError(error instanceof Error ? error.message : "Save your signature before submitting."); }
+  }
+
   let storedRequestGsaMileageRate: number | null = null;
 
   if (input.submissionMode === "draft" || input.submissionMode === "returned") {
@@ -198,6 +214,7 @@ export async function submitTrainingRequestWithAuthoritativeGsaRate(input: {
       throw new Error(getTrainingRequestErrorMessage(error));
     }
 
+    if (requesterSignaturePng) return submitWithRequesterSignature(mapTrainingRequestRow(data as TrainingRequestRow), requesterSignaturePng);
     return callSubmitWorkflowRpc(
       (data as TrainingRequestRow).id,
       "submit_training_request",
@@ -208,17 +225,18 @@ export async function submitTrainingRequestWithAuthoritativeGsaRate(input: {
   const expectedStatus =
     input.submissionMode === "returned" ? "returned_for_correction" : "draft";
 
-  const { error: updateError } = await supabase
+  const { data: updated, error: updateError } = await supabase
     .from("training_requests")
     .update(buildTrainingRequestDatabasePayload(insertInput))
     .eq("id", requestId)
     .eq("requester_personnel_id", personnel.id)
-    .eq("status", expectedStatus);
+    .eq("status", expectedStatus).select("*").single();
 
   if (updateError) {
     throw new Error(getTrainingRequestErrorMessage(updateError));
   }
 
+  if (requesterSignaturePng) return submitWithRequesterSignature(mapTrainingRequestRow(updated as TrainingRequestRow), requesterSignaturePng);
   return callSubmitWorkflowRpc(
     requestId,
     input.submissionMode === "returned"

@@ -1,3 +1,4 @@
+import { normalizeStateCourseDetails, normalizeStateCourseText, validateStateCourseDetails } from "@/lib/state-course-details";
 import { normalizeOtherExpenseDescription, validateOtherExpenseDescription } from "@/lib/other-expense-description";
 import { roundCurrency } from "@/lib/currency";
 import { calculateExpenseSummary } from "@/lib/expenses";
@@ -101,6 +102,13 @@ export function mapTrainingRequestRow(row: TrainingRequestRow): TrainingRequestR
     requesterEmail: row.requester_email,
     requesterName: row.requester_name,
     requesterTitleSnapshot: row.requester_title_snapshot ?? null,
+    requesterAddress: normalizeStateCourseText(row.requester_address),
+    requesterCity: normalizeStateCourseText(row.requester_city),
+    requesterState: normalizeStateCourseText(row.requester_state),
+    requesterZip: normalizeStateCourseText(row.requester_zip),
+    requesterPhone: normalizeStateCourseText(row.requester_phone),
+    nyTrainingId: normalizeStateCourseText(row.ny_training_id),
+
     courseName: row.training_title,
     courseNumber: row.course_number,
     isOfpcCourse:
@@ -138,6 +146,7 @@ export function trainingRequestRecordToDraft(
   request: TrainingRequestRecord,
 ): TrainingRequestDraft {
   return {
+    ...normalizeStateCourseDetails(request, request.isOfpcCourse),
     badgeNumber: request.requesterBadgeNumber,
     departmentEmail: request.requesterEmail,
     courseName: request.courseName,
@@ -179,6 +188,8 @@ export function buildTrainingRequestInput(input: {
   requireComplete?: boolean;
 }): TrainingRequestInsertInput {
   if (input.requireComplete) {
+    const stateErrors = validateStateCourseDetails(input.draft, input.draft.isOfpcCourse);
+    if (Object.keys(stateErrors).length) throw new Error(Object.values(stateErrors)[0]);
     const error = validateOtherExpenseDescription(input.expenseSummary.otherExpenses, input.draft.otherExpenseDescription);
     if (error) throw new Error(error);
   }
@@ -188,6 +199,7 @@ export function buildTrainingRequestInput(input: {
   });
 
   return {
+    ...normalizeStateCourseDetails(input.draft, input.draft.isOfpcCourse),
     requesterPersonnelId: input.personnel.id,
     requesterBadgeNumber: input.draft.badgeNumber.trim(),
     requesterEmail: normalizedEmail,
@@ -224,7 +236,14 @@ export function buildTrainingRequestInput(input: {
 export function buildTrainingRequestDatabasePayload(
   input: TrainingRequestInsertInput | TrainingRequestUpdateInput,
 ) {
+  const details = normalizeStateCourseDetails(input, input.isOfpcCourse);
   return {
+    requester_address: details.requesterAddress || null,
+    requester_city: details.requesterCity || null,
+    requester_state: details.requesterState || null,
+    requester_zip: details.requesterZip || null,
+    requester_phone: details.requesterPhone || null,
+    ny_training_id: details.nyTrainingId || null,
     requester_personnel_id: input.requesterPersonnelId,
     requester_badge_number: input.requesterBadgeNumber,
     requester_email: input.requesterEmail,

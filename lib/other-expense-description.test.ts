@@ -9,7 +9,7 @@ import type { TrainingRequestRow } from "@/types/training-request";
 
 const personnel = { id: request.requesterPersonnelId } as AuthenticatedPersonnel;
 function input(description: string, requireComplete: boolean) {
-  const draft = trainingRequestRecordToDraft({ ...request, otherExpenseDescription: description });
+  const draft = trainingRequestRecordToDraft({ ...request, isOfpcCourse: false, otherExpenseDescription: description });
   return buildTrainingRequestInput({ personnel, draft, requireComplete, expenseSummary: calculateExpenseSummaryFromDraft(draft, request.gsaMileageRate) });
 }
 

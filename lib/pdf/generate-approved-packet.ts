@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { PDFDocument } from "pdf-lib";
+import { encodePdfText, wrapPdfText } from "@/lib/pdf/wrap-pdf-text";
+import { PDFDocument, StandardFonts } from "pdf-lib";
 import {
   buildTalOriginalInitialStampValues,
   buildTrainingRequestApprovalStampValues,
@@ -50,11 +51,12 @@ export interface ApprovedPacketGenerationInput {
   deputyAction: TrainingRequestActionRecord;
   mtoSignaturePng: Uint8Array;
   deputySignaturePng: Uint8Array;
+  requesterSignaturePng?: Uint8Array;
 }
 
 export { PdfFormFieldError, getApprovedPacketStampPlan };
 
-function populateTalForm(pdf: PDFDocument, input: ApprovedPacketGenerationInput): void {
+async function populateTalForm(pdf: PDFDocument, input: ApprovedPacketGenerationInput): Promise<void> {
   const form = pdf.getForm();
   const { request, mtoAction } = input;
   const fields = TAL_FORM_FIELDS;
@@ -84,6 +86,43 @@ function populateTalForm(pdf: PDFDocument, input: ApprovedPacketGenerationInput)
   setOptionalTextField(form, fields.lastName, student.lastName);
   setOptionalTextField(form, fields.firstName, student.firstName);
   setOptionalTextField(form, fields.email, request.requesterEmail);
+  setOptionalTextField(form, fields.studentPrintName, request.requesterName);
+  const font = await pdf.embedFont(StandardFonts.Helvetica);
+  const studentFields = request.isOfpcCourse === true ? [
+    [fields.address, request.requesterAddress], [fields.city, request.requesterCity],
+    [fields.state, request.requesterState], [fields.zip, request.requesterZip],
+    [fields.phone, request.requesterPhone], [fields.nyTrainingId, request.nyTrainingId],
+  ] : [];
+  for (const [name, value] of studentFields) {
+    if (!name || !value?.trim()) continue;
+    let field;
+    try { field = form.getTextField(name); } catch { continue; }
+    // Existing boxes remain in place. Use the full ZIP+4 and fit long values
+    // within each original widget rather than overflowing adjacent fields.
+    field.removeMaxLength();
+    field.updateAppearances(font);
+    const safeValue = encodePdfText(value, font).replace(/\s+/g, " ");
+    const width = Math.min(...field.acroField.getWidgets().map(widget => widget.getRectangle().width)) - 6;
+    const naturalWidth = font.widthOfTextAtSize(safeValue, 10);
+    const size = Math.min(10, 10 * width / Math.max(naturalWidth, 1));
+    if (size >= 7) {
+      field.setText(safeValue);
+      field.setFontSize(size);
+    } else {
+      const lines = wrapPdfText(safeValue, font, width, 7);
+      const height = Math.min(...field.acroField.getWidgets().map(widget => widget.getRectangle().height)) - 3;
+      if (lines.length * 8 <= height) {
+        field.enableMultiline(); field.setText(lines.join("\n")); field.setFontSize(7);
+      } else {
+        field.setText("See student details in audit trail"); field.setFontSize(7);
+      }
+    }
+    field.updateAppearances(font);
+  }
+  if (input.requesterSignaturePng?.byteLength) {
+    setOptionalTextField(form, fields.studentSignatureDate,
+      formatPdfDate(input.deputyAction.signedAt ?? input.deputyAction.createdAt));
+  }
 }
 
 async function stampTalOriginalInitials(
@@ -182,7 +221,7 @@ export async function generateApprovedPacketBytes(
     throw new PdfFormFieldError("Approved packet template is missing a required page.");
   }
 
-  populateTalForm(talPdf, input);
+  await populateTalForm(talPdf, input);
 
   const [{ pdf: renderedTrainingPdf }, flattenedTalPdf] = await Promise.all([
     createTrainingRequestPdf(trainingPdf, input),
@@ -191,6 +230,10 @@ export async function generateApprovedPacketBytes(
 
   await stampTalOriginalInitials(flattenedTalPdf, input);
   await stampTalAgencySignature(flattenedTalPdf, input.mtoSignaturePng);
+  if (input.requesterSignaturePng?.byteLength) {
+    await drawSignatureInBox(flattenedTalPdf.getPage(0), flattenedTalPdf, input.requesterSignaturePng,
+      TAL_SIGNATURE_PLACEMENTS.student, "TAL requester signature");
+  }
 
   const auditPdf = await PDFDocument.create();
   await createAuditTrailPages(auditPdf, input.request, input.actions);
@@ -229,13 +272,14 @@ export async function generateApprovedPacketBytes(
 export async function inspectTalPopulationForTest(
   input: ApprovedPacketGenerationInput,
 ): Promise<{
+  studentDetails: Record<string, string>;
   studentPrintName: string;
   studentSignatureDate: string;
   studentAuthorizedChecked: boolean;
   scbaClearanceChecked: boolean;
 }> {
   const talPdf = await PDFDocument.load(await readFile(TAL_TEMPLATE));
-  populateTalForm(talPdf, input);
+  await populateTalForm(talPdf, input);
   const form = talPdf.getForm();
 
   function safeGetText(fieldName: string): string {
@@ -255,6 +299,7 @@ export async function inspectTalPopulationForTest(
   }
 
   return {
+    studentDetails: Object.fromEntries(["firstName", "lastName", "address", "city", "state", "zip", "phone", "nyTrainingId"].map(key => [key, safeGetText(TAL_FORM_FIELDS[key as keyof typeof TAL_FORM_FIELDS])])),
     studentPrintName: safeGetText(TAL_FORM_FIELDS.studentPrintName),
     studentSignatureDate: safeGetText(TAL_FORM_FIELDS.studentSignatureDate),
     studentAuthorizedChecked: safeIsChecked(TAL_FORM_FIELDS.studentAuthorized),

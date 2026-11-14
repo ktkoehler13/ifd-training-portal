@@ -1,5 +1,8 @@
 "use client";
 
+import { STATE_COURSE_FIELDS, normalizeStateCourseDetails, validateStateCourseDetails } from "@/lib/state-course-details";
+import { RequesterSignatureConfirmation } from "@/components/requests/RequesterSignatureConfirmation";
+import { StateCourseDetailsFields } from "@/components/requests/StateCourseDetailsFields";
 import { FormEvent, useEffect, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { otherExpenseLabel, validateOtherExpenseDescription } from "@/lib/other-expense-description";
@@ -60,6 +63,7 @@ import { cn } from "@/lib/utils";
 const TOTAL_STEPS = 4;
 
 const initialDraft: TrainingRequestDraft = {
+  ...normalizeStateCourseDetails({}, false),
   badgeNumber: "",
   departmentEmail: "",
   courseName: "",
@@ -84,6 +88,7 @@ const initialDraft: TrainingRequestDraft = {
   otherExpenseDescription: "",
   transportationNotes: "",
   confirmedAccurate: false,
+  requesterSignatureConfirmed: false,
 };
 
 function createInitialDraft(personnel: AuthenticatedPersonnel): TrainingRequestDraft {
@@ -132,6 +137,7 @@ export function TrainingRequestWizard({
 }: TrainingRequestWizardProps) {
   const router = useRouter();
   const [step, setStep] = useState(1);
+  const [requesterSignatureReady, setRequesterSignatureReady] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
   const [draft, setDraft] = useState<TrainingRequestDraft>(() =>
     createInitialDraft(personnel),
@@ -287,6 +293,7 @@ export function TrainingRequestWizard({
       delete next.isOfpcCourse;
       if (!value) {
         delete next.courseNumber;
+        for (const { key } of STATE_COURSE_FIELDS) delete next[key];
       }
       return next;
     });
@@ -345,7 +352,12 @@ export function TrainingRequestWizard({
       }
     }
 
+    if (currentStep === 4 && draft.isOfpcCourse === true && (!draft.requesterSignatureConfirmed || !requesterSignatureReady)) {
+      nextErrors.requesterSignatureConfirmed = "Save your signature and confirm its use before submitting.";
+    }
+
     if (currentStep === 2) {
+      Object.assign(nextErrors, validateStateCourseDetails(draft, draft.isOfpcCourse));
       if (!draft.courseName.trim()) {
         nextErrors.courseName = "Course name is required.";
       }
@@ -524,7 +536,10 @@ export function TrainingRequestWizard({
 
   function handleBack() {
     setErrors({});
-    if (step === TOTAL_STEPS) updateField("confirmedAccurate", false);
+    if (step === TOTAL_STEPS) {
+      updateField("confirmedAccurate", false);
+      updateField("requesterSignatureConfirmed", false);
+    }
     setStep((current) => Math.max(current - 1, 1));
   }
 
@@ -567,7 +582,11 @@ export function TrainingRequestWizard({
     setStatusMessage(null);
 
     try {
-      const submissionMode = !draftRequestId
+      let requestIdForSubmission = draftRequestId;
+      if (!requestIdForSubmission && draft.isOfpcCourse === true) {
+        requestIdForSubmission = (await persistDraft()).id;
+      }
+      const submissionMode = !requestIdForSubmission
         ? "create"
         : editableStatus === "returned_for_correction"
           ? "returned"
@@ -580,7 +599,7 @@ export function TrainingRequestWizard({
         },
         body: JSON.stringify({
           draft,
-          requestId: draftRequestId,
+          requestId: requestIdForSubmission,
           submissionMode,
         }),
       });
@@ -852,6 +871,9 @@ export function TrainingRequestWizard({
                     Learning Management System (LMS).
                   </p>
                 </Field>
+              ) : null}
+              {draft.isOfpcCourse === true ? (
+                <StateCourseDetailsFields values={draft} errors={errors} onChange={updateField} />
               ) : null}
               <Field
                 id="location"
@@ -1302,6 +1324,14 @@ export function TrainingRequestWizard({
               />
             </ReviewSection>
 
+            {draft.isOfpcCourse === true ? (
+              <ReviewSection title="OFPC Student Information">
+                {STATE_COURSE_FIELDS.map(({ key, label }) => (
+                  <ReviewItem key={key} label={label} value={draft[key] ?? ""} wide={key === "requesterAddress"} />
+                ))}
+              </ReviewSection>
+            ) : null}
+
             <ReviewSection title="Travel and Expenses">
               <ReviewItem
                 label="Department Vehicle Requested"
@@ -1366,6 +1396,10 @@ export function TrainingRequestWizard({
           {step === TOTAL_STEPS ? (
             <div className="space-y-3 rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-4">
               <h3 className="text-sm font-semibold text-zinc-900">Confirm before submitting</h3>
+              {draft.isOfpcCourse === true ? <RequesterSignatureConfirmation
+                confirmed={draft.requesterSignatureConfirmed === true}
+                onConfirm={(value) => updateField("requesterSignatureConfirmed", value)}
+                onReady={setRequesterSignatureReady} /> : null}
               <label className="flex items-start gap-3 text-sm text-zinc-800">
                 <input
                   id="confirmedAccurate"
@@ -1423,7 +1457,7 @@ export function TrainingRequestWizard({
               <Button
                 key="submit"
                 type="submit"
-                disabled={!draft.confirmedAccurate || isSubmitting || isSavingDraft}
+                disabled={!draft.confirmedAccurate || (draft.isOfpcCourse === true && (!draft.requesterSignatureConfirmed || !requesterSignatureReady)) || isSubmitting || isSavingDraft}
                 className="w-full sm:w-auto sm:min-w-36"
               >
                 {isSubmitting
@@ -1533,11 +1567,11 @@ function ReviewItem({
   wide?: boolean;
 }) {
   return (
-    <div className={cn(wide && "sm:col-span-2")}>
+    <div className={cn("min-w-0", wide && "sm:col-span-2")}>
       <dt className="text-xs font-medium tracking-wide text-zinc-500 uppercase">
         {label}
       </dt>
-      <dd className="mt-1 text-sm whitespace-pre-wrap text-zinc-900">
+      <dd className="mt-1 text-sm break-words whitespace-pre-wrap text-zinc-900">
         {value || "—"}
       </dd>
     </div>

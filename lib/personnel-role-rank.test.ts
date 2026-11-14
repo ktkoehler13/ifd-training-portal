@@ -211,7 +211,7 @@ describe("rank and application role independence", () => {
   it("does not grant administrative permissions from rank alone", () => {
     for (const title of PERSONNEL_TITLES) {
       assert.equal(isAdministrativeRole("firefighter"), false);
-      assert.equal(isSignatureEligibleRole("firefighter"), false);
+      assert.equal(isSignatureEligibleRole("firefighter"), true);
       void title;
     }
     assert.match(rolesSource, /role === "mto"/);

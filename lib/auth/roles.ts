@@ -21,5 +21,5 @@ export function isPersonnelPasswordResetRole(role: PersonnelRole): boolean {
 }
 
 export function isSignatureEligibleRole(role: PersonnelRole): boolean {
-  return role === "mto" || role === "deputy_chief";
+  return role === "firefighter" || role === "mto" || role === "deputy_chief" || role === "admin";
 }

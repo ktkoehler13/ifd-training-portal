@@ -1,3 +1,4 @@
+import type { StateCourseDetails } from "@/lib/state-course-details";
 import type { PersonnelRole, PersonnelTitle } from "@/types/personnel";
 
 export const TRAINING_REQUEST_STATUSES = [
@@ -41,6 +42,13 @@ export interface TrainingRequestRow {
   requester_email: string;
   requester_name: string;
   requester_title_snapshot: PersonnelTitle | null;
+  requester_address?: string | null;
+  requester_city?: string | null;
+  requester_state?: string | null;
+  requester_zip?: string | null;
+  requester_phone?: string | null;
+  ny_training_id?: string | null;
+
   training_title: string;
   course_number: string;
   is_ofpc_course: boolean | null;
@@ -72,7 +80,7 @@ export interface TrainingRequestRow {
   updated_at: string;
 }
 
-export interface TrainingRequestRecord {
+export interface TrainingRequestRecord extends StateCourseDetails {
   id: string;
   requestNumber: string | null;
   requesterPersonnelId: string;
@@ -111,7 +119,7 @@ export interface TrainingRequestRecord {
   updatedAt: string;
 }
 
-export interface TrainingRequestInsertInput {
+export interface TrainingRequestInsertInput extends StateCourseDetails {
   requesterPersonnelId: string;
   requesterBadgeNumber: string;
   requesterEmail: string;
@@ -143,7 +151,7 @@ export interface TrainingRequestInsertInput {
 
 export type TrainingRequestUpdateInput = TrainingRequestInsertInput;
 
-export interface TrainingRequestDraft {
+export interface TrainingRequestDraft extends StateCourseDetails {
   badgeNumber: string;
   departmentEmail: string;
   courseName: string;
@@ -168,6 +176,7 @@ export interface TrainingRequestDraft {
   otherExpenseDescription: string;
   transportationNotes: string;
   confirmedAccurate: boolean;
+  requesterSignatureConfirmed?: boolean;
 }
 
 export interface ExpenseSummaryValues {

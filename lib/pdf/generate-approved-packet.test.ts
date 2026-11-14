@@ -113,6 +113,21 @@ const packetInput = {
 };
 
 describe("generateApprovedPacketBytes", () => {
+  it("populates OFPC student details and uses final approval date only with a requester signature", async () => {
+    const signed = { ...packetInput, requesterSignaturePng: VALID_TEST_PNG, request: { ...sampleRequest,
+      requesterAddress: "123 Example Street Apt 4", requesterCity: "Ithaca", requesterState: "NY",
+      requesterZip: "14850-1234", requesterPhone: "607-555-0100", nyTrainingId: "00123456" } };
+    const result = await inspectTalPopulationForTest(signed);
+    assert.deepEqual(result.studentDetails, {firstName:"Kevin",lastName:"Koehler",address:"123 Example Street Apt 4",city:"Ithaca",state:"NY",zip:"14850-1234",phone:"607-555-0100",nyTrainingId:"00123456"});
+    assert.equal(result.studentSignatureDate, "07/02/2026");
+    const bytes = await generateApprovedPacketBytes(signed);
+    await validateFinalMergedPacketNonInteractive(bytes);
+    const ordinary = await inspectTalPopulationForTest({...signed,request:{...signed.request,isOfpcCourse:false},requesterSignaturePng:undefined});
+    assert.equal(ordinary.studentDetails.address, "");
+    assert.equal(ordinary.studentSignatureDate, "");
+  });
+
+
   it("produces a merged approved packet with an audit trail", async () => {
     const bytes = await generateApprovedPacketBytes(packetInput);
     const pdf = await PDFDocument.load(bytes);
@@ -132,9 +147,9 @@ describe("generateApprovedPacketBytes", () => {
     assert.equal(countWidgetAnnotations(pdf), 0);
   });
 
-  it("leaves firefighter TAL signature fields blank and checks authorization boxes", async () => {
+  it("fills the printed student name while leaving unsigned historical signature dates blank", async () => {
     const populated = await inspectTalPopulationForTest(packetInput);
-    assert.equal(populated.studentPrintName, "");
+    assert.equal(populated.studentPrintName, sampleRequest.requesterName);
     assert.equal(populated.studentSignatureDate, "");
     assert.equal(populated.studentAuthorizedChecked, true);
     assert.equal(populated.scbaClearanceChecked, true);

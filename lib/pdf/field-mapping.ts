@@ -300,6 +300,7 @@ export const TRAINING_REQUEST_FORM_SIGNATURE_PLACEMENTS = {
 } as const satisfies Record<string, PdfTextBoxPlacement | PdfImageBoxPlacement>;
 
 export const TAL_SIGNATURE_PLACEMENTS = {
+  student: { pageIndex: 0, x: 96, y: 189, width: 249, height: 26 },
   agencyAuthorization: { pageIndex: 0, x: 386.5, y: 503.2, width: 190.5, height: 24.1 },
 } as const;
 
@@ -337,12 +338,6 @@ export const TAL_ORIGINAL_INITIAL_PLACEMENTS = {
  */
 export const TAL_PERSONNEL_FIELDS_NOT_YET_AVAILABLE = [
   "middleInitial",
-  "address",
-  "city",
-  "state",
-  "zip",
-  "phone",
-  "nyTrainingId",
 ] as const;
 
 /**

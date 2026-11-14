@@ -1,5 +1,6 @@
 "use client";
 
+import { STATE_COURSE_FIELDS } from "@/lib/state-course-details";
 import { otherExpenseLabel } from "@/lib/other-expense-description";
 import { ExpenseSummary } from "@/components/requests/ExpenseSummary";
 import { formatCurrency, formatMileageRate } from "@/lib/currency";
@@ -114,7 +115,12 @@ export function RequestDetailPanel({
           }
         />
         {request.isOfpcCourse === true ? (
-          <DetailItem label="Course number" value={request.courseNumber} />
+          <>
+            <DetailItem label="Course number" value={request.courseNumber} />
+            {STATE_COURSE_FIELDS.map(({ key, label }) => (
+              <DetailItem key={key} label={label} value={request[key] ?? ""} className="min-w-0 break-words" />
+            ))}
+          </>
         ) : null}
         <DetailItem label="Location" value={request.location} />
         <DetailItem

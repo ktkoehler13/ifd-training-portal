@@ -68,7 +68,7 @@ async function downloadStorageObject(bucket: string, storagePath: string): Promi
   return new Uint8Array(await data.arrayBuffer());
 }
 
-async function uploadSignatureSnapshot(input: {
+export async function uploadSignatureSnapshot(input: {
   requestId: string;
   reservationId: string;
   pngBytes: Uint8Array;
@@ -91,18 +91,18 @@ async function uploadSignatureSnapshot(input: {
   }
 }
 
-async function downloadSnapshotObject(storagePath: string): Promise<Uint8Array> {
+export async function downloadSnapshotObject(storagePath: string): Promise<Uint8Array> {
   return downloadStorageObject(TRAINING_REQUEST_SIGNATURE_SNAPSHOT_BUCKET, storagePath);
 }
 
-async function deleteSignatureSnapshot(storagePath: string): Promise<void> {
+export async function deleteSignatureSnapshot(storagePath: string): Promise<void> {
   const service = createServiceRoleClient();
   await service.storage
     .from(TRAINING_REQUEST_SIGNATURE_SNAPSHOT_BUCKET)
     .remove([storagePath]);
 }
 
-async function loadPersonnelSignaturePng(personnelId: string): Promise<Uint8Array> {
+export async function loadPersonnelSignaturePng(personnelId: string): Promise<Uint8Array> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("personnel_signatures")
@@ -135,7 +135,7 @@ function findLatestAction(
   return null;
 }
 
-function createReconciliationQueries(input: {
+export function createReconciliationQueries(input: {
   requestId: string;
   reservationId: string;
   snapshotPath: string;
@@ -280,6 +280,18 @@ export async function generateApprovedTrainingRequestPacket(
       ),
     ]);
 
+    const requesterAction = [...actions].reverse().find(action => action.action === "submitted" || action.action === "resubmitted");
+    let requesterSignaturePng: Uint8Array | undefined;
+    if (request.isOfpcCourse === true && requesterAction?.electronicSignatureConfirmed && requesterAction.signatureStoragePath) {
+      requesterSignaturePng = await downloadStorageObject(
+        requesterAction.signatureStorageBucket ?? TRAINING_REQUEST_SIGNATURE_SNAPSHOT_BUCKET,
+        requesterAction.signatureStoragePath,
+      );
+      if (sha256Hex(requesterSignaturePng) !== requesterAction.signatureSha256) {
+        throw new Error("Requester signature snapshot verification failed.");
+      }
+    }
+
     const pdfBytes = await generateApprovedPacketBytes({
       request,
       actions,
@@ -287,6 +299,7 @@ export async function generateApprovedTrainingRequestPacket(
       deputyAction,
       mtoSignaturePng,
       deputySignaturePng,
+      requesterSignaturePng,
     });
 
     const storagePath = getApprovedPacketStoragePath(requestId);

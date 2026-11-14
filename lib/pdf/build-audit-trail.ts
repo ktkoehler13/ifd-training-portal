@@ -5,6 +5,7 @@ import {
   type PDFFont,
   type PDFPage,
 } from "pdf-lib";
+import { STATE_COURSE_FIELDS } from "@/lib/state-course-details";
 import { wrapPdfText } from "@/lib/pdf/wrap-pdf-text";
 import { formatExpenseChangeSummary } from "@/lib/mto-expense-review";
 import { warnApprovedPacketFieldUnavailable } from "@/lib/pdf/warn-approved-packet-fields";
@@ -349,6 +350,15 @@ export async function createAuditTrailPages(
     page.drawText(row.label, { x: MARGIN_LEFT, y: cursorY, font: boldFont, size: FONT_SIZE_SUMMARY_LABEL });
     const x = MARGIN_LEFT + boldFont.widthOfTextAtSize(row.label, FONT_SIZE_SUMMARY_LABEL) + 6;
     write(row.value, x, FONT_SIZE_SUMMARY_VALUE, SUMMARY_LINE_HEIGHT);
+  }
+  if (request.isOfpcCourse === true && STATE_COURSE_FIELDS.some(({key}) => request[key]?.trim())) {
+    ensure(SUMMARY_LINE_HEIGHT * 2);
+    cursorY -= 6;
+    page.drawText("OFPC Student Details", {x:MARGIN_LEFT,y:cursorY,font:boldFont,size:FONT_SIZE_SUMMARY_LABEL});
+    cursorY -= SUMMARY_LINE_HEIGHT;
+    for (const { key, label } of STATE_COURSE_FIELDS) {
+      if (request[key]?.trim()) write(`${label}: ${request[key]}`, MARGIN_LEFT, FONT_SIZE_SUMMARY_VALUE, SUMMARY_LINE_HEIGHT);
+    }
   }
   const overflowDates = getOnDutyDatesPdfOverflow(request);
   if ((request.onDutyDates ?? []).length > 0) {

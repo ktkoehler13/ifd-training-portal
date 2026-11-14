@@ -24,7 +24,7 @@ import { PERSONNEL_ROLE_LABELS, PERSONNEL_TITLE_LABELS } from "@/types/personnel
 import type { SignatureInputMethod, SignatureUploadState } from "@/types/personnel-signature";
 
 const CERTIFICATION_TEXT =
-  "I certify that this is my official signature and authorize the IFD Training Portal to place it on training documents I electronically approve.";
+  "I certify that this is my official signature and authorize the IFD Training Portal to place it on training documents I electronically sign or approve.";
 
 const initialUploadState: SignatureUploadState = {
   isSaving: false,
@@ -47,8 +47,7 @@ export function MySignatureView() {
                     Access denied
                   </h1>
                   <p className="mt-2 text-sm leading-6 text-zinc-600">
-                    My Signature is available only to active MTO and Deputy Chief
-                    personnel.
+                    My Signature is available only to active personnel.
                   </p>
                   <div className="mt-8">
                     <Link href="/dashboard">
