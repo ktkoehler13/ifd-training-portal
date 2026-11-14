@@ -47,6 +47,7 @@ export function NewRequestView({ currentGsaMileageRate }: NewRequestViewProps) {
               {LEGACY_LOCAL_STORAGE_NOTICE}
             </div>
             <TrainingRequestWizard
+              key={`${personnel.id}:${draftId ?? "new"}`}
               personnel={personnel}
               draftId={draftId}
               currentGsaMileageRate={currentGsaMileageRate}

@@ -68,6 +68,12 @@ function getQuickActionCards(
     hasPendingAction?: boolean;
   }> = [baseActionCards[0], baseActionCards[1]];
 
+  cards.push({
+    title: "My Profile",
+    description: "Save or update the address used to fill in new OFPC training requests.",
+    href: "/settings/profile",
+  });
+
   if (personnel.role === "mto" || personnel.role === "deputy_chief") {
     cards.push({
       title: "My Signature",

@@ -3,6 +3,8 @@
 import { STATE_COURSE_FIELDS, normalizeStateCourseDetails, validateStateCourseDetails } from "@/lib/state-course-details";
 import { RequesterSignatureConfirmation } from "@/components/requests/RequesterSignatureConfirmation";
 import { StateCourseDetailsFields } from "@/components/requests/StateCourseDetailsFields";
+import { ADDRESS_KEYS, prefillNewRequestAddress, samePersonnelAddress, type AddressField, type PersonnelAddress } from "@/lib/personnel-address";
+import { getOwnPersonnelAddress, saveOwnPersonnelAddress } from "@/lib/personnel-address-client";
 import { FormEvent, useEffect, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { otherExpenseLabel, validateOtherExpenseDescription } from "@/lib/other-expense-description";
@@ -154,6 +156,13 @@ export function TrainingRequestWizard({
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSavingDraft, setIsSavingDraft] = useState(false);
+  const [isSavingAddress, setIsSavingAddress] = useState(false);
+  const [saveAddressToProfile, setSaveAddressToProfile] = useState(false);
+  const [addressNotice, setAddressNotice] = useState<string | null>(null);
+  const [addressSaveError, setAddressSaveError] = useState<string | null>(null);
+  const addressEdited = useRef(false);
+  const addressSaveBusy = useRef(false);
+  const savedAddress = useRef<PersonnelAddress | null>(null);
   const [isLoadingDraft, setIsLoadingDraft] = useState(Boolean(draftId));
   const [latestCorrectionAction, setLatestCorrectionAction] =
     useState<TrainingRequestActionRecord | null>(null);
@@ -188,6 +197,28 @@ export function TrainingRequestWizard({
   });
 
   const requestNumberPreview = savedRequestNumber ?? "Draft";
+
+  useEffect(() => {
+    // Drafts and returned requests already have their own address snapshot.
+    if (draftId) return;
+    let cancelled = false;
+    getOwnPersonnelAddress(personnel.id).then((address) => {
+      if (cancelled) return;
+      savedAddress.current = address;
+      setDraft((current) => prefillNewRequestAddress(current, address, false, addressEdited.current));
+      if (address && !addressEdited.current) setAddressNotice("Address filled from your profile. You can edit it for this request.");
+    }).catch(() => {
+      if (!cancelled) setAddressNotice("Your saved address could not be loaded. Enter your address to continue.");
+    });
+    return () => { cancelled = true; };
+  }, [draftId, personnel.id]);
+
+  async function saveAddressIfRequested() {
+    if (!saveAddressToProfile || draft.isOfpcCourse !== true) return;
+    if (savedAddress.current && samePersonnelAddress(savedAddress.current, draft)) return;
+    savedAddress.current = await saveOwnPersonnelAddress(personnel.id, draft);
+    setAddressNotice("Address saved to your profile for future requests.");
+  }
 
   useEffect(() => {
     if (!draftId) {
@@ -279,6 +310,11 @@ export function TrainingRequestWizard({
     key: K,
     value: TrainingRequestDraft[K],
   ) {
+    if (ADDRESS_KEYS.includes(key as AddressField)) {
+      addressEdited.current = true;
+      setAddressNotice(null);
+      setAddressSaveError(null);
+    }
     setDraft((current) => ({ ...current, [key]: value }));
   }
 
@@ -492,6 +528,7 @@ export function TrainingRequestWizard({
   }
 
   async function handleSaveDraft() {
+    if (isSubmitting || isSavingDraft || addressSaveBusy.current) return;
     const nextErrors = validateDraftSave();
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) {
@@ -500,8 +537,10 @@ export function TrainingRequestWizard({
 
     setIsSavingDraft(true);
     setStatusMessage(null);
+    setAddressSaveError(null);
 
     try {
+      await saveAddressIfRequested();
       await persistDraft();
       setStatusMessage("Draft saved.");
     } catch (error) {
@@ -519,19 +558,32 @@ export function TrainingRequestWizard({
       setErrors({
         submit: message,
       });
+      setAddressSaveError(message);
     } finally {
       setIsSavingDraft(false);
     }
   }
 
-  function handleNext() {
+  async function handleNext() {
+    if (isSubmitting || isSavingDraft || addressSaveBusy.current) return;
     const nextErrors = validateStep(step);
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) {
       return;
     }
 
-    setStep((current) => Math.min(current + 1, TOTAL_STEPS));
+    setAddressSaveError(null);
+    addressSaveBusy.current = true;
+    setIsSavingAddress(true);
+    try {
+      if (step === 2) await saveAddressIfRequested();
+      setStep((current) => Math.min(current + 1, TOTAL_STEPS));
+    } catch (error) {
+      setAddressSaveError(error instanceof Error ? error.message : "Your address could not be saved. Try again.");
+    } finally {
+      addressSaveBusy.current = false;
+      setIsSavingAddress(false);
+    }
   }
 
   function handleBack() {
@@ -557,9 +609,9 @@ export function TrainingRequestWizard({
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (isSubmitting || isSavingDraft) return;
+    if (isSubmitting || isSavingDraft || addressSaveBusy.current) return;
     if (step < TOTAL_STEPS) {
-      handleNext();
+      await handleNext();
       return;
     }
 
@@ -582,6 +634,7 @@ export function TrainingRequestWizard({
     setStatusMessage(null);
 
     try {
+      await saveAddressIfRequested();
       let requestIdForSubmission = draftRequestId;
       if (!requestIdForSubmission && draft.isOfpcCourse === true) {
         requestIdForSubmission = (await persistDraft()).id;
@@ -873,7 +926,18 @@ export function TrainingRequestWizard({
                 </Field>
               ) : null}
               {draft.isOfpcCourse === true ? (
-                <StateCourseDetailsFields values={draft} errors={errors} onChange={updateField} />
+                <StateCourseDetailsFields values={draft} errors={errors} onChange={updateField}
+                  disabled={isSavingAddress || isSavingDraft || isSubmitting}
+                  addressOptions={<div className="space-y-2 rounded-lg border border-zinc-200 bg-white p-3">
+                    {addressNotice ? <p role="status" className="text-sm text-zinc-600">{addressNotice}</p> : null}
+                    <label className="flex items-start gap-3 text-sm text-zinc-800">
+                      <input type="checkbox" checked={saveAddressToProfile} disabled={isSavingAddress || isSavingDraft || isSubmitting}
+                        onChange={(event) => { setSaveAddressToProfile(event.target.checked); setAddressSaveError(null); }}
+                        aria-describedby="save-address-help" className="mt-0.5 h-5 w-5 shrink-0 rounded border-zinc-300 accent-red-700" />
+                      <span>Save this address to my profile</span>
+                    </label>
+                    <p id="save-address-help" className="text-sm leading-6 text-zinc-600">Saved when you select Continue or Save Draft. Future OFPC requests will fill it in automatically. You can also update it in <a href="/settings/profile" target="_blank" rel="noopener noreferrer" className="font-semibold text-red-700 underline">My Profile (opens a new tab)</a>.</p>
+                  </div>} />
               ) : null}
               <Field
                 id="location"
@@ -1393,6 +1457,7 @@ export function TrainingRequestWizard({
         ) : null}
 
         <div className="mt-8 flex flex-col gap-3">
+          {addressSaveError ? <p role="alert" className="text-sm text-red-700">{addressSaveError}</p> : null}
           {step === TOTAL_STEPS ? (
             <div className="space-y-3 rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-4">
               <h3 className="text-sm font-semibold text-zinc-900">Confirm before submitting</h3>
@@ -1437,7 +1502,7 @@ export function TrainingRequestWizard({
               type="button"
               variant="secondary"
               onClick={handleBack}
-              disabled={step === 1 || isSubmitting || isSavingDraft}
+              disabled={step === 1 || isSubmitting || isSavingDraft || isSavingAddress}
               className="w-full sm:w-auto sm:min-w-28"
             >
               Back
@@ -1448,16 +1513,16 @@ export function TrainingRequestWizard({
                 key="continue"
                 type="button"
                 onClick={handleNext}
-                disabled={isSubmitting || isSavingDraft}
+                disabled={isSubmitting || isSavingDraft || isSavingAddress}
                 className="w-full sm:w-auto sm:min-w-36"
               >
-                Continue
+                {isSavingAddress ? "Saving Address…" : "Continue"}
               </Button>
             ) : (
               <Button
                 key="submit"
                 type="submit"
-                disabled={!draft.confirmedAccurate || (draft.isOfpcCourse === true && (!draft.requesterSignatureConfirmed || !requesterSignatureReady)) || isSubmitting || isSavingDraft}
+                disabled={!draft.confirmedAccurate || (draft.isOfpcCourse === true && (!draft.requesterSignatureConfirmed || !requesterSignatureReady)) || isSubmitting || isSavingDraft || isSavingAddress}
                 className="w-full sm:w-auto sm:min-w-36"
               >
                 {isSubmitting
@@ -1475,7 +1540,7 @@ export function TrainingRequestWizard({
             <Button
               type="button"
               variant="secondary"
-              disabled={isSubmitting || isSavingDraft}
+              disabled={isSubmitting || isSavingDraft || isSavingAddress}
               className="w-full sm:w-auto sm:min-w-36"
               onClick={() => {
                 void handleSaveDraft();
