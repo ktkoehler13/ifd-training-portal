@@ -504,6 +504,3 @@ export async function createAndSubmitTrainingRequest(
   const draft = await createTrainingRequestDraft(input);
   return submitTrainingRequest(draft.id, input);
 }
-
-export const LEGACY_LOCAL_STORAGE_NOTICE =
-  "Development note: older browser-only test requests saved in localStorage are not migrated automatically.";

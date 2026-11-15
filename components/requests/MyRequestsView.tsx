@@ -28,7 +28,6 @@ import {
   deleteOwnTrainingRequestDraft,
   formatTrainingRequestIdentifier,
   formatTrainingRequestStatus,
-  LEGACY_LOCAL_STORAGE_NOTICE,
   listOwnTrainingRequests,
 } from "@/lib/training-requests";
 import type { TrainingRequestRecord } from "@/types/training-request";
@@ -151,13 +150,6 @@ function MyRequestsContent({ personnel }: { personnel: AuthenticatedPersonnel })
       </header>
 
       <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 px-4 py-8 sm:px-6">
-        <div
-          className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
-          role="status"
-        >
-          {LEGACY_LOCAL_STORAGE_NOTICE}
-        </div>
-
         {loadError ? (
           <div
             className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"

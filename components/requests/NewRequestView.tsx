@@ -6,7 +6,6 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { TrainingRequestWizard } from "@/components/requests/TrainingRequestWizard";
 import { AuthGate } from "@/components/layout/AuthGate";
-import { LEGACY_LOCAL_STORAGE_NOTICE } from "@/lib/training-requests";
 
 interface NewRequestViewProps {
   currentGsaMileageRate: number | null;
@@ -40,12 +39,6 @@ export function NewRequestView({ currentGsaMileageRate }: NewRequestViewProps) {
           </header>
 
           <div className="mx-auto w-full max-w-5xl flex-1 px-4 py-8 sm:px-6">
-            <div
-              className="mb-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
-              role="status"
-            >
-              {LEGACY_LOCAL_STORAGE_NOTICE}
-            </div>
             <TrainingRequestWizard
               key={`${personnel.id}:${draftId ?? "new"}`}
               personnel={personnel}
