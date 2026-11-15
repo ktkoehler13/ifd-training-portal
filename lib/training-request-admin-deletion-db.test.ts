@@ -4,7 +4,7 @@ import { readFile, readdir } from "node:fs/promises";
 import { PGlite } from "@electric-sql/pglite";
 import { canManageDeletedRequests } from "./training-request-admin-deletion";
 
-describe("Admin recoverable request deletion", () => {
+describe("Administrative recoverable request deletion", () => {
   let db: PGlite; let requestId: string;
   async function asUser(email = "admin@example.test", role = "authenticated") {
     await db.exec("reset role");
@@ -41,7 +41,9 @@ describe("Admin recoverable request deletion", () => {
       ('2','mto@example.test','Sample','MTO','mto',true),
       ('3','deputy@example.test','Sample','Deputy','deputy_chief',true),
       ('4','admin@example.test','Sample','Admin','admin',true),
-      ('5','inactive@example.test','Inactive','Admin','admin',false);`);
+      ('5','inactive@example.test','Inactive','Admin','admin',false),
+      ('6','inactive-mto@example.test','Inactive','MTO','mto',false),
+      ('7','inactive-deputy@example.test','Inactive','Deputy','deputy_chief',false);`);
   });
   beforeEach(async () => {
     await db.exec("reset role; begin"); await asUser("owner@example.test");
@@ -51,12 +53,12 @@ describe("Admin recoverable request deletion", () => {
   afterEach(async () => { await db.exec("rollback;reset role"); });
   after(async () => { await db?.close(); });
 
-  it("limits controls and RPCs to the active Admin role", async () => {
-    assert.equal(canManageDeletedRequests("admin"),true);
-    for (const role of ["firefighter","mto","deputy_chief"] as const) assert.equal(canManageDeletedRequests(role),false);
+  it("limits controls and RPCs to active administrative personnel", async () => {
+    for (const role of ["admin","mto","deputy_chief"] as const) assert.equal(canManageDeletedRequests(role),true);
+    assert.equal(canManageDeletedRequests("firefighter"),false);
     const version=(await row()).version;
-    for (const email of ["owner@example.test","mto@example.test","deputy@example.test","inactive@example.test"]) {
-      await asUser(email); await reject(()=>change(true,"Reason",version), /Only active Admin|Active authenticated/);
+    for (const email of ["owner@example.test","inactive@example.test","inactive-mto@example.test","inactive-deputy@example.test"]) {
+      await asUser(email); await reject(()=>change(true,"Reason",version), /Only active administrative|Active authenticated/);
     }
     await asUser("owner@example.test","anon");
     await reject(()=>change(true,"Reason",version),/permission denied/);
@@ -71,12 +73,28 @@ describe("Admin recoverable request deletion", () => {
     const deleted=actions.find(a=>a.action==='request_deleted'); assert.equal(deleted?.actor_role,"admin"); assert.equal(deleted?.comments,"Duplicate test request");
     assert.equal((await db.query("update training_request_actions set comments='forged' where training_request_id=$1 returning id",[requestId])).rows.length,0);
   });
-  it("hides deleted requests and history from requesters, MTO and Deputy Chief, then restores original visibility", async () => {
+  for (const [email,role,name] of [["mto@example.test","mto","Sample MTO"],["deputy@example.test","deputy_chief","Sample Deputy"],["admin@example.test","admin","Sample Admin"]]) {
+    it(`allows ${role} to delete, view and restore with the actual actor recorded`, async () => {
+      await asUser(email); await change();
+      assert.equal((await row()).deleted_by_name,name);
+      const actions=(await db.query("select actor_role,actor_name from training_request_actions where training_request_id=$1 and action='request_deleted'",[requestId])).rows;
+      assert.deepEqual(actions,[{actor_role:role,actor_name:name}]);
+      await change(false,"Restore to review");
+      assert.equal((await row()).deleted_at,null);
+      assert.equal((await row()).status,"pending_mto");
+      assert.equal((await db.query("select actor_role from training_request_actions where training_request_id=$1 and action='request_restored'",[requestId])).rows[0].actor_role,role);
+    });
+  }
+  it("hides deleted requests and history from requesters while administrative roles retain access", async () => {
     await change(); const version=(await row()).version;
-    for (const email of ["owner@example.test","mto@example.test","deputy@example.test"]) {
+    for (const email of ["owner@example.test","inactive@example.test","inactive-mto@example.test","inactive-deputy@example.test"]) {
       await asUser(email); assert.equal(await row(),undefined);
       assert.equal((await db.query("select id from training_request_actions where training_request_id=$1",[requestId])).rows.length,0);
-      await reject(()=>change(false,"Restore",version), /Only active Admin/);
+      await reject(()=>change(false,"Restore",version), /Only active administrative|Active authenticated/);
+    }
+    for (const email of ["admin@example.test","mto@example.test","deputy@example.test"]) {
+      await asUser(email); assert.ok((await row()).deleted_at);
+      assert.ok((await db.query("select id from training_request_actions where training_request_id=$1",[requestId])).rows.length);
     }
     await asUser(); await change(false,"Removed in error");
     assert.equal((await row()).deleted_at,null); assert.equal((await row()).status,"pending_mto");
@@ -140,6 +158,10 @@ describe("Admin recoverable request deletion", () => {
     await db.query("update training_request_notifications set event_type='approved',status='sent',sent_at=now() where training_request_id=$1",[requestId]);
     await asUser(); await change();
     assert.deepEqual((await db.query("select * from training_request_packets where request_id=$1",[requestId])).rows[0],packet);
+    for (const email of ["mto@example.test","deputy@example.test"]) {
+      await asUser(email);
+      assert.deepEqual((await db.query("select * from training_request_packets where request_id=$1",[requestId])).rows[0],packet);
+    }
     await asUser("owner@example.test"); assert.equal((await db.query("select * from training_request_packets where request_id=$1",[requestId])).rows.length,0);
     await asUser(); await change(false); assert.equal((await row()).status,"approved");
     assert.deepEqual((await db.query("select * from training_request_packets where request_id=$1",[requestId])).rows[0],packet);

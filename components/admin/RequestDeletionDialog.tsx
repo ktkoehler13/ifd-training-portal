@@ -42,7 +42,7 @@ export function RequestDeletionDialog({ request, onClose, onConfirm }: {
       </div>
       <p id="request-deletion-description" className="text-sm leading-6 text-zinc-600">
         {restoring ? "This returns the request to its original status and normal lists. Pending action alerts can resume; previous approval or denial emails will not be resent."
-          : "This moves the request to Deleted Requests and stops pending alerts. Its forms, signatures, and history are preserved. An Admin can restore it later."}
+          : "This moves the request to Deleted Requests and stops pending alerts. Its forms, signatures, and history are preserved. You can restore it later from Deleted Requests."}
       </p>
       <div className="space-y-2">
         <label htmlFor="request-deletion-reason" className="block text-sm font-medium">Reason</label>

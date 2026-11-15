@@ -1,10 +1,11 @@
 import { createClient } from "@/lib/supabase/client";
+import { isAdministrativeRole } from "@/lib/auth/roles";
 import { getTrainingRequestErrorMessage } from "@/lib/training-requests";
 import type { PersonnelRole } from "@/types/personnel";
 import type { TrainingRequestRecord } from "@/types/training-request";
 
 export function canManageDeletedRequests(role: PersonnelRole): boolean {
-  return role === "admin";
+  return isAdministrativeRole(role);
 }
 
 export async function setTrainingRequestDeleted(request: TrainingRequestRecord, deleted: boolean, reason: string): Promise<void> {
