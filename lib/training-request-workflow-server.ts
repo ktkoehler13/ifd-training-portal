@@ -245,6 +245,7 @@ export async function generateApprovedTrainingRequestPacket(
 
     const request = mapTrainingRequestRow(requestData as TrainingRequestRow);
 
+    if (request.deletedAt) throw new Error("Restore this request before generating approved forms.");
     if (request.status !== "approved") {
       throw new Error("Approved packets may only be generated for approved requests.");
     }
@@ -502,6 +503,8 @@ export async function retryApprovedTrainingRequestPacket(
   }
 
   const request = mapTrainingRequestRow(requestData as TrainingRequestRow);
+
+  if (request.deletedAt) throw new TrainingRequestWorkflowValidationError("Restore this request before generating approved forms.");
 
   if (request.status !== "approved") {
     throw new TrainingRequestWorkflowValidationError(

@@ -67,6 +67,8 @@ export const AUDIT_ACTION_PHRASES: Record<TrainingRequestActionType, string> = {
   deputy_chief_denied: "Denied request",
   resubmitted: "Resubmitted request",
   cancelled: "Cancelled request",
+  request_deleted: "Deleted request (recoverable)",
+  request_restored: "Restored request",
 };
 
 export interface AuditTrailEntry {

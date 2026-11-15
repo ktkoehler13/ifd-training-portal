@@ -51,6 +51,7 @@ async function loadApprovedTrainingRecords(): Promise<
     .from("training_requests")
     .select("*")
     .eq("status", FINAL_APPROVED_TRAINING_REQUEST_STATUS)
+    .is("deleted_at", null)
     .order("start_date", { ascending: true });
 
   if (requestError) {

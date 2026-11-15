@@ -12,6 +12,8 @@ export const TRAINING_REQUEST_ACTIONS = [
   "deputy_chief_denied",
   "resubmitted",
   "cancelled",
+  "request_deleted",
+  "request_restored",
 ] as const;
 
 export type TrainingRequestActionType =
@@ -31,6 +33,8 @@ export const TRAINING_REQUEST_ACTION_LABELS: Record<
   deputy_chief_denied: "Denied by Deputy Chief",
   resubmitted: "Resubmitted",
   cancelled: "Cancelled",
+  request_deleted: "Deleted by Admin",
+  request_restored: "Restored by Admin",
 };
 
 export interface TrainingRequestActionRow {

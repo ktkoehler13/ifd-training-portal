@@ -42,6 +42,7 @@ interface ConfirmationViewProps {
 }
 
 function getPageHeading(request: TrainingRequestRecord) {
+  if (request.deletedAt) return "Deleted request";
   switch (request.status) {
     case "draft":
       return "Draft request";
@@ -133,10 +134,11 @@ function ConfirmationContent({
 
   const latestCorrectionAction = getLatestCorrectionAction(actions);
   const canEditAndResubmit =
+    !request?.deletedAt &&
     request?.status === "returned_for_correction" &&
     request.requesterPersonnelId === personnel.id;
   const showCorrectionAlert =
-    request !== null && shouldShowCorrectionAlert(request.status);
+    request !== null && !request.deletedAt && shouldShowCorrectionAlert(request.status);
 
   return (
     <div className="flex flex-1 flex-col bg-zinc-100">
@@ -164,11 +166,17 @@ function ConfirmationContent({
                 <p className="mt-2 text-sm leading-6 text-zinc-600">
                   Request {formatTrainingRequestIdentifier(request)} ·{" "}
                   {formatTrainingRequestStatus(request.status)}
-                  {request.currentActionRole
+                  {!request.deletedAt && request.currentActionRole
                     ? ` · Next action: ${formatCurrentActionRole(request.currentActionRole)}`
                     : null}
                 </p>
               </PortalHeading>
+
+              {request.deletedAt && <div role="status" className="mb-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                <p>Deleted by {request.deletedByName} on {new Date(request.deletedAt).toLocaleString()}. Its original status and history are preserved.</p>
+                <p className="mt-2 whitespace-pre-wrap">Reason: {request.deletionReason}</p>
+                <button type="button" onClick={() => router.push("/admin/requests?view=deleted")} className="mt-3 font-semibold underline">Open Deleted Requests to restore</button>
+              </div>}
 
               {showCorrectionAlert ? (
                 <div className="mb-6 space-y-4">

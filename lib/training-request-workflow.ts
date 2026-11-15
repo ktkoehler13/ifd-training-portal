@@ -183,6 +183,7 @@ export async function countPendingApprovalsForRole(
   const { count, error } = await supabase
     .from("training_requests")
     .select("id", { count: "exact", head: true })
+    .is("deleted_at", null)
     .eq("current_action_role", role);
 
   if (error) {
@@ -200,6 +201,7 @@ export async function listPendingApprovalsForRole(
     .from("training_requests")
     .select("*")
     .eq("current_action_role", role)
+    .is("deleted_at", null)
     .order("submitted_at", { ascending: true, nullsFirst: false });
 
   if (error) {
@@ -209,14 +211,15 @@ export async function listPendingApprovalsForRole(
   return (data as TrainingRequestRow[]).map(mapTrainingRequestRow);
 }
 
-export async function listAllTrainingRequestsForAdmin(): Promise<
+export async function listAllTrainingRequestsForAdmin(deleted = false): Promise<
   TrainingRequestRecord[]
 > {
   const supabase = createClient();
-  const { data, error } = await supabase
+  const query = supabase
     .from("training_requests")
     .select("*")
     .order("submitted_at", { ascending: false, nullsFirst: false });
+  const { data, error } = await (deleted ? query.not("deleted_at", "is", null) : query.is("deleted_at", null));
 
   if (error) {
     throw new Error(getTrainingRequestErrorMessage(error));

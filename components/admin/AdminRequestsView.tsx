@@ -3,7 +3,7 @@
 import { PortalHeading } from "@/components/layout/PortalBrand";
 
 import Link from "next/link";
-import { startTransition, useCallback, useEffect, useState } from "react";
+import { startTransition, useCallback, useEffect, useRef, useState } from "react";
 import { AdminGate } from "@/components/layout/AuthGate";
 import { formatCurrency } from "@/lib/currency";
 import {
@@ -13,23 +13,37 @@ import {
 import { listAllTrainingRequestsForAdmin } from "@/lib/training-request-workflow";
 import { cn } from "@/lib/utils";
 import type { TrainingRequestRecord } from "@/types/training-request";
+import type { AuthenticatedPersonnel } from "@/lib/auth/personnel";
+import { canManageDeletedRequests, setTrainingRequestDeleted } from "@/lib/training-request-admin-deletion";
+import { RequestDeletionDialog } from "@/components/admin/RequestDeletionDialog";
+import { Button } from "@/components/ui/Button";
+import { useSearchParams } from "next/navigation";
 
-function AdminRequestsContent() {
+function AdminRequestsContent({ personnel }: { personnel: AuthenticatedPersonnel }) {
+  const canDelete = canManageDeletedRequests(personnel.role);
+  const searchParams = useSearchParams();
+  const [showDeleted, setShowDeleted] = useState(canDelete && searchParams.get("view") === "deleted");
+  const [selectedRequest, setSelectedRequest] = useState<TrainingRequestRecord | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const loadVersion = useRef(0);
   const [requests, setRequests] = useState<TrainingRequestRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const loadRequests = useCallback(async () => {
+    const version = ++loadVersion.current;
     setIsLoading(true);
     setLoadError(null);
 
     try {
-      const data = await listAllTrainingRequestsForAdmin();
+      const data = await listAllTrainingRequestsForAdmin(canDelete && showDeleted);
+      if (version !== loadVersion.current) return;
       startTransition(() => {
         setRequests(data);
         setIsLoading(false);
       });
     } catch (error) {
+      if (version !== loadVersion.current) return;
       startTransition(() => {
         setRequests([]);
         setLoadError(
@@ -40,7 +54,7 @@ function AdminRequestsContent() {
         setIsLoading(false);
       });
     }
-  }, []);
+  }, [canDelete, showDeleted]);
 
   useEffect(() => {
     void loadRequests();
@@ -69,6 +83,11 @@ function AdminRequestsContent() {
       </header>
 
       <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 px-4 py-8 sm:px-6">
+        {canDelete && <div className="flex flex-wrap gap-3" role="group" aria-label="Request list">
+          <Button variant={showDeleted ? "secondary" : "primary"} aria-pressed={!showDeleted} onClick={() => { setShowDeleted(false); setSuccessMessage(null); }} className="px-5">Current Requests</Button>
+          <Button variant={showDeleted ? "primary" : "secondary"} aria-pressed={showDeleted} onClick={() => { setShowDeleted(true); setSuccessMessage(null); }} className="px-5">Deleted Requests</Button>
+        </div>}
+        {successMessage && <p role="status" className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">{successMessage}</p>}
         {loadError ? (
           <div
             className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"
@@ -82,7 +101,7 @@ function AdminRequestsContent() {
           <p className="text-sm text-zinc-500" role="status">
             Loading requests...
           </p>
-        ) : (
+        ) : requests.length === 0 ? <p className="rounded-xl border border-zinc-200 bg-white p-6 text-sm text-zinc-600">{showDeleted ? "No deleted requests." : "No training requests."}</p> : (
           <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm shadow-zinc-200/60">
             <div className="overflow-x-auto">
               <table className="min-w-full text-left text-sm">
@@ -102,7 +121,7 @@ function AdminRequestsContent() {
                       key={request.id}
                       className={cn(
                         "border-b border-zinc-100 last:border-b-0",
-                        (request.status === "pending_mto" ||
+                        !request.deletedAt && (request.status === "pending_mto" ||
                           request.status === "pending_deputy_chief" ||
                           request.status === "returned_for_correction") &&
                           "font-bold",
@@ -119,6 +138,10 @@ function AdminRequestsContent() {
                       </td>
                       <td className="px-4 py-4 align-top text-zinc-700">
                         {formatTrainingRequestStatus(request.status)}
+                        {request.deletedAt && <div className="mt-2 text-xs font-normal text-zinc-600">
+                          <p>Deleted {new Date(request.deletedAt).toLocaleString()} by {request.deletedByName}</p>
+                          <p className="mt-1 whitespace-pre-wrap break-words">{request.deletionReason}</p>
+                        </div>}
                       </td>
                       <td className="px-4 py-4 align-top text-zinc-700">
                         {formatCurrency(request.totalEstimatedExpenses)}
@@ -131,7 +154,7 @@ function AdminRequestsContent() {
                           >
                             View
                           </Link>
-                          {(request.status === "pending_mto" ||
+                          {!request.deletedAt && (request.status === "pending_mto" ||
                             request.status === "pending_deputy_chief") &&
                           (request.currentActionRole === "mto" ||
                             request.currentActionRole === "deputy_chief") ? (
@@ -142,6 +165,11 @@ function AdminRequestsContent() {
                               Review
                             </Link>
                           ) : null}
+                          {canDelete && <button type="button" onClick={() => setSelectedRequest(request)}
+                            aria-label={`${request.deletedAt ? "Restore" : "Delete"} ${request.courseName || "untitled request"}`}
+                            className="inline-flex h-9 items-center rounded-xl border border-red-200 bg-white px-3 text-xs font-semibold text-red-700 hover:bg-red-50">
+                            {request.deletedAt ? "Restore" : "Delete"}
+                          </button>}
                         </div>
                       </td>
                     </tr>
@@ -152,6 +180,12 @@ function AdminRequestsContent() {
           </div>
         )}
       </div>
+      {selectedRequest && <RequestDeletionDialog key={selectedRequest.id} request={selectedRequest} onClose={() => setSelectedRequest(null)}
+        onConfirm={async (request, deleted, reason) => {
+          await setTrainingRequestDeleted(request, deleted, reason);
+          setRequests(current => current.filter(row => row.id !== request.id));
+          setSuccessMessage(deleted ? "Request moved to Deleted Requests." : "Request restored to its original status.");
+        }} />}
     </div>
   );
 }
@@ -159,7 +193,7 @@ function AdminRequestsContent() {
 export function AdminRequestsView() {
   return (
     <AdminGate>
-      <AdminRequestsContent />
+      {(personnel) => <AdminRequestsContent personnel={personnel} />}
     </AdminGate>
   );
 }

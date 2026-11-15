@@ -241,6 +241,7 @@ export function TrainingRequestWizard({
         }
 
         if (
+          request.deletedAt ||
           (request.status !== "draft" &&
             request.status !== "returned_for_correction") ||
           request.requesterPersonnelId !== personnel.id

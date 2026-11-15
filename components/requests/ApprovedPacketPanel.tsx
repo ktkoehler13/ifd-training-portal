@@ -52,7 +52,7 @@ export function ApprovedPacketPanel({
     return null;
   }
 
-  const canRetry = canRetryApprovedPacketGeneration(personnel.role);
+  const canRetry = !request.deletedAt && canRetryApprovedPacketGeneration(personnel.role);
   const downloadUrl = `/api/training-requests/${encodeURIComponent(request.id)}/approved-packet`;
 
   async function handleRetry() {

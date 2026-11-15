@@ -101,6 +101,9 @@ export function mapTrainingRequestRow(row: TrainingRequestRow): TrainingRequestR
     requesterPersonnelId: row.requester_personnel_id,
     requesterBadgeNumber: row.requester_badge_number,
     requesterEmail: row.requester_email,
+    deletedAt: row.deleted_at ?? null,
+    deletedByName: row.deleted_by_name ?? null,
+    deletionReason: row.deletion_reason ?? null,
     requestContactEmail: row.request_contact_email ?? null,
     locationType: row.location_type ?? (row.location?.trim() ? "other" : ""),
     academyMealDays: row.academy_meal_days ?? null,
@@ -362,6 +365,7 @@ export async function listOwnTrainingRequests(
     .from("training_requests")
     .select("*")
     .eq("requester_personnel_id", personnelId)
+    .is("deleted_at", null)
     .order("created_at", { ascending: false });
 
   if (error) {

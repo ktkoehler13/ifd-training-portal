@@ -36,6 +36,9 @@ export const TRAINING_REQUEST_NUMBER_PREVIEW =
 export const TRAINING_REQUEST_DRAFT_LABEL = "Draft";
 
 export interface TrainingRequestRow {
+  deleted_at?: string | null;
+  deleted_by_name?: string | null;
+  deletion_reason?: string | null;
   id: string;
   request_number: string | null;
   requester_personnel_id: string;
@@ -86,6 +89,9 @@ export interface TrainingRequestRow {
 }
 
 export interface TrainingRequestRecord extends StateCourseDetails {
+  deletedAt?: string | null;
+  deletedByName?: string | null;
+  deletionReason?: string | null;
   requestContactEmail?: string | null;
   locationType?: TrainingLocationType | "";
   academyMealDays?: number | null;
