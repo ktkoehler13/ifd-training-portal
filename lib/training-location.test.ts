@@ -7,7 +7,7 @@ import { APPROVED_PACKET_VISUAL_FIXTURE_REQUEST as request } from "./pdf/approve
 import type { AuthenticatedPersonnel } from "./auth/personnel";
 import type { TrainingRequestRow } from "@/types/training-request";
 
-const details = { requesterAddress: "123 Example St", requesterCity: "Ithaca", requesterState: "NY", requesterZip: "14850", requesterPhone: "607-555-0100", nyTrainingId: "00123456" };
+const details = { requesterAddress: "123 Example St", requesterCity: "Ithaca", requesterState: "NY", requesterZip: "14850", requesterPhone: "607-555-0100", nyTrainingId: "NY0012345" };
 const draft = { ...trainingRequestRecordToDraft({ ...request, ...details, otherExpenseDescription: "Parking" }), locationType: "nys_fire_academy" as const, location: "NYS Fire Academy", academyMealDays: "", academySsnLast4: "0012", numberOfDaysOnDuty: "0", onDutyDates: [], courseStartDate: "2026-12-01", courseEndDate: "2026-12-03", registrationFee: "", foodExpenses: "" };
 describe("Academy estimates and request contact details", () => {
   it("uses the chosen venue and retains custom location text", () => {

@@ -10,6 +10,17 @@ const academy = { ...fixture, request: { ...fixture.request, locationType: "nys_
   requesterName: "Sample Requester", requesterAddress: "123 Example St", requesterCity: "Ithaca", requesterState: "NY", requesterZip: "14850", requesterPhone: "607-555-0100", nyTrainingId: "NY0012345", academySsnLast4: "0012", requestContactEmail: "alternate@example.test", registrationFee: 25, foodExpenses: 24 } };
 
 describe("official Academy registration page", () => {
+  it("places a short ID in the final cells with leading zeroes and a full ID on the TAL", async () => {
+    const input = { ...academy, request: { ...academy.request, nyTrainingId: "NY0001336" } };
+    const values = academyRegistrationValues(input);
+    assert.equal(values["Training ID"], "0001336");
+    const placements = academyDigitPlacements("Training ID", "1336")!;
+    assert.equal(placements.map(p => p.digit).join(""), "0001336");
+    assert.equal(placements.slice(3).map(p => p.digit).join(""), "1336");
+    assert.ok(Math.abs(placements[3].centerX - (212.8211 + 229.6734) / 2) < 0.001);
+    assert.equal(academyRegistrationValues({ ...input, request: { ...input.request, nyTrainingId: "1336" } })["Training ID"], "0001336");
+    assert.equal((await inspectTalPopulationForTest(input)).studentDetails.nyTrainingId, "NY0001336");
+  });
   it("centers each ID and SSN digit in the original printed cells without losing leading zeroes", () => {
     const training = academyDigitPlacements("Training ID", "0012345")!;
     const ssn = academyDigitPlacements("last 4 of SSN", "0012")!;

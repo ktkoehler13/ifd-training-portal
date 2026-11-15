@@ -1,3 +1,5 @@
+import { isValidNyTrainingId, normalizeNyTrainingId } from "@/lib/ny-training-id";
+
 /** Request-specific details for the existing OFPC Training Authorization Letter. */
 export const STATE_COURSE_FIELDS = [
   { key: "requesterAddress", column: "requester_address", label: "Street Address", maxLength: 160, autoComplete: "street-address", type: "text" },
@@ -19,7 +21,7 @@ export function normalizeStateCourseText(value: unknown): string {
 export function normalizeStateCourseDetails(value: StateCourseDetails, isOfpcCourse: boolean | null): Record<StateCourseField, string> {
   return Object.fromEntries(STATE_COURSE_FIELDS.map(({ key }) => {
     const text = isOfpcCourse === true ? normalizeStateCourseText(value[key]) : "";
-    return [key, key === "requesterState" ? text.toUpperCase() : text];
+    return [key, key === "requesterState" ? text.toUpperCase() : key === "nyTrainingId" ? normalizeNyTrainingId(text) : text];
   })) as Record<StateCourseField, string>;
 }
 
@@ -41,6 +43,8 @@ export function validateStateCourseDetails(value: StateCourseDetails, isOfpcCour
   if (!errors.requesterPhone && (digits.length < 10 || digits.length > 15 || !/^[+\d().\s-]+$/.test(details.requesterPhone))) {
     errors.requesterPhone = "Enter a phone number with area code (10–15 digits).";
   }
-  // Training IDs are text: retain leading zeroes and the user's exact ID format.
+  if (!errors.nyTrainingId && !isValidNyTrainingId(details.nyTrainingId)) {
+    errors.nyTrainingId = "Enter one to seven numbers after NY for your New York Training ID.";
+  }
   return errors;
 }

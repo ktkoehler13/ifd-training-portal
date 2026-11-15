@@ -3,6 +3,7 @@
 import { Field } from "@/components/ui/Field";
 import { Input } from "@/components/ui/Input";
 import { AddressFields } from "@/components/settings/AddressFields";
+import { NyTrainingIdInput } from "@/components/requests/NyTrainingIdInput";
 import { ADDRESS_KEYS, type AddressField } from "@/lib/personnel-address";
 import type { ReactNode } from "react";
 import { STATE_COURSE_FIELDS, type StateCourseDetails, type StateCourseErrors, type StateCourseField } from "@/lib/state-course-details";
@@ -21,6 +22,7 @@ export function StateCourseDetailsFields({ values, errors, onChange, addressOpti
     {addressOptions}
     <div className="grid gap-4 sm:grid-cols-2">
       {STATE_COURSE_FIELDS.filter(({ key }) => !ADDRESS_KEYS.includes(key as AddressField)).map(({ key, label, maxLength, autoComplete, type }) => (
+        key === "nyTrainingId" ? <NyTrainingIdInput key={key} value={values[key] ?? ""} error={errors[key]} disabled={disabled} onChange={(value) => onChange(key, value)} /> :
         <Field key={key} id={key} label={label} error={errors[key]} className={key === "requesterAddress" ? "sm:col-span-2" : undefined}>
           <Input id={key} type={type} value={values[key] ?? ""} required disabled={disabled}
             maxLength={maxLength} autoComplete={autoComplete}

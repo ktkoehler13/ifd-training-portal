@@ -6,8 +6,9 @@ import { calculateExpenseSummaryFromDraft } from "./expenses";
 import { APPROVED_PACKET_VISUAL_FIXTURE_REQUEST as request } from "./pdf/approved-packet-visual-fixture";
 import type { AuthenticatedPersonnel } from "./auth/personnel";
 import type { TrainingRequestRow } from "@/types/training-request";
+import { isValidNyTrainingId, normalizeNyTrainingId, nyTrainingIdDigits } from "./ny-training-id";
 
-const details = { requesterAddress:"123 Example Street Apt 4", requesterCity:"Ithaca", requesterState:"NY", requesterZip:"14850-1234", requesterPhone:"(607) 555-0100", nyTrainingId:"00123456" };
+const details = { requesterAddress:"123 Example Street Apt 4", requesterCity:"Ithaca", requesterState:"NY", requesterZip:"14850-1234", requesterPhone:"(607) 555-0100", nyTrainingId:"NY0012345" };
 describe("state course student details", () => {
   it("requires all six fields only for OFPC courses", () => {
     assert.equal(Object.keys(validateStateCourseDetails({}, true)).length, 6);
@@ -29,7 +30,7 @@ describe("state course student details", () => {
     const payload = buildTrainingRequestDatabasePayload(input);
     const record = mapTrainingRequestRow({...payload,id:request.id,status:"draft"} as TrainingRequestRow);
     assert.deepEqual(normalizeStateCourseDetails(trainingRequestRecordToDraft(record),true),details);
-    assert.equal(payload.ny_training_id,"00123456");
+    assert.equal(payload.ny_training_id,"NY0012345");
     const nonState = buildTrainingRequestDatabasePayload({...input,isOfpcCourse:false});
     for (const {column} of STATE_COURSE_FIELDS) assert.equal(nonState[column],null);
   });
@@ -39,5 +40,44 @@ describe("state course student details", () => {
     assert.doesNotThrow(()=>buildTrainingRequestInput({...input,requireComplete:false}));
     assert.throws(()=>buildTrainingRequestInput({...input,requireComplete:true}),/Street Address is required/);
     assert.equal(draft.nyTrainingId,"");
+  });
+});
+
+describe("New York Training ID entry", () => {
+  it("pads short numbers to seven digits and includes exactly one NY prefix", () => {
+    for (const value of ["1336", "0001336", "NY0001336", "ny1336", " NY-1336 "]) {
+      assert.equal(normalizeNyTrainingId(value), "NY0001336");
+      assert.equal(nyTrainingIdDigits(normalizeNyTrainingId(value)), "0001336");
+      assert.deepEqual(validateStateCourseDetails({ ...details, nyTrainingId: value }, true), {});
+    }
+    assert.equal(normalizeNyTrainingId("0"), "NY0000000");
+    assert.equal(normalizeNyTrainingId("1234567"), "NY1234567");
+    assert.equal(normalizeNyTrainingId(""), "");
+  });
+  it("rejects letters, signs, decimals and excess digits without silently rewriting them", () => {
+    for (const value of ["12345678", "NY00001336", "12a34", "1e3", "-1336", "13.36", "13 36", "NYNY1336"]) {
+      assert.equal(isValidNyTrainingId(value), false);
+      assert.equal(normalizeNyTrainingId(value), value);
+      assert.ok(validateStateCourseDetails({ ...details, nyTrainingId: value }, true).nyTrainingId);
+    }
+  });
+  it("stores the complete padded ID even if a short entry is submitted before blur", () => {
+    const draft = trainingRequestRecordToDraft({ ...request, ...details, otherExpenseDescription: "Parking" });
+    draft.nyTrainingId = "1336";
+    const input = buildTrainingRequestInput({ personnel: { id: request.requesterPersonnelId } as AuthenticatedPersonnel, draft, requireComplete: true, expenseSummary: calculateExpenseSummaryFromDraft(draft, request.gsaMileageRate) });
+    assert.equal(input.nyTrainingId, "NY0001336");
+    const payload = buildTrainingRequestDatabasePayload(input);
+    assert.equal(payload.ny_training_id, "NY0001336");
+    const restored = trainingRequestRecordToDraft(mapTrainingRequestRow({ ...payload, id: request.id, status: "draft" } as TrainingRequestRow));
+    assert.equal(restored.nyTrainingId, "NY0001336");
+    assert.equal(nyTrainingIdDigits(restored.nyTrainingId), "0001336");
+  });
+  it("retains historical IDs when reading records and rejects malformed new submissions", () => {
+    const payload = buildTrainingRequestDatabasePayload({ ...request, ...details });
+    const historical = mapTrainingRequestRow({ ...payload, id: request.id, status: "approved", ny_training_id: "00123456" } as TrainingRequestRow);
+    assert.equal(historical.nyTrainingId, "00123456");
+    const draft = trainingRequestRecordToDraft({ ...request, ...details, otherExpenseDescription: "Parking" });
+    draft.nyTrainingId = "12345678";
+    assert.throws(() => buildTrainingRequestInput({ personnel: { id: request.requesterPersonnelId } as AuthenticatedPersonnel, draft, requireComplete: true, expenseSummary: calculateExpenseSummaryFromDraft(draft, request.gsaMileageRate) }), /one to seven numbers/);
   });
 });

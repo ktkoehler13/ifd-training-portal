@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { PDFDocument, StandardFonts, type PDFPage } from "pdf-lib";
 import { requestContactEmail } from "@/lib/training-location";
+import { normalizeNyTrainingId, nyTrainingIdDigits } from "@/lib/ny-training-id";
 import { TAL_CONSTANTS } from "@/lib/pdf/field-mapping";
 import { drawSignatureInBox } from "@/lib/pdf/draw-signature";
 import { stripInteractivePdfArtifacts } from "@/lib/pdf/validate-merged-packet";
@@ -19,6 +20,7 @@ const ACADEMY_DIGIT_CELLS = {
 export function academyDigitPlacements(field: keyof typeof ACADEMY_DIGIT_CELLS, value: string) {
   const cells = ACADEMY_DIGIT_CELLS[field];
   if (!/^[0-9]+$/.test(value) || value.length > cells.count || (field === "last 4 of SSN" && value.length !== 4)) return null;
+  if (field === "Training ID") value = value.padStart(cells.count, "0");
   const width = (cells.right - cells.left) / cells.count;
   return [...value].map((digit, index) => ({ digit, centerX: cells.left + width * (index + 0.5), y: cells.baseline }));
 }
@@ -31,7 +33,7 @@ export function academyRegistrationValues({ request, mtoAction }: ApprovedPacket
   const name = splitRequesterNameForTal(request.requesterName);
   return {
     Name: name.lastName ? `${name.lastName}, ${name.firstName}` : name.firstName,
-    "Training ID": (request.nyTrainingId ?? "").trim().replace(/^NY[ -]?/i, ""),
+    "Training ID": nyTrainingIdDigits(normalizeNyTrainingId(request.nyTrainingId)),
     "last 4 of SSN": /^[0-9]{4}$/.test(request.academySsnLast4 ?? "") ? request.academySsnLast4! : "",
     "Home Address": request.requesterAddress ?? "", City: request.requesterCity ?? "", State: request.requesterState ?? "", Zip: request.requesterZip ?? "",
     "Daytime Phone": request.requesterPhone ?? "", Email: requestContactEmail(request),
