@@ -1,3 +1,4 @@
+import { requestContactEmail } from "@/lib/training-location";
 import {
   PDFDocument,
   rgb,
@@ -340,6 +341,7 @@ export async function createAuditTrailPages(
   const summaryRows = [
     { label: "Request Number:", value: request.requestNumber?.trim() || "Not assigned" },
     { label: "Requester:", value: request.requesterName?.trim() || "" },
+    { label: "Request contact email:", value: requestContactEmail(request) },
     { label: "Badge Number:", value: request.requesterBadgeNumber?.trim() || "" },
     { label: "Course:", value: request.courseName?.trim() || "" },
     { label: "Current Status:", value: TRAINING_REQUEST_STATUS_LABELS[request.status] },

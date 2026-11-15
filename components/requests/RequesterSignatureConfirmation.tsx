@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/Button";
+import { AddSignatureDialog } from "@/components/signature/AddSignatureDialog";
 
 export function RequesterSignatureConfirmation({ confirmed, onConfirm, onReady }: {
   confirmed: boolean;
@@ -13,6 +14,8 @@ export function RequesterSignatureConfirmation({ confirmed, onConfirm, onReady }
   const [preview, setPreview] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showEditor, setShowEditor] = useState(false);
+  const [savedMessage, setSavedMessage] = useState(false);
   useEffect(() => {
     let active = true;
     onReady(false);
@@ -40,11 +43,15 @@ export function RequesterSignatureConfirmation({ confirmed, onConfirm, onReady }
     ) : <p className="text-sm text-zinc-700">Save your signature before submitting this state-run course request.</p>}
     {error ? <p role="alert" className="text-sm text-red-700">{error}</p> : null}
     <div className="flex flex-wrap items-center gap-3 text-sm">
-      <a href="/settings/signature" target="_blank" rel="noopener noreferrer" className="font-semibold text-red-700 underline">Set up or update my signature (opens a new tab)</a>
+      <Button type="button" variant="secondary" onClick={() => { onConfirm(false); setShowEditor(true); setSavedMessage(false); }}>{preview ? "Update Signature" : "Add Signature"}</Button>
       <Button type="button" variant="secondary" disabled={loading} onClick={() => {
         onConfirm(false); onReady(false); setLoading(true); setError(null); setReload((value) => value + 1);
       }}>Check for saved signature</Button>
     </div>
+    {savedMessage && !loading && preview && !error ? <p role="status" className="text-sm text-green-800">Signature added. Confirm the acknowledgment below to continue.</p> : null}
+    {showEditor ? <AddSignatureDialog onClose={() => setShowEditor(false)} onSaved={() => {
+      setShowEditor(false); onConfirm(false); onReady(false); setLoading(true); setError(null); setSavedMessage(true); setReload((value) => value + 1);
+    }} /> : null}
     <label className="flex items-start gap-3 text-sm text-zinc-800">
       <input type="checkbox" checked={confirmed} disabled={loading || !preview || Boolean(error)}
         onChange={(event) => onConfirm(event.target.checked)}

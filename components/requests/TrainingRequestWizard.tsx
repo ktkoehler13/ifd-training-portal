@@ -2,6 +2,9 @@
 
 import { STATE_COURSE_FIELDS, normalizeStateCourseDetails, validateStateCourseDetails } from "@/lib/state-course-details";
 import { RequesterSignatureConfirmation } from "@/components/requests/RequesterSignatureConfirmation";
+import { TrainingLocationFields } from "@/components/requests/TrainingLocationFields";
+import { AcademyExpensePreset } from "@/components/requests/AcademyExpensePreset";
+import { applyAcademyExpenseDefaults, parseAcademyMealDays, suggestedAcademyMealDays, validateAcademySsnLast4, validateRequestContactEmail } from "@/lib/training-location";
 import { StateCourseDetailsFields } from "@/components/requests/StateCourseDetailsFields";
 import { ADDRESS_KEYS, prefillNewRequestAddress, samePersonnelAddress, type AddressField, type PersonnelAddress } from "@/lib/personnel-address";
 import { getOwnPersonnelAddress, saveOwnPersonnelAddress } from "@/lib/personnel-address-client";
@@ -38,7 +41,6 @@ import {
 import {
   formatPersonnelFullName,
   hasCompletePersonnelName,
-  normalizePersonnelEmail,
   PERSONNEL_NAME_REQUIRED_MESSAGE,
 } from "@/lib/personnel";
 import {
@@ -73,6 +75,9 @@ const initialDraft: TrainingRequestDraft = {
   isOfpcCourse: null,
   trainingProvider: "",
   location: "",
+  locationType: "",
+  academyMealDays: "",
+  academySsnLast4: "",
   courseStartDate: "",
   courseEndDate: "",
   totalDaysIncludingTravel: "",
@@ -110,10 +115,6 @@ interface TrainingRequestWizardProps {
 type DraftErrors = Partial<
   Record<keyof TrainingRequestDraft | "gsaMileageRate" | "submit", string>
 >;
-
-function isValidEmail(value: string) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
-}
 
 function formatDisplayDate(value: string) {
   if (!value) {
@@ -376,16 +377,8 @@ export function TrainingRequestWizard({
         nextErrors.badgeNumber =
           "Badge number must match your signed-in personnel record.";
       }
-      if (!draft.departmentEmail.trim()) {
-        nextErrors.departmentEmail = "Department email is required.";
-      } else if (
-        normalizePersonnelEmail(draft.departmentEmail) !== personnel.email
-      ) {
-        nextErrors.departmentEmail =
-          "Department email must match your signed-in personnel record.";
-      } else if (!isValidEmail(draft.departmentEmail.trim())) {
-        nextErrors.departmentEmail = "Enter a valid email address.";
-      }
+      const emailError = validateRequestContactEmail(draft.departmentEmail);
+      if (emailError) nextErrors.departmentEmail = emailError;
     }
 
     if (currentStep === 4 && draft.isOfpcCourse === true && (!draft.requesterSignatureConfirmed || !requesterSignatureReady)) {
@@ -394,6 +387,8 @@ export function TrainingRequestWizard({
 
     if (currentStep === 2) {
       Object.assign(nextErrors, validateStateCourseDetails(draft, draft.isOfpcCourse));
+      const ssnError = validateAcademySsnLast4(draft.academySsnLast4, draft.locationType);
+      if (ssnError) nextErrors.academySsnLast4 = ssnError;
       if (!draft.courseName.trim()) {
         nextErrors.courseName = "Course name is required.";
       }
@@ -403,8 +398,8 @@ export function TrainingRequestWizard({
       } else if (draft.isOfpcCourse && !draft.courseNumber.trim()) {
         nextErrors.courseNumber = "Course number is required.";
       }
-      if (!draft.location.trim()) {
-        nextErrors.location = "Location is required.";
+      if (!draft.location.trim() || draft.location.length > 300) {
+        nextErrors.location = "Select a location, or enter an Other location (300 characters or fewer).";
       }
       if (!draft.courseStartDate) {
         nextErrors.courseStartDate = "Course start date is required.";
@@ -432,6 +427,7 @@ export function TrainingRequestWizard({
     }
 
     if (currentStep === 3) {
+      if (draft.locationType === "nys_fire_academy" && parseAcademyMealDays(draft.academyMealDays) === null) nextErrors.academyMealDays = "Enter a whole number of commuter meal days from 0 to 366.";
       if (!rateAvailable) {
         nextErrors.gsaMileageRate =
           "GSA mileage rate is not configured. Contact the Training Bureau.";
@@ -486,16 +482,8 @@ export function TrainingRequestWizard({
         "Badge number must match your signed-in personnel record.";
     }
 
-    if (!draft.departmentEmail.trim()) {
-      nextErrors.departmentEmail = "Department email is required.";
-    } else if (
-      normalizePersonnelEmail(draft.departmentEmail) !== personnel.email
-    ) {
-      nextErrors.departmentEmail =
-        "Department email must match your signed-in personnel record.";
-    } else if (!isValidEmail(draft.departmentEmail.trim())) {
-      nextErrors.departmentEmail = "Enter a valid email address.";
-    }
+    const emailError = validateRequestContactEmail(draft.departmentEmail);
+    if (emailError) nextErrors.departmentEmail = emailError;
 
     return nextErrors;
   }
@@ -576,7 +564,10 @@ export function TrainingRequestWizard({
     addressSaveBusy.current = true;
     setIsSavingAddress(true);
     try {
-      if (step === 2) await saveAddressIfRequested();
+      if (step === 2) {
+        await saveAddressIfRequested();
+        setDraft((current) => applyAcademyExpenseDefaults(current));
+      }
       setStep((current) => Math.min(current + 1, TOTAL_STEPS));
     } catch (error) {
       setAddressSaveError(error instanceof Error ? error.message : "Your address could not be saved. Try again.");
@@ -782,15 +773,15 @@ export function TrainingRequestWizard({
               </Field>
               <Field
                 id="departmentEmail"
-                label="Department Email"
+                label="Contact Email for This Request"
                 error={errors.departmentEmail}
               >
                 <Input
                   id="departmentEmail"
                   type="email"
                   value={draft.departmentEmail}
-                  readOnly
-                  disabled
+                  maxLength={254}
+                  onChange={(event) => updateField("departmentEmail", event.target.value)}
                   aria-invalid={errors.departmentEmail ? true : undefined}
                   aria-describedby={
                     errors.departmentEmail
@@ -798,6 +789,7 @@ export function TrainingRequestWizard({
                       : undefined
                   }
                 />
+                <p className="text-sm leading-6 text-zinc-600">Request updates and approved forms will be sent here. Changing this email does not change your sign-in account.</p>
               </Field>
             </div>
             {errors.submit ? (
@@ -855,6 +847,13 @@ export function TrainingRequestWizard({
                   }
                 />
               </Field>
+              <TrainingLocationFields type={draft.locationType} location={draft.location} error={errors.location} onChange={(locationType, location) => {
+                setDraft((current) => ({ ...current, locationType, location,
+                  academyMealDays: locationType === "nys_fire_academy" ? current.academyMealDays : "",
+                  academySsnLast4: locationType === "nys_fire_academy" ? current.academySsnLast4 : "",
+                  isOfpcCourse: locationType === "nys_fire_academy" ? true : current.isOfpcCourse,
+                }));
+              }} />
               <div className="sm:col-span-2">
                 <fieldset>
                   <legend className="text-sm font-medium text-zinc-700">
@@ -879,6 +878,7 @@ export function TrainingRequestWizard({
                         type="radio"
                         name="isOfpcCourse"
                         checked={draft.isOfpcCourse === false}
+                        disabled={draft.locationType === "nys_fire_academy"}
                         onChange={() => handleIsOfpcCourseChange(false)}
                         className="h-4 w-4 border-zinc-300 text-red-700 focus:ring-red-700"
                       />
@@ -939,24 +939,16 @@ export function TrainingRequestWizard({
                     <p id="save-address-help" className="text-sm leading-6 text-zinc-600">Saved when you select Continue or Save Draft. Future OFPC requests will fill it in automatically. You can also update it in <a href="/settings/profile" target="_blank" rel="noopener noreferrer" className="font-semibold text-red-700 underline">My Profile (opens a new tab)</a>.</p>
                   </div>} />
               ) : null}
-              <Field
-                id="location"
-                label="Location"
-                error={errors.location}
-                className="sm:col-span-2"
-              >
-                <Input
-                  id="location"
-                  value={draft.location}
-                  onChange={(event) =>
-                    updateField("location", event.target.value)
-                  }
-                  aria-invalid={errors.location ? true : undefined}
-                  aria-describedby={
-                    errors.location ? "location-error" : undefined
-                  }
-                />
-              </Field>
+              {draft.locationType === "nys_fire_academy" ? (
+                <Field id="academySsnLast4" label="Last four digits of SSN" error={errors.academySsnLast4} className="sm:col-span-2">
+                  <Input id="academySsnLast4" type="text" inputMode="numeric" autoComplete="off" maxLength={4} pattern="[0-9]{4}"
+                    value={draft.academySsnLast4 ?? ""} required disabled={isSavingAddress || isSavingDraft || isSubmitting}
+                    onChange={(event) => updateField("academySsnLast4", event.target.value)}
+                    aria-invalid={errors.academySsnLast4 ? true : undefined}
+                    aria-describedby={errors.academySsnLast4 ? "academySsnLast4-error academySsnLast4-help" : "academySsnLast4-help"} />
+                  <p id="academySsnLast4-help" className="mt-2 text-sm leading-6 text-zinc-600">Enter only the last four digits. They will appear on this Academy Registration Form and be saved with this request, not in your profile.</p>
+                </Field>
+              ) : null}
               <Field
                 id="courseStartDate"
                 label="Course Start Date"
@@ -1043,6 +1035,16 @@ export function TrainingRequestWizard({
               </div>
             ) : null}
 
+            {draft.locationType === "nys_fire_academy" ? <AcademyExpensePreset
+              days={draft.academyMealDays ?? String(suggestedAcademyMealDays(draft.courseStartDate, draft.courseEndDate))}
+              error={errors.academyMealDays}
+              onDaysChange={(value) => setDraft((current) => {
+                const oldDays = parseAcademyMealDays(current.academyMealDays);
+                const newDays = parseAcademyMealDays(value);
+                const followsEstimate = !current.foodExpenses.trim() || (oldDays !== null && Number(current.foodExpenses) === oldDays * 8);
+                return { ...current, academyMealDays: value, foodExpenses: followsEstimate && newDays !== null ? (newDays * 8).toFixed(2) : current.foodExpenses };
+              })}
+              onApply={() => setDraft((current) => applyAcademyExpenseDefaults(current, true))} /> : null}
             <FormSection title="Transportation">
               <fieldset className="space-y-3">
                 <legend className="text-sm font-medium text-zinc-900">
@@ -1328,7 +1330,7 @@ export function TrainingRequestWizard({
               />
               <ReviewItem label="Badge Number" value={draft.badgeNumber} />
               <ReviewItem
-                label="Department Email"
+                label="Contact Email for This Request"
                 value={draft.departmentEmail}
               />
             </ReviewSection>
@@ -1353,6 +1355,7 @@ export function TrainingRequestWizard({
                 <ReviewItem label="Course Number" value={draft.courseNumber} />
               ) : null}
               <ReviewItem label="Location" value={draft.location} />
+              {draft.locationType === "nys_fire_academy" ? <ReviewItem label="Academy attendance" value={`Commuter — ${draft.academyMealDays} meal day(s)`} /> : null}
               <ReviewItem
                 label="Course Start Date"
                 value={formatDisplayDate(draft.courseStartDate)}
@@ -1393,6 +1396,7 @@ export function TrainingRequestWizard({
                 {STATE_COURSE_FIELDS.map(({ key, label }) => (
                   <ReviewItem key={key} label={label} value={draft[key] ?? ""} wide={key === "requesterAddress"} />
                 ))}
+                {draft.locationType === "nys_fire_academy" ? <ReviewItem label="Last four digits of SSN" value={draft.academySsnLast4 ?? ""} /> : null}
               </ReviewSection>
             ) : null}
 

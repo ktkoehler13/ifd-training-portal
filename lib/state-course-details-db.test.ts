@@ -55,6 +55,76 @@ describe("OFPC details and immutable requester signatures at the database bounda
     assert.equal((await row()).ny_training_id,null);await fill();
     assert.equal((await row()).ny_training_id,"00123456");assert.equal((await row()).requester_state,"NY");
   });
+  it("stores request contact separately while retaining the authenticated identity", async () => {
+    await db.query("update training_requests set request_contact_email=' Alternate@Example.Test ',location_type='sptc',location='old venue',academy_meal_days=4 where id=$1", [requestId]);
+    const result = await row();
+    assert.equal(result.request_contact_email, "alternate@example.test"); assert.equal(result.requester_email, "owner@example.test");
+    assert.equal(result.requester_name, "Sample Requester"); assert.equal(result.requester_badge_number, "1");
+    assert.equal(result.location, "SPTC"); assert.equal(result.academy_meal_days, null);
+    assert.equal((await db.query("select email from personnel where id=$1", [owner])).rows[0].email, "owner@example.test");
+  });
+  it("rejects malformed request emails at the database boundary", async () => {
+    await assert.rejects(db.query("update training_requests set request_contact_email='missing@domain' where id=$1", [requestId]), /valid contact email/);
+  });
+  it("does not let another requester change a request's contact or venue", async () => {
+    await asUser("other@example.test");
+    assert.equal((await db.query("update training_requests set request_contact_email='other@example.test',location_type='sptc' where id=$1 returning id", [requestId])).rows.length, 0);
+  });
+  it("requires Academy meal days at signed submission and keeps failure atomic", async () => {
+    await fill(); await db.query("update training_requests set location_type='nys_fire_academy' where id=$1", [requestId]);
+    const id = await reserve(); await db.exec("savepoint invalid_academy");
+    await assert.rejects(complete(id), /commuter meal-day count/);
+    await db.exec("rollback to savepoint invalid_academy");
+    assert.equal((await row()).status, "draft");
+  });
+  it("requires OFPC details for Academy courses", async () => {
+    await db.query("update training_requests set location_type='nys_fire_academy',academy_meal_days=3,is_ofpc_course=false where id=$1", [requestId]);
+    await assert.rejects(db.query("select submit_training_request($1)", [requestId]), /Academy requests require OFPC/);
+  });
+  for (const days of [-1, 367]) it(`rejects invalid Academy meal days (${days})`, async () => {
+    await assert.rejects(db.query("update training_requests set location_type='nys_fire_academy',academy_meal_days=$1 where id=$2", [days, requestId]), /check constraint/);
+  });
+  it("submits an Academy request with zero meals and freezes its contact and venue", async () => {
+    await fill(); await db.query("update training_requests set location_type='nys_fire_academy',academy_meal_days=0,academy_ssn_last4='0012',request_contact_email='alternate@example.test' where id=$1", [requestId]);
+    const id = await reserve(); await complete(id);
+    assert.equal((await row()).location, "NYS Fire Academy"); assert.equal((await row()).status, "pending_mto");
+    assert.equal((await row()).academy_ssn_last4, "0012");
+    await db.exec("reset role");
+    for (const change of ["request_contact_email='changed@example.test'", "location_type='other'", "academy_meal_days=1", "academy_ssn_last4='1234'"]) {
+      await db.exec("savepoint frozen");
+      await assert.rejects(db.query(`update training_requests set ${change} where id=$1`, [requestId]), /only be edited/);
+      await db.exec("rollback to savepoint frozen");
+    }
+  });
+  it("requires the last four SSN digits when submitting an Academy request", async () => {
+    await fill(); await db.query("update training_requests set location_type='nys_fire_academy',academy_meal_days=1 where id=$1", [requestId]);
+    const id = await reserve(); await assert.rejects(complete(id), /last four digits/);
+  });
+  for (const value of ["123", "123456789", "12a4"]) it(`rejects invalid SSN suffix length or content (${value.length} characters)`, async () => {
+    await assert.rejects(db.query("update training_requests set location_type='nys_fire_academy',academy_ssn_last4=$1 where id=$2", [value, requestId]), /check constraint/);
+  });
+  it("retains leading zeroes, blocks other requesters, and clears the suffix when leaving Academy training", async () => {
+    await db.query("update training_requests set location_type='nys_fire_academy',academy_ssn_last4=' 0012 ' where id=$1", [requestId]);
+    assert.equal((await row()).academy_ssn_last4, "0012");
+    await asUser("other@example.test"); assert.equal(await row(), undefined);
+    assert.equal((await db.query("update training_requests set academy_ssn_last4='1234' where id=$1 returning id", [requestId])).rows.length, 0);
+    await asUser(); await db.query("update training_requests set location_type='sptc' where id=$1", [requestId]);
+    assert.equal((await row()).academy_ssn_last4, null);
+  });
+  it("routes requester decisions to the request email while reviewer alerts keep their own address", async () => {
+    await db.query("update training_requests set is_ofpc_course=false,request_contact_email='alternate@example.test' where id=$1", [requestId]);
+    await db.query("select submit_training_request($1)", [requestId]); await db.exec("reset role");
+    await db.query("update personnel set role='mto' where id=$1", [other]);
+    const action = (await db.query("select id from training_request_actions where training_request_id=$1", [requestId])).rows[0].id;
+    for (const event of ["approved", "denied", "returned_for_correction", "pending_mto"]) await db.query("select enqueue_training_request_notifications($1,$2,$3)", [requestId, action, event]);
+    const notifications = (await db.query("select event_type,recipient_email from training_request_notifications where training_request_id=$1 order by event_type", [requestId])).rows;
+    assert.deepEqual(notifications, [
+      { event_type: "approved", recipient_email: "alternate@example.test" },
+      { event_type: "denied", recipient_email: "alternate@example.test" },
+      { event_type: "pending_mto", recipient_email: "other@example.test" },
+      { event_type: "returned_for_correction", recipient_email: "alternate@example.test" },
+    ]);
+  });
   it("does not retain student details on non-OFPC requests",async()=>{
     await fill();await db.query("update training_requests set is_ofpc_course=false where id=$1",[requestId]);
     assert.equal((await row()).requester_address,null);assert.equal((await row()).ny_training_id,null);

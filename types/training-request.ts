@@ -1,4 +1,5 @@
 import type { StateCourseDetails } from "@/lib/state-course-details";
+import type { TrainingLocationType } from "@/lib/training-location";
 import type { PersonnelRole, PersonnelTitle } from "@/types/personnel";
 
 export const TRAINING_REQUEST_STATUSES = [
@@ -40,6 +41,10 @@ export interface TrainingRequestRow {
   requester_personnel_id: string;
   requester_badge_number: string;
   requester_email: string;
+  request_contact_email?: string | null;
+  location_type?: TrainingLocationType | null;
+  academy_meal_days?: number | null;
+  academy_ssn_last4?: string | null;
   requester_name: string;
   requester_title_snapshot: PersonnelTitle | null;
   requester_address?: string | null;
@@ -81,6 +86,10 @@ export interface TrainingRequestRow {
 }
 
 export interface TrainingRequestRecord extends StateCourseDetails {
+  requestContactEmail?: string | null;
+  locationType?: TrainingLocationType | "";
+  academyMealDays?: number | null;
+  academySsnLast4?: string | null;
   id: string;
   requestNumber: string | null;
   requesterPersonnelId: string;
@@ -120,6 +129,10 @@ export interface TrainingRequestRecord extends StateCourseDetails {
 }
 
 export interface TrainingRequestInsertInput extends StateCourseDetails {
+  requestContactEmail?: string | null;
+  locationType?: TrainingLocationType | "";
+  academyMealDays?: number | null;
+  academySsnLast4?: string | null;
   requesterPersonnelId: string;
   requesterBadgeNumber: string;
   requesterEmail: string;
@@ -152,6 +165,9 @@ export interface TrainingRequestInsertInput extends StateCourseDetails {
 export type TrainingRequestUpdateInput = TrainingRequestInsertInput;
 
 export interface TrainingRequestDraft extends StateCourseDetails {
+  locationType?: TrainingLocationType | "";
+  academyMealDays?: string;
+  academySsnLast4?: string;
   badgeNumber: string;
   departmentEmail: string;
   courseName: string;

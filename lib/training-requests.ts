@@ -1,4 +1,5 @@
 import { normalizeStateCourseDetails, normalizeStateCourseText, validateStateCourseDetails } from "@/lib/state-course-details";
+import { normalizeTrainingLocation, parseAcademyMealDays, requestContactEmail, validateAcademySsnLast4, validateRequestContactEmail } from "@/lib/training-location";
 import { normalizeOtherExpenseDescription, validateOtherExpenseDescription } from "@/lib/other-expense-description";
 import { roundCurrency } from "@/lib/currency";
 import { calculateExpenseSummary } from "@/lib/expenses";
@@ -100,6 +101,10 @@ export function mapTrainingRequestRow(row: TrainingRequestRow): TrainingRequestR
     requesterPersonnelId: row.requester_personnel_id,
     requesterBadgeNumber: row.requester_badge_number,
     requesterEmail: row.requester_email,
+    requestContactEmail: row.request_contact_email ?? null,
+    locationType: row.location_type ?? (row.location?.trim() ? "other" : ""),
+    academyMealDays: row.academy_meal_days ?? null,
+    academySsnLast4: row.academy_ssn_last4 ?? null,
     requesterName: row.requester_name,
     requesterTitleSnapshot: row.requester_title_snapshot ?? null,
     requesterAddress: normalizeStateCourseText(row.requester_address),
@@ -148,7 +153,10 @@ export function trainingRequestRecordToDraft(
   return {
     ...normalizeStateCourseDetails(request, request.isOfpcCourse),
     badgeNumber: request.requesterBadgeNumber,
-    departmentEmail: request.requesterEmail,
+    departmentEmail: requestContactEmail(request),
+    locationType: request.locationType ?? (request.location.trim() ? "other" : ""),
+    academyMealDays: request.academyMealDays == null ? "" : String(request.academyMealDays),
+    academySsnLast4: request.locationType === "nys_fire_academy" ? request.academySsnLast4 ?? "" : "",
     courseName: request.courseName,
     courseNumber: request.courseNumber,
     isOfpcCourse: request.isOfpcCourse,
@@ -194,6 +202,15 @@ export function buildTrainingRequestInput(input: {
     if (error) throw new Error(error);
   }
   const normalizedEmail = normalizePersonnelEmail(input.draft.departmentEmail);
+  const contactError = validateRequestContactEmail(normalizedEmail);
+  if (contactError) throw new Error(contactError);
+  const venue = normalizeTrainingLocation(input.draft.locationType, input.draft.location);
+  const ssnError = validateAcademySsnLast4(input.draft.academySsnLast4, venue.locationType, input.requireComplete ?? false);
+  if (ssnError) throw new Error(ssnError);
+  const academySsnLast4 = venue.locationType === "nys_fire_academy" ? input.draft.academySsnLast4?.trim() || null : null;
+  const academyMealDays = venue.locationType === "nys_fire_academy" ? parseAcademyMealDays(input.draft.academyMealDays) : null;
+  if (input.requireComplete && (!venue.location || venue.location.length > 300)) throw new Error("Enter a training location (300 characters or fewer).");
+  if (input.requireComplete && venue.locationType === "nys_fire_academy" && (academyMealDays === null || input.draft.isOfpcCourse !== true)) throw new Error("Academy requests require OFPC course information and a valid commuter meal-day count.");
   const dayDetails = buildTrainingDayDetailsFromDraft(input.draft, {
     requireComplete: input.requireComplete ?? false,
   });
@@ -202,7 +219,11 @@ export function buildTrainingRequestInput(input: {
     ...normalizeStateCourseDetails(input.draft, input.draft.isOfpcCourse),
     requesterPersonnelId: input.personnel.id,
     requesterBadgeNumber: input.draft.badgeNumber.trim(),
-    requesterEmail: normalizedEmail,
+    requesterEmail: input.personnel.email,
+    requestContactEmail: normalizedEmail,
+    locationType: venue.locationType,
+    academyMealDays,
+    academySsnLast4,
     courseName: input.draft.courseName.trim(),
     courseNumber:
       input.draft.isOfpcCourse === true
@@ -211,7 +232,7 @@ export function buildTrainingRequestInput(input: {
     isOfpcCourse: input.draft.isOfpcCourse,
     trainingProvider: input.draft.trainingProvider.trim(),
     courseDescription: input.draft.courseDescription.trim(),
-    location: input.draft.location.trim(),
+    location: venue.location,
     courseStartDate: input.draft.courseStartDate,
     courseEndDate: input.draft.courseEndDate,
     totalDaysIncludingTravel: dayDetails.totalDaysIncludingTravel,
@@ -247,6 +268,10 @@ export function buildTrainingRequestDatabasePayload(
     requester_personnel_id: input.requesterPersonnelId,
     requester_badge_number: input.requesterBadgeNumber,
     requester_email: input.requesterEmail,
+    request_contact_email: input.requestContactEmail || null,
+    location_type: input.locationType || null,
+    academy_meal_days: input.academyMealDays ?? null,
+    academy_ssn_last4: input.locationType === "nys_fire_academy" ? input.academySsnLast4 || null : null,
     training_title: input.courseName,
     course_number: input.courseNumber,
     is_ofpc_course: input.isOfpcCourse,

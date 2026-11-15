@@ -1,3 +1,4 @@
+import { requestContactEmail } from "@/lib/training-location";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { encodePdfText, wrapPdfText } from "@/lib/pdf/wrap-pdf-text";
@@ -12,6 +13,7 @@ import { createAuditTrailPages } from "@/lib/pdf/build-audit-trail";
 import { warnApprovedPacketFieldUnavailable } from "@/lib/pdf/warn-approved-packet-fields";
 import { drawSignatureInBox } from "@/lib/pdf/draw-signature";
 import { createTrainingRequestPdf } from "@/lib/pdf/render-training-request";
+import { createAcademyRegistrationPdf } from "@/lib/pdf/render-academy-registration";
 import {
   TAL_CONSTANTS,
   TAL_FORM_FIELDS,
@@ -85,9 +87,30 @@ async function populateTalForm(pdf: PDFDocument, input: ApprovedPacketGeneration
   checkOptionalCheckbox(form, fields.scbaClearance);
   setOptionalTextField(form, fields.lastName, student.lastName);
   setOptionalTextField(form, fields.firstName, student.firstName);
-  setOptionalTextField(form, fields.email, request.requesterEmail);
+  setOptionalTextField(form, fields.email, requestContactEmail(request));
   setOptionalTextField(form, fields.studentPrintName, request.requesterName);
   const font = await pdf.embedFont(StandardFonts.Helvetica);
+  // Keep the TAL's original boxes and normal typography. Only constrain values
+  // too long for those boxes; their full text remains in the packet.
+  for (const [name, raw, reference] of [
+    [fields.courseName, request.courseName, "See Training Request for course"],
+    [fields.courseNumber, request.isOfpcCourse ? request.courseNumber : "", "See Training Request for course number"],
+    [fields.courseLocation, request.location, "See Training Request for location"],
+    [fields.email, requestContactEmail(request), "See request contact email in audit trail"],
+  ]) {
+    if (!raw?.trim()) continue;
+    let field;
+    try { field = form.getTextField(name); } catch { continue; }
+    const text = encodePdfText(raw, font).replace(/\s+/g, " ");
+    const width = Math.min(...field.acroField.getWidgets().map(widget => widget.getRectangle().width)) - 6;
+    const size = width / Math.max(1, font.widthOfTextAtSize(text, 1));
+    if (size >= 12 && text === raw) continue;
+    field.removeMaxLength();
+    field.updateAppearances(font);
+    field.setText(size < 7 ? reference : text);
+    field.setFontSize(size < 7 ? 7 : Math.min(12, size));
+    field.updateAppearances(font);
+  }
   const studentFields = request.isOfpcCourse === true ? [
     [fields.address, request.requesterAddress], [fields.city, request.requesterCity],
     [fields.state, request.requesterState], [fields.zip, request.requesterZip],
@@ -243,6 +266,10 @@ export async function generateApprovedPacketBytes(
   const [talPage] = await mergedPdf.copyPages(flattenedTalPdf, [0]);
   for (const trainingPage of trainingPages) mergedPdf.addPage(trainingPage);
   mergedPdf.addPage(talPage);
+  if (input.request.locationType === "nys_fire_academy") {
+    const academyPdf = await createAcademyRegistrationPdf(input);
+    for (const page of await mergedPdf.copyPages(academyPdf, academyPdf.getPageIndices())) mergedPdf.addPage(page);
+  }
 
   const auditPageIndexes = Array.from(
     { length: auditPdf.getPageCount() },
@@ -277,6 +304,8 @@ export async function inspectTalPopulationForTest(
   studentSignatureDate: string;
   studentAuthorizedChecked: boolean;
   scbaClearanceChecked: boolean;
+  courseName: string;
+  contactEmail: string;
 }> {
   const talPdf = await PDFDocument.load(await readFile(TAL_TEMPLATE));
   await populateTalForm(talPdf, input);
@@ -299,6 +328,8 @@ export async function inspectTalPopulationForTest(
   }
 
   return {
+    courseName: safeGetText(TAL_FORM_FIELDS.courseName),
+    contactEmail: safeGetText(TAL_FORM_FIELDS.email),
     studentDetails: Object.fromEntries(["firstName", "lastName", "address", "city", "state", "zip", "phone", "nyTrainingId"].map(key => [key, safeGetText(TAL_FORM_FIELDS[key as keyof typeof TAL_FORM_FIELDS])])),
     studentPrintName: safeGetText(TAL_FORM_FIELDS.studentPrintName),
     studentSignatureDate: safeGetText(TAL_FORM_FIELDS.studentSignatureDate),

@@ -1,5 +1,7 @@
 "use client";
 
+import { requestContactEmail } from "@/lib/training-location";
+
 import { STATE_COURSE_FIELDS } from "@/lib/state-course-details";
 import { otherExpenseLabel } from "@/lib/other-expense-description";
 import { ExpenseSummary } from "@/components/requests/ExpenseSummary";
@@ -89,6 +91,7 @@ export function RequestDetailPanel({
           className="sm:col-span-2"
         />
         <DetailItem label="Requester name" value={request.requesterName} />
+        <DetailItem label="Request contact email" value={requestContactEmail(request)} className="min-w-0 break-words" />
         <DetailItem
           label="Requester badge"
           value={request.requesterBadgeNumber}

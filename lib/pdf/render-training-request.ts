@@ -1,3 +1,4 @@
+import { requestContactEmail } from "@/lib/training-location";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import type { ApprovedPacketGenerationInput } from "@/lib/pdf/generate-approved-packet";
 import type { TrainingRequestRecord } from "@/types/training-request";
@@ -123,7 +124,7 @@ export async function createTrainingRequestPdf(
   drawHeader();
   section("GENERAL INFORMATION");
   field("Requester / Badge", [text(request.requesterName), text(request.requesterBadgeNumber)].filter(Boolean).join(" / "));
-  field("Email / Application Date", [text(request.requesterEmail), formatPdfDate(request.submittedAt ?? request.createdAt)].filter(Boolean).join(" / "));
+  field("Email / Application Date", [text(requestContactEmail(request)), formatPdfDate(request.submittedAt ?? request.createdAt)].filter(Boolean).join(" / "));
   field("Course", text(request.courseName));
   field("Provider", text(request.trainingProvider));
   field("OFPC Course / Course #", [request.isOfpcCourse == null ? "" : request.isOfpcCourse ? "Yes" : "No", request.isOfpcCourse ? text(request.courseNumber) : ""].filter(Boolean).join(" / "));

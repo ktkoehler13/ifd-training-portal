@@ -79,6 +79,7 @@ export function ApprovedPacketPanel({
       <h2 className="text-lg font-semibold text-zinc-900">
         Approved Training Packet
       </h2>
+      {request.locationType === "nys_fire_academy" ? <p className="mt-3 text-sm leading-6 text-zinc-600">Includes the Fire Academy Registration Form. Review the prefilled information and complete any remaining student information before registering with the Academy. You can leave the payment fields blank.</p> : null}
 
       {!packet ? (
         <p className="mt-3 text-sm leading-6 text-zinc-600">

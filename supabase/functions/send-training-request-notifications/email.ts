@@ -6,6 +6,7 @@ export interface EmailRequest {
   training_title: string;
   status: string;
   current_action_role: string | null;
+  request_contact_email?: string | null;
 }
 
 export interface EmailNotification {
@@ -23,7 +24,7 @@ const events: Record<string, { heading: string; action: string; button: string }
   pending_mto: { heading: "MTO review required", action: "Review this training request and record your decision.", button: "Review request" },
   pending_deputy_chief: { heading: "Deputy Chief review required", action: "Review this training request and record your decision.", button: "Review request" },
   returned_for_correction: { heading: "Training request needs corrections", action: "Read the reviewer’s comments, edit your request, and resubmit it.", button: "Review corrections" },
-  approved: { heading: "Training request approved", action: "Your training request is approved. Open the portal to view the details and approved forms.", button: "View approved request" },
+  approved: { heading: "Training request approved", action: "Your training request is approved. Your approved forms are attached. Open the portal to view the details or download them again. For Academy courses, review the registration form and complete any remaining student information before registering. You can leave the payment fields blank.", button: "View approved request" },
   denied: { heading: "Training request denied", action: "Open the portal to review the decision and reviewer’s comments.", button: "View decision" },
 };
 

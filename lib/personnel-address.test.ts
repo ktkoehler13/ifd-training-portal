@@ -6,7 +6,7 @@ const address = { requesterAddress: "123 Example St Apt 2", requesterCity: "Itha
 
 describe("saved profile address and request snapshots", () => {
   it("normalizes only address fields, excluding phone and training ID", () => {
-    assert.deepEqual(normalizePersonnelAddress({ ...address, requesterAddress: "  123  Example St\nApt 2 ", requesterState: " ny ", requesterPhone: "6075550100", nyTrainingId: "00123456" }), address);
+    assert.deepEqual(normalizePersonnelAddress({ ...address, requesterAddress: "  123  Example St\nApt 2 ", requesterState: " ny ", requesterPhone: "6075550100", nyTrainingId: "00123456", academySsnLast4: "0012" }), address);
   });
   it("requires a complete valid address with bounded lengths", () => {
     assert.equal(Object.keys(validatePersonnelAddress({})).length, 4);

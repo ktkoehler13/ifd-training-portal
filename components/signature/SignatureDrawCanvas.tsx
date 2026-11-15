@@ -15,6 +15,8 @@ import {
 
 interface SignatureDrawCanvasProps {
   disabled?: boolean;
+  saveLabel?: string;
+  compact?: boolean;
   onSave: (
     blob: Blob,
     meta?: { resized?: boolean },
@@ -30,6 +32,8 @@ const DRAWING_INSET_PX = 16;
 
 export function SignatureDrawCanvas({
   disabled = false,
+  saveLabel = "Save Drawing",
+  compact = false,
   onSave,
 }: SignatureDrawCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -199,7 +203,7 @@ export function SignatureDrawCanvas({
       <div className="overflow-hidden rounded-xl border border-zinc-300 bg-white p-4 sm:p-6">
         <canvas
           ref={canvasRef}
-          className="block h-56 w-full touch-none lg:h-72"
+          className={compact ? "block h-32 w-full touch-none sm:h-40" : "block h-56 w-full touch-none lg:h-72"}
           aria-label="Signature drawing canvas"
           onPointerDown={startDrawing}
           onPointerMove={continueDrawing}
@@ -209,8 +213,7 @@ export function SignatureDrawCanvas({
         />
       </div>
       <p className="text-sm text-zinc-600">
-        Draw with your mouse, finger, or stylus. The panel is wider on desktop so
-        long signatures fit comfortably. Use Clear to start over.
+        Draw with your mouse, finger, or stylus. Use Clear to start over.
       </p>
       {error ? (
         <p className="text-sm text-red-700" role="alert">
@@ -233,7 +236,7 @@ export function SignatureDrawCanvas({
           }}
           disabled={disabled || isSaving || !hasStroke}
         >
-          {isSaving ? "Saving…" : "Save Drawing"}
+          {isSaving ? "Saving…" : saveLabel}
         </Button>
       </div>
     </div>

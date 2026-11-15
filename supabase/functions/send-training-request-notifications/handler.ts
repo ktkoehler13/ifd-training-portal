@@ -1,4 +1,5 @@
 import { buildNotificationEmail, getRetryTime, type EmailNotification, type EmailRequest } from "./email.ts";
+import { approvedPacketPath, verifiedPacketAttachment, type ApprovedPacket } from "./attachment.ts";
 
 export interface DeliveryConfig {
   supabaseUrl?: string;
@@ -68,7 +69,7 @@ export function createNotificationHandler(config: DeliveryConfig, fetcher: Fetch
         let action: Action | undefined;
         if (!skipReason) {
           const [requests, actions, recipients] = await Promise.all([
-            database<EmailRequest[]>(`training_requests?id=eq.${notification.training_request_id}&select=id,request_number,requester_name,requester_personnel_id,training_title,status,current_action_role`),
+            database<EmailRequest[]>(`training_requests?id=eq.${notification.training_request_id}&select=id,request_number,requester_name,requester_personnel_id,request_contact_email,training_title,status,current_action_role`),
             database<Action[]>(`training_request_actions?training_request_id=eq.${notification.training_request_id}&action=in.(${workflowActions})&select=id,comments&order=created_at.desc,id.desc&limit=1`),
             notification.recipient_personnel_id
               ? database<Recipient[]>(`personnel?id=eq.${notification.recipient_personnel_id}&select=id,email,role,active`)
@@ -80,7 +81,7 @@ export function createNotificationHandler(config: DeliveryConfig, fetcher: Fetch
             : notification.event_type === "pending_deputy_chief" ? "deputy_chief" : null;
           if (!training || training.status !== notification.event_type || action?.id !== notification.source_action_id) {
             skipReason = "Request has moved beyond this workflow action";
-          } else if (!recipient?.active || recipient.email.toLowerCase() !== notification.recipient_email.toLowerCase()
+          } else if (!recipient?.active || (role ? recipient.email : training.request_contact_email || recipient.email).toLowerCase() !== notification.recipient_email.toLowerCase()
             || (role ? recipient.role !== role || training.current_action_role !== role : recipient.id !== training.requester_personnel_id)) {
             skipReason = "Recipient is no longer eligible for this alert";
           }
@@ -96,11 +97,27 @@ export function createNotificationHandler(config: DeliveryConfig, fetcher: Fetch
           await update(notification, { status: "skipped", last_error: skipReason, processing_started_at: null });
           skipped++; continue;
         }
+        let attachments: Awaited<ReturnType<typeof verifiedPacketAttachment>>[] | undefined;
+        if (notification.event_type === "approved") {
+          const packets = await database<ApprovedPacket[]>(`training_request_packets?request_id=eq.${notification.training_request_id}&select=request_id,storage_bucket,storage_path,filename,sha256,file_size_bytes,status`);
+          const storagePath = approvedPacketPath(packets[0], notification.training_request_id);
+          const download = await fetcher(`${config.supabaseUrl}/storage/v1/object/authenticated/${storagePath}`, {
+            headers, signal: AbortSignal.timeout(15_000),
+          });
+          if (!download.ok) throw new Error(`Approved forms could not be downloaded (${download.status}).`);
+          attachments = [await verifiedPacketAttachment(packets[0], new Uint8Array(await download.arrayBuffer()))];
+          // Check again after downloading; never attach forms to an obsolete decision.
+          const current = await database<EmailRequest[]>(`training_requests?id=eq.${notification.training_request_id}&select=status,request_contact_email`);
+          if (current[0]?.status !== "approved" || current[0]?.request_contact_email !== training?.request_contact_email) {
+            await update(notification, { status: "skipped", last_error: "Request changed while preparing approved forms", processing_started_at: null });
+            skipped++; continue;
+          }
+        }
         const email = buildNotificationEmail(training!, notification, config.appBaseUrl, action?.comments ?? null);
         const response = await fetcher("https://api.resend.com/emails", {
           method: "POST", signal: AbortSignal.timeout(15_000),
           headers: { Authorization: `Bearer ${config.resendApiKey}`, "Content-Type": "application/json", "Idempotency-Key": notification.id },
-          body: JSON.stringify({ from: config.fromEmail, to: [notification.recipient_email], subject: email.subject, text: email.text, html: email.html }),
+          body: JSON.stringify({ from: config.fromEmail, to: [notification.recipient_email], subject: email.subject, text: email.text, html: email.html, ...(attachments ? { attachments } : {}) }),
         });
         if (!response.ok) throw new Error(`Email provider rejected delivery (${response.status})`);
         await update(notification, { status: "sent", sent_at: new Date(now()).toISOString(), last_error: null, processing_started_at: null });
