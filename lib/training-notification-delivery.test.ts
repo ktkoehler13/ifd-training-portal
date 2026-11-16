@@ -48,6 +48,11 @@ describe("training notification email content", () => {
       for (const value of [request.request_number, request.requester_name, request.training_title]) assert.ok(email.text.includes(value));
       assert.match(email.html, /Sign in/);
       assert.equal(email.text.includes("Correct the dates"), ["returned_for_correction", "denied"].includes(event));
+      for (const content of [email.text, email.html]) {
+        assert.equal(content.includes("Your responsibilities"), event === "approved");
+        assert.equal(content.includes("Meal reimbursement"), event === "approved");
+        assert.equal(content.includes("tips up to 18%"), event === "approved");
+      }
     });
   }
   it("escapes names, courses and reviewer comments in HTML", () => {
@@ -123,6 +128,9 @@ describe("approved-form email attachments", () => {
   const options = { notification: { event_type: "approved", recipient_personnel_id: "owner", recipient_email: "owner@example.test" }, request: { status: "approved", current_action_role: null }, recipient: { id: "owner", email: "owner@example.test", role: "firefighter" } };
   it("attaches the integrity-checked approved PDF after final approval", async () => {
     const h = harness(options); await h.run();
+    for (const content of [String(h.sent[0].text), String(h.sent[0].html)]) {
+      for (const instruction of ["Register directly", "required time off", "class contact hours", "itemized meal receipts", "tips up to 18%", "travel dates, destinations, and miles driven"]) assert.ok(content.includes(instruction));
+    }
     assert.deepEqual(h.sent[0].attachments, [{ filename: "approved-forms.pdf", content: Buffer.from(packetBytes).toString("base64"), content_type: "application/pdf" }]);
     assert.equal(h.patches[0].status, "sent");
   });

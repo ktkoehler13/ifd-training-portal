@@ -24,9 +24,18 @@ const events: Record<string, { heading: string; action: string; button: string }
   pending_mto: { heading: "MTO review required", action: "Review this training request and record your decision.", button: "Review request" },
   pending_deputy_chief: { heading: "Deputy Chief review required", action: "Review this training request and record your decision.", button: "Review request" },
   returned_for_correction: { heading: "Training request needs corrections", action: "Read the reviewer’s comments, edit your request, and resubmit it.", button: "Review corrections" },
-  approved: { heading: "Training request approved", action: "Your training request is approved. Your approved forms are attached. Open the portal to view the details or download them again. For Academy courses, review the registration form and complete any remaining student information before registering. You can leave the payment fields blank.", button: "View approved request" },
+  approved: { heading: "Training request approved", action: "Your training request has been approved. Your approved forms are attached. You can also view your request and download the forms in the portal.", button: "View approved request" },
   denied: { heading: "Training request denied", action: "Open the portal to review the decision and reviewer’s comments.", button: "View decision" },
 };
+
+const approvalResponsibilities = [
+  { label: "Course registration", instruction: "Register directly with the course provider and confirm your enrollment." },
+  { label: "Time off", instruction: "Arrange and secure any required time off before attending." },
+  { label: "Class contact hours", instruction: "Record the actual class contact hours you complete." },
+  { label: "Meal reimbursement", instruction: "Save itemized meal receipts for reimbursement. The City will reimburse tips up to 18%." },
+  { label: "Mileage reimbursement", instruction: "Keep a record of your travel dates, destinations, and miles driven for any mileage reimbursement you request." },
+];
+const academyRegistrationReminder = "For Academy courses, review the attached registration form and complete any remaining student information before registering. Payment fields may be left blank.";
 
 function escapeHtml(value: string): string {
   return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;")
@@ -53,10 +62,17 @@ export function buildNotificationEmail(
   const reviewComments = ["returned_for_correction", "denied"].includes(notification.event_type)
     ? comments?.trim() : null;
   const subject = `${copy.heading}: ${request.request_number}`.replace(/[\r\n]+/g, " ");
+  const responsibilities = notification.event_type === "approved" ? approvalResponsibilities : [];
   const text = [
     "ITHACA FIRE DEPARTMENT — TRAINING PORTAL", copy.heading, copy.action,
     `Request: ${request.request_number}`, `Requester: ${request.requester_name}`,
     `Course: ${request.training_title}`,
+    ...(responsibilities.length ? [
+      "Your responsibilities",
+      "You are responsible for completing the following:",
+      responsibilities.map(({ label, instruction }) => `- ${label}: ${instruction}`).join("\n"),
+      academyRegistrationReminder,
+    ] : []),
     ...(reviewComments ? [`Reviewer comments: ${reviewComments}`] : []),
     `${copy.button}: ${link}`, "Sign in to the portal to view or act on this request.",
     "This is an automated notification. Please use the portal for request actions.",
@@ -71,6 +87,10 @@ export function buildNotificationEmail(
 <p><strong>Request:</strong> ${escapeHtml(request.request_number)}<br>
 <strong>Requester:</strong> ${escapeHtml(request.requester_name)}<br>
 <strong>Course:</strong> ${escapeHtml(request.training_title)}</p>
+${responsibilities.length ? `<h2 style="font-size:18px;line-height:1.4;margin:24px 0 8px">Your responsibilities</h2>
+<p>You are responsible for completing the following:</p>
+<ul style="padding-left:22px;margin:12px 0">${responsibilities.map(({ label, instruction }) => `<li style="margin-bottom:12px"><strong>${escapeHtml(label)}:</strong> ${escapeHtml(instruction)}</li>`).join("")}</ul>
+<p>${escapeHtml(academyRegistrationReminder)}</p>` : ""}
 ${reviewComments ? `<div style="background:#f4f4f5;padding:16px;border-left:3px solid #991b1b"><strong>Reviewer comments</strong><br>${escapeHtml(reviewComments).replaceAll("\n", "<br>")}</div>` : ""}
 <p style="margin:28px 0"><a href="${escapeHtml(link)}" style="display:inline-block;background:#991b1b;color:#ffffff;padding:12px 22px;text-decoration:none;border-radius:6px;font-weight:bold">${escapeHtml(copy.button)}</a></p>
 <p style="font-size:13px;color:#52525b">Sign in to the portal to view or act on this request.</p>

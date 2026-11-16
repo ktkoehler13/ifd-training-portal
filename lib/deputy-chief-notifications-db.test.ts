@@ -163,6 +163,7 @@ describe("primary Deputy Chief notification routing", () => {
   });
   it("allows the backup DC to complete a signed final approval", async () => {
     await designate(); await enqueue();
+    assert.equal((await db.query("select count(*)::int as count from training_request_notifications where training_request_id=$1 and event_type='approved'",[requestId])).rows[0].count,0);
     await asUser("backup@example.test");
     await db.query(`insert into personnel_signatures(personnel_id, storage_bucket, storage_path, mime_type, file_size_bytes, certification_confirmed)
       values($1,'personnel-signatures',$2,'image/png',100,true)`,[ids.backup,`${ids.backup}/signature.png`]);
@@ -175,5 +176,7 @@ describe("primary Deputy Chief notification routing", () => {
     const signed=(await db.query("select actor_personnel_id,signature_sha256 from training_request_actions where id=$1",[reservation])).rows[0];
     assert.equal(signed.actor_personnel_id,ids.backup);
     assert.equal(signed.signature_sha256,"b".repeat(64));
+    const approvalEmail = (await db.query("select source_action_id,recipient_personnel_id,recipient_email,status from training_request_notifications where training_request_id=$1 and event_type='approved'",[requestId])).rows;
+    assert.deepEqual(approvalEmail, [{ source_action_id: reservation, recipient_personnel_id: ids.owner, recipient_email: "owner@example.test", status: "pending" }]);
   });
 });
