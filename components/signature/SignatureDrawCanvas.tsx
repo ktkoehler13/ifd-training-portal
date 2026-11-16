@@ -15,6 +15,7 @@ import {
 
 interface SignatureDrawCanvasProps {
   disabled?: boolean;
+  saveDisabled?: boolean;
   saveLabel?: string;
   compact?: boolean;
   onSave: (
@@ -32,6 +33,7 @@ const DRAWING_INSET_PX = 16;
 
 export function SignatureDrawCanvas({
   disabled = false,
+  saveDisabled = false,
   saveLabel = "Save Drawing",
   compact = false,
   onSave,
@@ -180,6 +182,7 @@ export function SignatureDrawCanvas({
 
   async function handleSave() {
     const canvas = canvasRef.current;
+    if (disabled || saveDisabled || isSaving) return;
     if (!canvas || !hasStroke) {
       setError("Draw your signature before saving.");
       return;
@@ -234,7 +237,7 @@ export function SignatureDrawCanvas({
           onClick={() => {
             void handleSave();
           }}
-          disabled={disabled || isSaving || !hasStroke}
+          disabled={disabled || saveDisabled || isSaving || !hasStroke}
         >
           {isSaving ? "Saving…" : saveLabel}
         </Button>

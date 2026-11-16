@@ -1467,6 +1467,7 @@ export function TrainingRequestWizard({
             <div className="space-y-3 rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-4">
               <h3 className="text-sm font-semibold text-zinc-900">Confirm before submitting</h3>
               {draft.isOfpcCourse === true ? <RequesterSignatureConfirmation
+                defaultName={formatPersonnelFullName(personnel) ?? undefined}
                 confirmed={draft.requesterSignatureConfirmed === true}
                 onConfirm={(value) => updateField("requesterSignatureConfirmed", value)}
                 onReady={setRequesterSignatureReady} /> : null}

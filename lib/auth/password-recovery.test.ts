@@ -90,7 +90,7 @@ describe("password recovery request flow", () => {
 
 describe("password recovery reset page", () => {
   it("rejects missing recovery session", () => {
-    assert.match(recoveryServerSource, /hasPasswordRecoveryCookie/);
+    assert.match(recoveryServerSource, /verifyPasswordRecoveryProof/);
     assert.match(recoveryResetRouteSource, /completePasswordRecovery/);
     assert.equal(
       PASSWORD_RECOVERY_SESSION_REQUIRED_MESSAGE,
@@ -198,7 +198,7 @@ describe("password recovery wiring", () => {
   it("redirects recovery callbacks to /reset-password", () => {
     assert.match(
       authCallbackSource,
-      /if \(type === "recovery"\) \{\s*await markPasswordRecoverySession\(\);\s*return NextResponse\.redirect\(new URL\("\/reset-password", origin\)\);\s*\}/,
+      /if \(type === "recovery"\) \{\s*const valid = await markPasswordRecoverySession\(\);/,
     );
   });
 

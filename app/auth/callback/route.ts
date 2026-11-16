@@ -86,8 +86,8 @@ export async function GET(request: NextRequest) {
   }
 
   if (type === "recovery") {
-    await markPasswordRecoverySession();
-    return NextResponse.redirect(new URL("/reset-password", origin));
+    const valid = await markPasswordRecoverySession();
+    return NextResponse.redirect(new URL(valid ? "/reset-password" : "/reset-password?reason=invalid-link", origin));
   }
 
   if (personnel.mustChangePassword) {

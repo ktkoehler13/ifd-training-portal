@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { WorkflowSignatureSetup } from "@/components/signature/WorkflowSignatureSetup";
 import { Button } from "@/components/ui/Button";
 import { Textarea } from "@/components/ui/Textarea";
 import type { AuthenticatedPersonnel } from "@/lib/auth/personnel";
@@ -85,6 +87,8 @@ function WorkflowActionDialogContent({
   onClose: () => void;
   onConfirm: WorkflowActionDialogProps["onConfirm"];
 }) {
+  const dialog = useRef<HTMLDialogElement>(null);
+  const [signatureReady, setSignatureReady] = useState(false);
   const [comments, setComments] = useState("");
   const [electronicSignatureConfirmed, setElectronicSignatureConfirmed] =
     useState(false);
@@ -94,17 +98,17 @@ function WorkflowActionDialogContent({
   const signerName = formatPersonnelFullName(personnel);
 
   useEffect(() => {
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape" && !isSubmitting) {
-        onClose();
-      }
-    }
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isSubmitting, onClose]);
+    const element = dialog.current;
+    element?.showModal();
+    return () => element?.close();
+  }, []);
 
   async function handleConfirm() {
+    if (isSubmitting) return;
+    if (copy.requireSignature && !signatureReady) {
+      setError("Add your signature before signing this action.");
+      return;
+    }
     if (copy.requireComments && !comments.trim()) {
       setError("Comments are required for this action.");
       return;
@@ -136,22 +140,13 @@ function WorkflowActionDialogContent({
     }
   }
 
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-zinc-900/50 p-4 sm:items-center"
-      role="presentation"
-      onClick={(event) => {
-        if (event.target === event.currentTarget && !isSubmitting) {
-          onClose();
-        }
-      }}
+  return createPortal(
+    <dialog
+      ref={dialog}
+      onCancel={(event) => { event.preventDefault(); if (!isSubmitting) onClose(); }}
+      aria-labelledby="workflow-action-title"
+      className="fixed inset-0 m-auto max-h-[90dvh] w-[calc(100%-2rem)] max-w-lg overflow-y-auto rounded-2xl border-0 bg-white p-6 shadow-xl backdrop:bg-black/50 sm:p-8"
     >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="workflow-action-title"
-        className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl sm:p-8"
-      >
         <h2 id="workflow-action-title" className="text-lg font-semibold text-zinc-900">
           {copy.title}
         </h2>
@@ -167,6 +162,9 @@ function WorkflowActionDialogContent({
                 {personnel.badgeNumber}
               </span>
             </p>
+            <div className="mt-4">
+              <WorkflowSignatureSetup defaultName={signerName ?? undefined} onReady={setSignatureReady} onChange={() => setElectronicSignatureConfirmed(false)} disabled={isSubmitting} />
+            </div>
             <label className="mt-4 flex items-start gap-3 text-sm text-zinc-700">
               <input
                 type="checkbox"
@@ -174,7 +172,7 @@ function WorkflowActionDialogContent({
                 onChange={(event) =>
                   setElectronicSignatureConfirmed(event.target.checked)
                 }
-                disabled={isSubmitting}
+                disabled={isSubmitting || !signatureReady}
                 className="mt-1 h-4 w-4 rounded border-zinc-300 text-red-700 focus:ring-red-700"
               />
               <span>
@@ -225,13 +223,12 @@ function WorkflowActionDialogContent({
             type="button"
             variant={copy.destructive ? "danger" : "primary"}
             onClick={() => void handleConfirm()}
-            disabled={isSubmitting}
+            disabled={isSubmitting || (copy.requireSignature && (!signatureReady || !electronicSignatureConfirmed))}
           >
             {isSubmitting ? "Processing..." : copy.confirmLabel}
           </Button>
         </div>
-      </div>
-    </div>
+    </dialog>, document.body
   );
 }
 

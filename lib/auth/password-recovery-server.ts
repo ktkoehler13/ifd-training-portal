@@ -26,6 +26,8 @@ import { sendGoTruePasswordRecoveryEmail } from "@/lib/auth/gotrue-recover";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceRoleClient } from "@/lib/supabase/service";
 import { hasRecentRecoveryAuthentication } from "@/lib/auth/password-recovery-session";
+import { createPasswordRecoveryProof, verifyPasswordRecoveryProof, type RecoveryIdentity } from "@/lib/auth/password-recovery-proof";
+import { getSupabaseServiceRoleKey } from "@/lib/supabase/service-env";
 
 const PASSWORD_RECOVERY_COOKIE_NAME = "ifd_password_recovery";
 const PASSWORD_RECOVERY_COOKIE_MAX_AGE_SECONDS = 60 * 30;
@@ -95,9 +97,9 @@ export function getPasswordRecoveryRedirectUrl(requestOrigin?: string): string {
   return buildApplicationPathUrl("/reset-password", requestOrigin);
 }
 
-export async function markPasswordRecoverySession(): Promise<void> {
+async function savePasswordRecoveryProof(identity: RecoveryIdentity): Promise<void> {
   const cookieStore = await cookies();
-  cookieStore.set(PASSWORD_RECOVERY_COOKIE_NAME, "1", {
+  cookieStore.set(PASSWORD_RECOVERY_COOKIE_NAME, createPasswordRecoveryProof(identity, getSupabaseServiceRoleKey()), {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
@@ -106,9 +108,13 @@ export async function markPasswordRecoverySession(): Promise<void> {
   });
 }
 
-async function hasPasswordRecoveryCookie(): Promise<boolean> {
-  const cookieStore = await cookies();
-  return cookieStore.get(PASSWORD_RECOVERY_COOKIE_NAME)?.value === "1";
+// PKCE callbacks must prove recovery through verified claims. A type=recovery
+// query parameter or an ordinary OTP/password session is not sufficient.
+export async function markPasswordRecoverySession(): Promise<boolean> {
+  const identity = await getRecoveryIdentity(await createClient());
+  if (!identity || !hasRecentRecoveryAuthentication(identity.claims, identity.userId)) return false;
+  await savePasswordRecoveryProof(identity);
+  return true;
 }
 
 export async function clearPasswordRecoverySession(): Promise<void> {
@@ -177,40 +183,24 @@ export async function requestPasswordRecovery(input: {
   return genericResponse;
 }
 
-async function verifyRecoverySession(): Promise<boolean> {
-  if (!(await hasPasswordRecoveryCookie())) {
-    return false;
-  }
-
-  const supabase = await createClient();
-  const {
-    data: { user },
-    error,
-  } = await supabase.auth.getUser();
-
-  if (error || !user?.email) {
-    return false;
-  }
+async function getRecoveryIdentity(supabase: Awaited<ReturnType<typeof createClient>>) {
+  const { data: { user }, error } = await supabase.auth.getUser();
+  if (error || !user?.email) return null;
 
   const { data: verified, error: claimsError } = await supabase.auth.getClaims();
-  if (claimsError || !hasRecentRecoveryAuthentication(verified?.claims, user.id)) {
-    return false;
-  }
+  if (claimsError || verified?.claims.sub !== user.id || typeof verified.claims.session_id !== "string" || !verified.claims.session_id) return null;
 
   const personnel = await getAuthenticatedPersonnel();
+  if (!personnel || normalizePersonnelEmail(user.email) !== normalizePersonnelEmail(personnel.email)) return null;
+  return { userId: user.id, sessionId: verified.claims.session_id, claims: verified.claims };
+}
 
-  if (!personnel) {
-    return false;
-  }
-
-  if (
-    normalizePersonnelEmail(user.email) !==
-    normalizePersonnelEmail(personnel.email)
-  ) {
-    return false;
-  }
-
-  return true;
+async function verifyRecoverySession(): Promise<boolean> {
+  const cookieStore = await cookies();
+  const proof = cookieStore.get(PASSWORD_RECOVERY_COOKIE_NAME)?.value;
+  if (!proof) return false;
+  const identity = await getRecoveryIdentity(await createClient());
+  return Boolean(identity && verifyPasswordRecoveryProof(proof, identity, getSupabaseServiceRoleKey()));
 }
 
 export async function exchangePasswordRecoveryCode(
@@ -234,9 +224,7 @@ export async function exchangePasswordRecoveryCode(
     return { ok: false };
   }
 
-  await markPasswordRecoverySession();
-
-  const valid = await verifyRecoverySession();
+  const valid = await markPasswordRecoverySession();
   if (!valid) {
     await clearPasswordRecoverySession();
     return { ok: false };
@@ -250,44 +238,21 @@ export async function hasPasswordRecoverySession(): Promise<boolean> {
 }
 
 export async function establishPasswordRecoverySessionFromAuthUser(): Promise<boolean> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-    error,
-  } = await supabase.auth.getUser();
-
-  if (error || !user?.email) {
-    return false;
-  }
-
-  const { data: verified, error: claimsError } = await supabase.auth.getClaims();
-  if (claimsError || !hasRecentRecoveryAuthentication(verified?.claims, user.id)) {
-    return false;
-  }
-
-  const personnel = await getAuthenticatedPersonnel();
-
-  if (!personnel) {
-    return false;
-  }
-
-  if (
-    normalizePersonnelEmail(user.email) !==
-    normalizePersonnelEmail(personnel.email)
-  ) {
-    return false;
-  }
-
-  await markPasswordRecoverySession();
-  return true;
+  // Reopening the form may reuse proof for this session, but never renew its expiry.
+  return await verifyRecoverySession() || await markPasswordRecoverySession();
 }
 
 export async function verifyPasswordRecoveryToken(tokenHash: string): Promise<boolean> {
   if (!/^[a-f0-9]{40,128}$/i.test(tokenHash)) return false;
   const supabase = await createClient();
-  const { error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type: "recovery" });
-  if (error) return false;
-  return establishPasswordRecoverySessionFromAuthUser();
+  const { data, error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type: "recovery" });
+  if (error || !data.user) return false;
+  // Supabase's token-hash recovery exchange issues an "otp" AMR. The successful
+  // recovery-specific exchange is the proof of purpose; bind it to this session.
+  const identity = await getRecoveryIdentity(supabase);
+  if (!identity || identity.userId !== data.user.id) return false;
+  await savePasswordRecoveryProof(identity);
+  return true;
 }
 
 export async function completePasswordRecovery(input: {
