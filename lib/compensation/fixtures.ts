@@ -1,0 +1,8 @@
+import type { CompensationPacket } from "./model";
+export const compensationFixture:CompensationPacket={
+  id:"11111111-1111-4111-8111-111111111111",request_id:"22222222-2222-4222-8222-222222222222",requester_id:"33333333-3333-4333-8333-333333333333",status:"completed",version:4,
+  identity:{name:"Sample Requester",badge:"999",course:"Fire Officer Training",requestNumber:"Requester, S, Fire Officer Training, 2026.1",mileageRate:0.725},
+  data:{emtTravel:"no",compensationType:"pay",instructor:"Sample Instructor / Fire Instructor",time:[{date:"2026-11-10",start:"08:00",end:"12:00",secondStart:"12:30",secondEnd:"16:30"},{date:"2026-11-11",start:"08:30",end:"12:00",secondStart:"13:00",secondEnd:"16:00"}],mileage:[{date:"2026-11-10",destination:"NYS Fire Academy — round trip",miles:"102.4"},{date:"2026-11-11",destination:"NYS Fire Academy — round trip",miles:"102.4"}],voucher:[{date:"2026-11-10",quantity:"1",description:"Meal reimbursement — itemized receipt attached; includes 18% tip",unitPrice:"21.24"},{date:"2026-11-11",quantity:"1",description:"Meal reimbursement — itemized receipt attached",unitPrice:"18.50"}],street:"123 Example Street",cityStateZip:"Ithaca, NY 14850",title:"Firefighter"},
+  office_codes:["TTM"],office_name:"Sample Office Administrator",office_completed_at:"2026-11-16T15:00:00Z",
+  requester_signature:{path:"requester.png",sha256:"a".repeat(64),name:"Sample Requester",signedAt:"2026-11-12T15:00:00Z"},mto_signature:{path:"mto.png",sha256:"b".repeat(64),name:"Sample MTO",signedAt:"2026-11-13T15:00:00Z"},pdf_path:null,pdf_sha256:null,receipts:[],review_note:"",created_at:"2026-11-12T15:00:00Z",updated_at:"2026-11-16T15:00:00Z",
+};

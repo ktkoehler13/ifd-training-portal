@@ -60,6 +60,7 @@ const systemSettingsCard = {
 function getQuickActionCards(
   personnel: AuthenticatedPersonnel,
   pendingApprovalCount: number | null,
+  pendingCompensationCount: number | null,
 ) {
   const cards: Array<{
     title: string;
@@ -67,6 +68,13 @@ function getQuickActionCards(
     href: string | null;
     hasPendingAction?: boolean;
   }> = [baseActionCards[0], baseActionCards[1]];
+
+  cards.push({
+    title: "Compensation Packets",
+    description: pendingCompensationCount ? `${pendingCompensationCount} compensation packet${pendingCompensationCount === 1 ? "" : "s"} awaiting your action.` : "Complete training hours, mileage, vouchers and receipts. Review submitted compensation packets.",
+    hasPendingAction: (pendingCompensationCount ?? 0) > 0,
+    href: "/compensation",
+  });
 
   cards.push({
     title: "My Profile",
@@ -123,7 +131,26 @@ function DashboardContent({ personnel }: { personnel: AuthenticatedPersonnel }) 
   const [pendingApprovalCount, setPendingApprovalCount] = useState<number | null>(
     null,
   );
-  const actionCards = getQuickActionCards(personnel, pendingApprovalCount);
+  const [pendingCompensationCount, setPendingCompensationCount] = useState<number | null>(null);
+  const actionCards = getQuickActionCards(personnel, pendingApprovalCount, pendingCompensationCount);
+  useEffect(() => {
+    let active = true;
+    async function refresh() {
+      try {
+        const response = await fetch("/api/compensation", { cache: "no-store" });
+        if (!response.ok) return;
+        const data = await response.json() as {packets: Array<{requester_id: string; status: string}>};
+        if (active) setPendingCompensationCount(data.packets.filter(packet =>
+          (packet.requester_id === personnel.id && packet.status === "returned") ||
+          (personnel.role === "mto" && packet.status === "pending_mto") ||
+          (isAdministrativeRole(personnel.role) && packet.status === "pending_office")
+        ).length);
+      } catch { /* The packet list provides a retryable error if unavailable. */ }
+    }
+    void refresh(); window.addEventListener("focus", refresh);
+    const timer = window.setInterval(refresh, 60000);
+    return () => { active = false; window.removeEventListener("focus", refresh); window.clearInterval(timer); };
+  }, [personnel.id, personnel.role]);
 
   useEffect(() => {
     if (personnel.role !== "mto" && personnel.role !== "deputy_chief") {

@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+import { isCompensationEligible } from "@/lib/compensation/model";
 import { PortalHeading } from "@/components/layout/PortalBrand";
 
 import { startTransition, useEffect, useState } from "react";
@@ -200,6 +202,13 @@ function ConfirmationContent({
               ) : null}
 
               <RequestDetailPanel request={request} />
+              {isCompensationEligible(request) && (request.requesterPersonnelId === personnel.id || isAdministrativeRole(personnel.role)) ? (
+                <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5">
+                  <h2 className="text-lg font-semibold">Training Compensation</h2>
+                  <p className="mt-1 text-sm text-zinc-600">Complete actual training hours, mileage, the city voucher and receipt attachments after your training.</p>
+                  <Link href={`/compensation/${request.id}`} className="mt-4 inline-block rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold text-white">{request.requesterPersonnelId === personnel.id ? "Complete Compensation Packet" : "View Compensation Packet"}</Link>
+                </section>
+              ) : null}
 
               {request.status === "approved" ? (
                 <ApprovedPacketPanel

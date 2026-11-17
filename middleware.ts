@@ -11,6 +11,7 @@ export const config = {
     "/dashboard/:path*",
     "/requests/:path*",
     "/approvals/:path*",
+    "/compensation/:path*",
     "/admin/:path*",
     "/settings/:path*",
     "/reset-password",

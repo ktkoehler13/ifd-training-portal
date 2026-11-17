@@ -4,7 +4,7 @@ import { getRequestReturnPath, passwordSetupReturnPath } from "./request-return-
 
 const id = "12345678-1234-1234-1234-123456789abc";
 it("returns the same approval or request link after login", () => {
-  for (const path of [`/approvals/${id}`, `/requests/${id}/confirmation`]) {
+  for (const path of [`/approvals/${id}`, `/requests/${id}/confirmation`, `/compensation/${id}`]) {
     assert.equal(getRequestReturnPath(path), path);
     assert.equal(new URL(passwordSetupReturnPath(path), "https://portal.test").searchParams.get("next"), path);
   }
