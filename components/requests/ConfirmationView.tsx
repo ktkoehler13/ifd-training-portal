@@ -7,6 +7,7 @@ import { PortalHeading } from "@/components/layout/PortalBrand";
 import { startTransition, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { RequestActionTimeline } from "@/components/requests/RequestActionTimeline";
+import { CityAuthorizationPanel } from "@/components/city-authorization/CityAuthorizationPanel";
 import { ApprovedPacketPanel } from "@/components/requests/ApprovedPacketPanel";
 import {
   CorrectionRequiredAlert,
@@ -202,6 +203,7 @@ function ConfirmationContent({
               ) : null}
 
               <RequestDetailPanel request={request} />
+              {request.status === "approved" && !request.deletedAt && <CityAuthorizationPanel requestId={request.id}/>}
               {isCompensationEligible(request) && (request.requesterPersonnelId === personnel.id || isAdministrativeRole(personnel.role)) ? (
                 <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-5">
                   <h2 className="text-lg font-semibold">Training Compensation</h2>

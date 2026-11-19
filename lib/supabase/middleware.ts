@@ -85,6 +85,7 @@ export async function updateSession(request: NextRequest) {
     pathname.startsWith("/admin") ||
     pathname.startsWith("/settings") ||
     pathname.startsWith("/compensation") ||
+    pathname.startsWith("/city-authorizations") ||
     pathname.startsWith("/approvals");
 
   if (user?.email) {

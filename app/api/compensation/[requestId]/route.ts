@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
-import { actOnCompensation, compensationDetail, compensationFile, CompensationError, removeCompensationReceipt, uploadCompensationReceipt } from "@/lib/compensation/server";
+import { actOnCompensation, compensationDetail, compensationFile, CompensationError, CompensationRateChangedError, removeCompensationReceipt, uploadCompensationReceipt } from "@/lib/compensation/server";
 export const runtime="nodejs";
 export const maxDuration=60;
 type Context={params:Promise<{requestId:string}>};
 function errorResponse(error:unknown) {
-  return NextResponse.json({error:error instanceof Error?error.message:"Unable to complete this compensation action."},{status:error instanceof CompensationError?error.status:400,headers:{"Cache-Control":"private, no-store"}});
+  return NextResponse.json({error:error instanceof Error?error.message:"Unable to complete this compensation action.",...(error instanceof CompensationRateChangedError?{currentMileageRate:error.currentMileageRate}:{})},{status:error instanceof CompensationError?error.status:400,headers:{"Cache-Control":"private, no-store"}});
 }
 export async function GET(request:Request,context:Context) {
   try {

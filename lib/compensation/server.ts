@@ -1,7 +1,8 @@
 import "server-only";
 import { createHash, randomUUID } from "node:crypto";
 import { getAuthenticatedPersonnel } from "@/lib/auth/personnel";
-import { isAdministrativeRole } from "@/lib/auth/roles";
+import { GSA_MILEAGE_RATE_SETTING_KEY, parseGsaMileageRateSettingValue } from "@/lib/system-settings";
+import { canCompleteCompensation, canReadCompensationPacket } from "./access";
 import { PERSONNEL_TITLE_LABELS } from "@/types/personnel";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceRoleClient } from "@/lib/supabase/service";
@@ -16,6 +17,15 @@ const BUCKET="training-compensation";
 const hash=(bytes:Uint8Array)=>createHash("sha256").update(bytes).digest("hex");
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export class CompensationError extends Error { constructor(message:string,public status=400){super(message);} }
+export class CompensationRateChangedError extends CompensationError {
+  constructor(public currentMileageRate:number) { super("The mileage rate changed. Review the updated totals and confirm your signature again.",409); }
+}
+async function currentCompensationMileageRate(service:ReturnType<typeof createServiceRoleClient>) {
+  const {data,error}=await service.from("system_settings").select("value").eq("key",GSA_MILEAGE_RATE_SETTING_KEY).maybeSingle();
+  const rate=parseGsaMileageRateSettingValue(data?.value);
+  if(error || rate===null) throw new CompensationError("The current mileage rate is unavailable. Ask an administrator to check System Settings before continuing.",503);
+  return rate;
+}
 export async function compensationActor() {
   const actor=await getAuthenticatedPersonnel();
   if(!actor) throw new CompensationError("Sign in to continue.",401);
@@ -28,10 +38,11 @@ export async function loadCompensation(requestId:string) {
   const {data:raw,error}=await service.from("training_requests").select("*").eq("id",requestId).maybeSingle();
   if(error) throw new CompensationError("Unable to load the training request.",503);
   const request=raw as TrainingRequestRow|null;
-  if(!request || request.deleted_at || (actor.id!==request.requester_personnel_id && !isAdministrativeRole(actor.role))) throw new CompensationError("Request not found.",404);
+  if(!request || request.deleted_at) throw new CompensationError("Request not found.",404);
   const {data,error:packetError}=await service.from("training_compensation_packets").select("*").eq("request_id",requestId).maybeSingle();
   if(packetError) throw new CompensationError("Unable to load compensation. Please try again.",503);
   const packet=data as CompensationPacket|null;
+  if(!canReadCompensationPacket(actor,request.requester_personnel_id,packet)) throw new CompensationError("Request not found.",404);
   return {actor,service,request,packet};
 }
 type Context=Awaited<ReturnType<typeof loadCompensation>>;
@@ -45,7 +56,10 @@ export async function compensationDetail(requestId:string) {
     const {data:address}=await db.from("personnel_addresses").select("street_address,city,state,zip").eq("personnel_id",actor.id).maybeSingle();
     initial={...initial,street:address?.street_address??request.requester_address??"",cityStateZip:address?`${address.city}, ${address.state} ${address.zip}`:[request.requester_city,request.requester_state,request.requester_zip].filter(Boolean).join(" "),title:PERSONNEL_TITLE_LABELS[actor.title]};
   }
-  return {packet,events:(events??[]).map(({snapshot,...event})=>({...event,receipts:(snapshot as CompensationPacket).receipts})),initial,eligible:isCompensationEligible(request),request:{id:request.id,course:request.training_title,name:request.requester_name,badge:request.requester_badge_number,requestNumber:request.request_number,endDate:request.end_date,requesterId:request.requester_personnel_id,mileageRate:Number(request.gsa_mileage_rate)},actor:{id:actor.id,role:actor.role,name:[actor.firstName,actor.lastName].filter(Boolean).join(" ")}};
+  const mileageRate=!packet || ["draft","returned"].includes(packet.status)
+    ? await currentCompensationMileageRate(service) : packet.identity.mileageRate;
+  const displayedPacket=packet && ["draft","returned"].includes(packet.status) ? {...packet,identity:{...packet.identity,mileageRate}} : packet;
+  return {packet:displayedPacket,events:(events??[]).map(({snapshot,...event})=>({...event,receipts:(snapshot as CompensationPacket).receipts})),initial,eligible:isCompensationEligible(request),request:{id:request.id,course:request.training_title,name:request.requester_name,badge:request.requester_badge_number,requestNumber:request.request_number,endDate:request.end_date,requesterId:request.requester_personnel_id,mileageRate},actor:{id:actor.id,role:actor.role,name:[actor.firstName,actor.lastName].filter(Boolean).join(" ")}};
 }
 function editable({actor,packet,request}:Context) {
   if(actor.id!==request.requester_personnel_id || (packet && !["draft","returned"].includes(packet.status))) throw new CompensationError("Only the requester can edit a draft or returned packet.",403);
@@ -74,6 +88,7 @@ async function persist(ctx:Context,args:Record<string,unknown>) {
   });
   // Never remove uploaded snapshots on an ambiguous database response. A commit
   // may have succeeded despite a timeout; reload reconciles by version/history.
+  if(error?.message?.startsWith("Mileage rate changed")) throw new CompensationRateChangedError(await currentCompensationMileageRate(ctx.service));
   if(error || !data) throw new CompensationError(error?.message??"Unable to confirm the change. Reload the packet before trying again.",409);
   return data as CompensationPacket;
 }
@@ -88,9 +103,9 @@ export async function actOnCompensation(requestId:string,value:unknown) {
   if(action==="approve" || action==="return") {
     if(actor.role!=="mto" || packet?.status!=="pending_mto") throw new CompensationError("This packet requires MTO review.",403);
   }
-  if(action==="complete" && (!isAdministrativeRole(actor.role) || packet?.status!=="pending_office")) throw new CompensationError("Office completion requires administrative privileges after MTO approval.",403);
+  if(action==="complete" && (!canCompleteCompensation(actor.role) || packet?.status!=="pending_office")) throw new CompensationError("Office completion requires the Office role or administrative privileges after MTO approval.",403);
   const input=action==="save" || action==="submit"?parseCompensationInput(v.data):packet!.data;
-  if(action==="save") return persist(ctx,{p_action:"save",p_data:input,p_identity:{name:request.requester_name,badge:request.requester_badge_number,course:request.training_title,requestNumber:request.request_number??"",mileageRate:Number(request.gsa_mileage_rate)}});
+  if(action==="save") return persist(ctx,{p_action:"save",p_data:input,p_identity:{name:request.requester_name,badge:request.requester_badge_number,course:request.training_title,requestNumber:request.request_number??"",mileageRate:await currentCompensationMileageRate(ctx.service)}});
   if(!packet) throw new CompensationError("Save the packet before submitting.");
   if(action==="return") {
     if(typeof v.note!=="string" || v.note.trim().length<3 || v.note.length>2000) throw new CompensationError("Explain the corrections needed (3–2,000 characters).");
@@ -99,7 +114,12 @@ export async function actOnCompensation(requestId:string,value:unknown) {
   const errors=validateCompensationSubmission(input,localToday());
   if(errors.length) throw new CompensationError(errors.join("\n"));
   const now=new Date().toISOString(),name=[actor.firstName,actor.lastName].filter(Boolean).join(" ");
-  const updated={...packet,data:input,version:packet.version+1};
+  const updated={...packet,data:input,identity:{...packet.identity},version:packet.version+1};
+  if(action==="submit") {
+    const currentRate=await currentCompensationMileageRate(ctx.service);
+    if(v.expectedMileageRate!==currentRate) throw new CompensationRateChangedError(currentRate);
+    updated.identity.mileageRate=currentRate;
+  }
   let signature:CompensationSignature|null=null;
   const bytes=await signatures(ctx,packet);
   if(action==="submit" || action==="approve") {
@@ -116,7 +136,7 @@ export async function actOnCompensation(requestId:string,value:unknown) {
   const pdf=await renderCompensationPacket(updated,bytes);
   const pdfPath=`${packet.id}/${randomUUID()}/packet.pdf`;
   await upload(ctx,pdfPath,pdf,"application/pdf");
-  return persist(ctx,{p_action:action,p_data:input,p_signature:signature,p_pdf_path:pdfPath,p_pdf_sha256:hash(pdf),p_office_codes:updated.office_codes});
+  return persist(ctx,{p_action:action,p_data:input,p_identity:updated.identity,p_signature:signature,p_pdf_path:pdfPath,p_pdf_sha256:hash(pdf),p_office_codes:updated.office_codes});
 }
 export async function compensationFile(requestId:string,version:string|null,receiptId:string|null) {
   const ctx=await loadCompensation(requestId);
@@ -137,7 +157,7 @@ export async function compensationFile(requestId:string,version:string|null,rece
     if(!packet.pdf_path || !packet.pdf_sha256) throw new CompensationError("Packet PDF is not ready.");
     return {bytes:await download(ctx,packet.pdf_path,packet.pdf_sha256),type:"application/pdf",name:"training-compensation.pdf"};
   }
-  return {bytes:await renderCompensationPacket({...packet,requester_signature:null,mto_signature:null,office_codes:[],office_name:null,office_completed_at:null},{},true),type:"application/pdf",name:"compensation-draft.pdf"};
+  return {bytes:await renderCompensationPacket({...packet,identity:{...packet.identity,mileageRate:await currentCompensationMileageRate(ctx.service)},requester_signature:null,mto_signature:null,office_codes:[],office_name:null,office_completed_at:null},{},true),type:"application/pdf",name:"compensation-draft.pdf"};
 }
 export async function uploadCompensationReceipt(requestId:string,form:FormData) {
   const ctx=await loadCompensation(requestId);editable(ctx);

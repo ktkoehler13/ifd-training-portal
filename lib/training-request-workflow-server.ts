@@ -554,11 +554,11 @@ export async function downloadApprovedTrainingRequestPacket(input: {
     personnel.role === "deputy_chief" ||
     personnel.role === "admin";
 
-  if (!isOwner && !isAdmin) {
+  if (!isOwner && !isAdmin && personnel.role !== "office") {
     throw new TrainingRequestWorkflowAccessError();
   }
 
-  if (request.status !== "approved") {
+  if (request.status !== "approved" || request.deletedAt) {
     throw new TrainingRequestWorkflowValidationError(
       "Approved packets are only available after final approval.",
     );

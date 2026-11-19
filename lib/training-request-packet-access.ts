@@ -15,7 +15,7 @@ export function canDownloadApprovedPacket(input: {
   request: TrainingRequestRecord;
   packet: TrainingRequestPacketRecord | null;
 }): boolean {
-  if (input.request.status !== "approved") {
+  if (input.request.status !== "approved" || input.request.deletedAt) {
     return false;
   }
 
@@ -27,7 +27,7 @@ export function canDownloadApprovedPacket(input: {
     return true;
   }
 
-  return isAdministrativeRole(input.personnel.role);
+  return isAdministrativeRole(input.personnel.role) || input.personnel.role === "office";
 }
 
 export function formatTrainingRequestPacketStatus(

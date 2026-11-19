@@ -89,7 +89,8 @@ export function isPersonnelRole(value: string): value is PersonnelRole {
     value === "firefighter" ||
     value === "mto" ||
     value === "deputy_chief" ||
-    value === "admin"
+    value === "admin" ||
+    value === "office"
   );
 }
 

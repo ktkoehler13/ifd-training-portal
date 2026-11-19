@@ -51,6 +51,20 @@ describe("OFPC details and immutable requester signatures at the database bounda
   });
   afterEach(async()=>{await db.exec("rollback;reset role");});
   after(async()=>{await db?.close();});
+  it("lets Office personnel maintain their own signature and submit their own OFPC request",async()=>{
+    await db.exec("reset role");await db.query("update personnel set role='office' where id=$1",[owner]);await asUser();
+    await db.query("update personnel_signatures set file_size_bytes=200 where personnel_id=$1",[owner]);
+    await fill();const id=await reserve();await complete(id);
+    assert.equal((await row()).status,"pending_mto");
+    const action=(await db.query("select actor_role,action,signature_file_size_bytes from training_request_actions where id=$1",[id])).rows[0];
+    assert.deepEqual(action,{actor_role:"office",action:"submitted",signature_file_size_bytes:100});
+  });
+  it("lets Office personnel submit their own non-OFPC request without reviewer privileges",async()=>{
+    await db.exec("reset role");await db.query("update personnel set role='office' where id=$1",[owner]);await asUser();
+    await db.query("update training_requests set is_ofpc_course=false where id=$1",[requestId]);
+    await db.query("select submit_training_request($1)",[requestId]);assert.equal((await row()).status,"pending_mto");
+    await assert.rejects(db.query("select mto_approve_training_request($1,null,true)",[requestId]),/MTO|signature|permission/);
+  });
   it("saves incomplete drafts and normalizes details",async()=>{
     assert.equal((await row()).ny_training_id,null);await fill();
     assert.equal((await row()).ny_training_id,"00123456");assert.equal((await row()).requester_state,"NY");

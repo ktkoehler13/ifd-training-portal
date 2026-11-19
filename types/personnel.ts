@@ -1,4 +1,4 @@
-export type PersonnelRole = "firefighter" | "mto" | "deputy_chief" | "admin";
+export type PersonnelRole = "firefighter" | "mto" | "deputy_chief" | "admin" | "office";
 
 export type PersonnelTitle =
   | "firefighter"
@@ -82,6 +82,7 @@ export const PERSONNEL_ROLES: PersonnelRole[] = [
   "mto",
   "deputy_chief",
   "admin",
+  "office",
 ];
 
 export const PERSONNEL_ROLE_LABELS: Record<PersonnelRole, string> = {
@@ -89,4 +90,5 @@ export const PERSONNEL_ROLE_LABELS: Record<PersonnelRole, string> = {
   mto: "MTO",
   deputy_chief: "Deputy Chief",
   admin: "Admin",
+  office: "Office",
 };

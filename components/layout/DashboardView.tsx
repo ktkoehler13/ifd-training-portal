@@ -6,6 +6,9 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { AuthGate } from "@/components/layout/AuthGate";
 import { SignOutButton } from "@/components/auth/SignOutButton";
+import { canProcessCityAuthorization, cityAuthorizationNeedsAction, type CityAuthorizationQueueItem } from "@/lib/city-authorization/model";
+import { compensationNeedsAction } from "@/lib/compensation/access";
+import type { CompensationPacket } from "@/lib/compensation/model";
 import { isAdministrativeRole } from "@/lib/auth/roles";
 import type { AuthenticatedPersonnel } from "@/lib/auth/personnel";
 import { formatPersonnelDashboardIdentity } from "@/lib/personnel";
@@ -61,6 +64,7 @@ function getQuickActionCards(
   personnel: AuthenticatedPersonnel,
   pendingApprovalCount: number | null,
   pendingCompensationCount: number | null,
+  pendingCityAuthorizationCount: number | null,
 ) {
   const cards: Array<{
     title: string;
@@ -71,9 +75,18 @@ function getQuickActionCards(
 
   cards.push({
     title: "Compensation Packets",
-    description: pendingCompensationCount ? `${pendingCompensationCount} compensation packet${pendingCompensationCount === 1 ? "" : "s"} awaiting your action.` : "Complete training hours, mileage, vouchers and receipts. Review submitted compensation packets.",
+    description: pendingCompensationCount ? `${pendingCompensationCount} compensation packet${pendingCompensationCount === 1 ? "" : "s"} awaiting your action.` : personnel.role === "office" ? "Review MTO-signed compensation packets and complete office coding." : "Complete training hours, mileage, vouchers and receipts. Review submitted compensation packets.",
     hasPendingAction: (pendingCompensationCount ?? 0) > 0,
     href: "/compensation",
+  });
+
+  if (canProcessCityAuthorization(personnel.role)) cards.push({
+    title: "City Authorizations",
+    description: personnel.role === "office" && pendingCityAuthorizationCount
+      ? `${pendingCityAuthorizationCount} approved request${pendingCityAuthorizationCount === 1 ? "" : "s"} awaiting City Authorization.`
+      : "View DC-approved requests and upload their City Authorizations.",
+    hasPendingAction: personnel.role === "office" && (pendingCityAuthorizationCount ?? 0) > 0,
+    href: "/city-authorizations",
   });
 
   cards.push({
@@ -132,19 +145,31 @@ function DashboardContent({ personnel }: { personnel: AuthenticatedPersonnel }) 
     null,
   );
   const [pendingCompensationCount, setPendingCompensationCount] = useState<number | null>(null);
-  const actionCards = getQuickActionCards(personnel, pendingApprovalCount, pendingCompensationCount);
+  const [pendingCityAuthorizationCount, setPendingCityAuthorizationCount] = useState<number | null>(null);
+  const actionCards = getQuickActionCards(personnel, pendingApprovalCount, pendingCompensationCount, pendingCityAuthorizationCount);
+  useEffect(() => {
+    if (!canProcessCityAuthorization(personnel.role)) return;
+    let active = true;
+    async function refresh() {
+      try {
+        const response = await fetch("/api/city-authorizations", {cache:"no-store"});
+        if (!response.ok) return;
+        const data = await response.json() as {items:CityAuthorizationQueueItem[]};
+        if (active) setPendingCityAuthorizationCount(data.items.filter(item=>cityAuthorizationNeedsAction(item.status,personnel.role)).length);
+      } catch { /* The City Authorizations page provides a retryable error. */ }
+    }
+    void refresh(); window.addEventListener("focus", refresh);
+    const timer = window.setInterval(refresh,60000);
+    return () => {active=false;window.removeEventListener("focus",refresh);window.clearInterval(timer);};
+  }, [personnel.role]);
   useEffect(() => {
     let active = true;
     async function refresh() {
       try {
         const response = await fetch("/api/compensation", { cache: "no-store" });
         if (!response.ok) return;
-        const data = await response.json() as {packets: Array<{requester_id: string; status: string}>};
-        if (active) setPendingCompensationCount(data.packets.filter(packet =>
-          (packet.requester_id === personnel.id && packet.status === "returned") ||
-          (personnel.role === "mto" && packet.status === "pending_mto") ||
-          (isAdministrativeRole(personnel.role) && packet.status === "pending_office")
-        ).length);
+        const data = await response.json() as {packets: Array<Pick<CompensationPacket, "requester_id" | "status">>};
+        if (active) setPendingCompensationCount(data.packets.filter(packet => compensationNeedsAction(packet, {id:personnel.id,role:personnel.role})).length);
       } catch { /* The packet list provides a retryable error if unavailable. */ }
     }
     void refresh(); window.addEventListener("focus", refresh);

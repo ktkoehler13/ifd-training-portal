@@ -134,6 +134,13 @@ describe("approved packet download authorization", () => {
     );
   });
 
+  it("lets Office download approved forms for City processing but not deleted or unapproved requests", () => {
+    const office={...otherFirefighter,role:"office" as const};
+    assert.equal(canDownloadApprovedPacket({personnel:office,request:approvedRequest,packet:readyPacket}),true);
+    assert.equal(canDownloadApprovedPacket({personnel:office,request:{...approvedRequest,status:"pending_deputy_chief"},packet:readyPacket}),false);
+    assert.equal(canDownloadApprovedPacket({personnel:office,request:{...approvedRequest,deletedAt:"2026-11-19"},packet:readyPacket}),false);
+    assert.equal(canRetryApprovedPacketGeneration("office"),false);
+  });
   it("blocks download when the packet is not ready", () => {
     assert.equal(
       canDownloadApprovedPacket({

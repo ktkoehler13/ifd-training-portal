@@ -1,6 +1,8 @@
+// Keep the stored terminal value for existing snapshots; the Office-facing
+// status is Submitted after coding and marking the packet as submitted.
 export type CompensationStatus = "draft" | "pending_mto" | "returned" | "pending_office" | "completed";
 export const COMPENSATION_STATUS: Record<CompensationStatus, string> = {
-  draft: "Draft", pending_mto: "Awaiting MTO Review", returned: "Returned for Corrections", pending_office: "MTO Approved — Awaiting Office", completed: "Complete",
+  draft: "Draft", pending_mto: "Awaiting MTO Review", returned: "Returned for Corrections", pending_office: "MTO Approved — Awaiting Office", completed: "Submitted",
 };
 export const OFFICE_CODES = {
   TTM: "Training Time — Straight Pay", OC: "Training Time — Straight Time",

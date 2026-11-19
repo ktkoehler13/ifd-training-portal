@@ -255,6 +255,7 @@ export function PersonnelFormFields({
               </option>
             ))}
           </Select>
+          {values.role === "office" && <p className="text-sm text-zinc-500">Processes City Authorizations after Deputy Chief approval and compensation packets after MTO approval. Admin, MTO and Deputy Chief users can serve as backups.</p>}
         </Field>
 
         <Field id={`${idPrefix}-active`} label="Active">

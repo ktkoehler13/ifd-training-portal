@@ -12,6 +12,7 @@ export const config = {
     "/requests/:path*",
     "/approvals/:path*",
     "/compensation/:path*",
+    "/city-authorizations/:path*",
     "/admin/:path*",
     "/settings/:path*",
     "/reset-password",

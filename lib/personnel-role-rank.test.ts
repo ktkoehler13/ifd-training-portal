@@ -3,7 +3,7 @@ import path from "node:path";
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { isAdministrativeRole, isSignatureEligibleRole } from "@/lib/auth/roles";
-import { isPersonnelTitle } from "@/lib/personnel";
+import { isPersonnelRole, isPersonnelTitle } from "@/lib/personnel";
 import {
   PERSONNEL_ROLE_LABELS,
   PERSONNEL_ROLES,
@@ -136,6 +136,7 @@ describe("Add User and Edit User dropdowns", () => {
       "mto",
       "deputy_chief",
       "admin",
+      "office",
     ]);
   });
 
@@ -227,12 +228,20 @@ describe("rank and application role independence", () => {
 });
 
 describe("stored application role values", () => {
+  it("supports Office as an application role without granting general administrative access", () => {
+    assert.equal(PERSONNEL_ROLE_LABELS.office, "Office");
+    assert.equal(isPersonnelRole("office"), true);
+    assert.equal(isPersonnelTitle("office"), false);
+    assert.equal(isAdministrativeRole("office"), false);
+    assert.equal(isSignatureEligibleRole("office"), true);
+  });
   it("keeps firefighter as the stored ordinary application role value", () => {
     assert.deepEqual(PERSONNEL_ROLES, [
       "firefighter",
       "mto",
       "deputy_chief",
       "admin",
+      "office",
     ]);
   });
 });
