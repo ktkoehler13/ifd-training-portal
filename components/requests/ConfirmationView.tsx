@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { isCompensationEligible } from "@/lib/compensation/model";
-import { PortalHeading } from "@/components/layout/PortalBrand";
 
 import { startTransition, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -162,7 +161,7 @@ function ConfirmationContent({
             </>
           ) : request ? (
             <>
-              <PortalHeading className="mb-6">
+              <div className="mb-6">
                 <h1 className="text-2xl font-semibold tracking-tight text-zinc-900">
                   {getPageHeading(request)}
                 </h1>
@@ -173,7 +172,7 @@ function ConfirmationContent({
                     ? ` · Next action: ${formatCurrentActionRole(request.currentActionRole)}`
                     : null}
                 </p>
-              </PortalHeading>
+              </div>
 
               {request.deletedAt && <div role="status" className="mb-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
                 <p>Deleted by {request.deletedByName} on {new Date(request.deletedAt).toLocaleString()}. Its original status and history are preserved.</p>

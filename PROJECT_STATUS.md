@@ -13,6 +13,10 @@ Updated **November 21, 2026**. Read [PROJECT_VISION.md](PROJECT_VISION.md) for u
   3. November 19: `20261119180000_city_authorizations.sql`
   4. November 21, with the user's approval: `20261121120000_city_authorization_file_removal.sql`
   5. November 21, with the user's approval: `20261121180000_approval_routing_settings.sql`
+- **Pending release: navigation and dashboard refresh** (branch `feature/navigation-dashboard`). Website only: no migration or worker change.
+  - Every signed-in page gets a shared top bar inside `AuthGate`: crest, role-based sections, Admin menu, and an account menu with profile, signature, password and sign out. Page headers became a simple `PageHeader`.
+  - The dashboard has a greeting, a "needs your attention" row, icon action cards and recent requests with colored status badges.
+  - Checks run November 21: `npm test` gave 726 passed. `tsc`, lint and build passed. Visual review is pending on the Vercel preview, which needs a signed-in user.
 - **Approval routing released November 21** (ktkoehler13/ifd-training-portal#4), in this order:
   1. Migration `20261121180000_approval_routing_settings.sql` applied to production. Supabase history records it as `20261121181047 approval_routing_settings`.
   2. Email worker deployed as version 12 (bundled with esbuild, JWT verification kept on). Before replacing it, live version 11 was compared to the `main` source and matched. The worker logs showed a clean boot and 200 responses on its every-minute runs.

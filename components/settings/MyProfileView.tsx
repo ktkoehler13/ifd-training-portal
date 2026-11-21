@@ -1,9 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState, type FormEvent } from "react";
 import { AuthGate } from "@/components/layout/AuthGate";
-import { PortalHeading } from "@/components/layout/PortalBrand";
+import { PageHeader } from "@/components/layout/PageHeader";
 import { AddressFields } from "@/components/settings/AddressFields";
 import { Button } from "@/components/ui/Button";
 import { normalizePersonnelAddress, validatePersonnelAddress, type AddressErrors } from "@/lib/personnel-address";
@@ -59,12 +58,7 @@ function ProfileContent({ personnelId }: { personnelId: string }) {
   }
 
   return <div className="flex flex-1 flex-col bg-zinc-100">
-    <header className="border-b border-zinc-200 bg-white">
-      <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 px-4 py-5 sm:flex-row sm:items-start sm:justify-between sm:px-6">
-        <PortalHeading><h1 className="text-xl font-semibold text-zinc-900 sm:text-2xl">My Profile</h1><p className="mt-1 text-sm text-zinc-600">Keep your address ready for future training requests.</p></PortalHeading>
-        <Link href="/dashboard" className="text-sm font-semibold text-red-700 underline">Back to Dashboard</Link>
-      </div>
-    </header>
+    <PageHeader title="My Profile" description="Keep your address ready for future training requests." />
     <main className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6">
       <form onSubmit={save} noValidate className="space-y-5 rounded-2xl bg-white p-6 shadow-sm sm:p-8">
         <h2 className="text-lg font-semibold text-zinc-900">Saved Address</h2>
