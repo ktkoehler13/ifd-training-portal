@@ -12,6 +12,7 @@ import {
 } from "@/lib/auth/client";
 import type { AuthenticatedPersonnel } from "@/lib/auth/personnel";
 import { Button } from "@/components/ui/Button";
+import { PortalTopBar } from "@/components/layout/PortalTopBar";
 
 interface AuthGateProps {
   children: ReactNode | ((personnel: AuthenticatedPersonnel) => ReactNode);
@@ -98,7 +99,12 @@ export function AuthGate({ children }: AuthGateProps) {
     );
   }
 
-  return typeof children === "function" ? children(personnel) : children;
+  return (
+    <>
+      <PortalTopBar personnel={personnel} minimal={personnel.mustChangePassword} />
+      {typeof children === "function" ? children(personnel) : children}
+    </>
+  );
 }
 
 interface AdminGateProps {
