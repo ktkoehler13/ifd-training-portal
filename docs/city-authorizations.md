@@ -4,6 +4,12 @@ After a new signed Deputy Chief approval, the request remains Approved and a sep
 
 On the approved request, select a PDF, PNG or JPEG (up to 4 MB), then **Upload City Authorization**. After the private file is stored and its bytes verified, the workflow records the uploader and timestamp, marks the Office step complete and clears the action alert. The request and its authorization remain accessible in Authorization Uploaded and All. Revisions retain earlier files. Requesters can download their own authorization but cannot upload it.
 
+## Removing a wrong file
+
+Before uploading, **Remove** next to the selected file clears the choice. After uploading, Office and administrative backups see **Remove** on each uploaded file and must confirm with **Remove File**. Requesters can't remove files.
+
+A removed file disappears from the request and can't be downloaded. Its private object and file row are kept, with the remover and time recorded, and Office and backups see it under **Removed Files**. If other files remain, the task stays Authorization Uploaded. If none remain, it returns to Awaiting Office, the Office action alert returns, and a new upload completes it again. Removal uses the same version check as uploads, so a stale page must reload first. It needs migration `20261121120000_city_authorization_file_removal.sql`, which relaxes the pending-state check, allows only the one-time removal marking on file rows, hides removed rows from client reads and adds the service-only `record_city_authorization_file_removal` function.
+
 ## Cutover and access
 
 Production installation was completed and verified November 19, 2026 with commit `ccc7e5a`. See [PROJECT_STATUS.md](../PROJECT_STATUS.md) for evidence and outstanding live acceptance; the instructions below also describe setup for another environment.

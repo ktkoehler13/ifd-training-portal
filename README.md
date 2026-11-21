@@ -128,7 +128,7 @@ Configure the mileage rate and primary DC in **System Settings**. Assign Office 
 | Reset another user's password | No | Yes | No | Yes | No |
 | MTO compensation review/signature | No | Yes | No | No | No |
 | Office compensation coding/submission | No | Backup | Backup | Backup | Yes |
-| City Authorization upload | No | Backup | Backup | Backup | Yes |
+| City Authorization upload / remove | No | Backup | Backup | Backup | Yes |
 
 All access requires an active authorized session; sensitive actions also enforce password setup and workflow state. Office can read other users' compensation only after signed MTO handoff, and approved undeleted requests/forms for City processing. Requesters can download their own City files but cannot upload. Office has no general administration power.
 

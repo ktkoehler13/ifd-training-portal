@@ -39,10 +39,12 @@ export async function cityAuthorizationDetail(requestId:string) {
   const {actor,service}=await context(requestId);
   const [authorization,files]=await Promise.all([
     service.from("training_request_city_authorizations").select("*").eq("request_id",requestId).maybeSingle(),
-    service.from("training_request_city_authorization_files").select("id,request_id,version,file_name,content_type,file_size_bytes,uploaded_by_name,uploaded_at").eq("request_id",requestId).order("version",{ascending:false}),
+    service.from("training_request_city_authorization_files").select("id,request_id,version,file_name,content_type,file_size_bytes,uploaded_by_name,uploaded_at,removed_at,removed_by_name").eq("request_id",requestId).order("version",{ascending:false}),
   ]);
   if(authorization.error || files.error) throw new CityAuthorizationError("Unable to load City Authorization files.",503);
-  return {authorization:authorization.data as CityAuthorization|null,files:files.data??[],canUpload:canProcessCityAuthorization(actor.role)};
+  const canUpload=canProcessCityAuthorization(actor.role),all=(files.data??[]) as Array<Omit<CityAuthorizationFile,"storage_path"|"sha256">>;
+  // Removed files stay in history for Office and administrative backups only.
+  return {authorization:authorization.data as CityAuthorization|null,files:all.filter(f=>!f.removed_at),removedFiles:canUpload?all.filter(f=>f.removed_at):[],canUpload};
 }
 export async function uploadCityAuthorization(requestId:string,form:FormData) {
   const {actor,service}=await context(requestId);
@@ -73,13 +75,29 @@ export async function uploadCityAuthorization(requestId:string,form:FormData) {
   if(error || !data) throw new CityAuthorizationError(error?.message??"Unable to confirm the upload. Reload the request before trying again.",409);
   return data as CityAuthorization;
 }
+export async function removeCityAuthorizationFile(requestId:string,input:unknown) {
+  const {actor,service}=await context(requestId);
+  if(!canProcessCityAuthorization(actor.role)) throw new CityAuthorizationError("Office or administrative access is required to remove a City Authorization.",403);
+  const {fileId,version}=(input&&typeof input==="object"?input:{}) as {fileId?:unknown;version?:unknown};
+  if(typeof fileId!=="string" || !UUID.test(fileId)) throw new CityAuthorizationError("File not found.",404);
+  if(typeof version!=="number" || !Number.isSafeInteger(version) || version<1) throw new CityAuthorizationError("Reload the request before removing a file.");
+  // The private object is kept; the workflow only marks the file removed.
+  const {data,error}=await service.rpc("record_city_authorization_file_removal",{p_actor_id:actor.id,p_request_id:requestId,p_expected_version:version,p_file_id:fileId});
+  if(error || !data) {
+    const message=error?.message??"";
+    if(/changed/i.test(message)) throw new CityAuthorizationError("This authorization changed. Reload before removing a file.",409);
+    if(/not found/i.test(message)) throw new CityAuthorizationError("File not found.",404);
+    throw new CityAuthorizationError("Unable to confirm the removal. Reload the request before trying again.",409);
+  }
+  return data as CityAuthorization;
+}
 export async function downloadCityAuthorization(requestId:string,fileId:string) {
   const {service}=await context(requestId);
   if(!UUID.test(fileId)) throw new CityAuthorizationError("File not found.",404);
   const {data,error}=await service.from("training_request_city_authorization_files").select("*").eq("request_id",requestId).eq("id",fileId).maybeSingle();
   const file=data as CityAuthorizationFile|null;
   if(error) throw new CityAuthorizationError("Unable to load the authorization file.",503);
-  if(!file || !file.storage_path.startsWith(`${requestId}/`)) throw new CityAuthorizationError("File not found.",404);
+  if(!file || file.removed_at || !file.storage_path.startsWith(`${requestId}/`)) throw new CityAuthorizationError("File not found.",404);
   const {data:blob,error:downloadError}=await service.storage.from(BUCKET).download(file.storage_path);
   if(downloadError || !blob) throw new CityAuthorizationError("Unable to download the authorization file.",503);
   const bytes=new Uint8Array(await blob.arrayBuffer());

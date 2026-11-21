@@ -23,6 +23,10 @@ describe("City Authorization routing, file history and database permissions",()=
   const file=randomUUID(),v={requestId,version,file,name:"City approval.pdf",path:`${requestId}/${file}.pdf`,type:"application/pdf",size:100,sha:"a".repeat(64),...overrides};
   return (await db.query<{request_id:string;status:"pending"|"uploaded";version:number}>("select * from record_city_authorization_upload($1,$2,$3,$4,$5,$6,$7,$8,$9)",[actor,v.requestId,v.version,v.file,v.name,v.path,v.type,v.size,v.sha])).rows[0];
  }
+ async function removeFile(actor:string,fileId:string,version:number) {
+  return (await db.query<{status:"pending"|"uploaded";version:number;completed_at:string|null}>("select * from record_city_authorization_file_removal($1,$2,$3,$4)",[actor,requestId,version,fileId])).rows[0];
+ }
+ const fileIds=async()=>(await db.query<{id:string}>("select id from training_request_city_authorization_files where request_id=$1 order by version",[requestId])).rows.map(r=>r.id);
  async function reject(run:()=>Promise<unknown>,pattern:RegExp){await db.exec("savepoint rejected");await assert.rejects(run,pattern);await db.exec("rollback to savepoint rejected;release savepoint rejected");}
  before(async()=>{
   db=new PGlite();await db.exec(`create role anon;create role authenticated;create role service_role bypassrls;
@@ -97,6 +101,34 @@ describe("City Authorization routing, file history and database permissions",()=
   await decide();await db.exec("reset role");await db.query("update personnel set active=false where id=$1",[ids.office]);await role();await reject(()=>upload(),/Office or administrative/);
   await db.exec("reset role;alter table training_requests disable trigger user");await db.query("update personnel set active=true where id=$1",[ids.office]);await db.query("update training_requests set deleted_at=now(),deleted_by_personnel_id=$2,deleted_by_name='Admin',deletion_reason='Duplicate' where id=$1",[requestId,ids.admin]);await db.exec("alter table training_requests enable trigger user");
   await role();await reject(()=>upload(),/after Deputy Chief approval/);await role("authenticated","office");assert.equal((await db.query("select * from training_request_city_authorizations where request_id=$1",[requestId])).rows.length,0);
+ });
+ it("removing the only file returns the task to Office and keeps a removal record",async()=>{
+  await decide();await upload();const [fileId]=await fileIds();
+  const result=await removeFile(ids.mto,fileId,1);
+  assert.equal(result.status,"pending");assert.equal(result.version,2);assert.equal(result.completed_at,null);
+  assert.equal(cityAuthorizationNeedsAction(result.status,"office"),true);
+  const row=(await db.query<{removed_at:string|null;removed_by_personnel_id:string;removed_by_name:string;storage_path:string}>("select removed_at,removed_by_personnel_id,removed_by_name,storage_path from training_request_city_authorization_files where id=$1",[fileId])).rows[0];
+  assert.ok(row.removed_at);assert.equal(row.removed_by_personnel_id,ids.mto);assert.equal(row.removed_by_name,"mto Sample");assert.ok(row.storage_path.startsWith(requestId));
+  for(const person of ["office","owner"] as const){await role("authenticated",person);assert.equal((await db.query("select id from training_request_city_authorization_files where request_id=$1",[requestId])).rows.length,0);}
+  await role();const again=await upload(ids.office,2);assert.equal(again.status,"uploaded");assert.equal(again.version,3);
+  assert.equal((await db.query("select status from training_requests where id=$1",[requestId])).rows[0].status,"approved");
+ });
+ it("removing one of several files keeps the task complete and rejects invalid removals",async()=>{
+  await decide();await upload();await upload(ids.office,1);const [first,second]=await fileIds();
+  await reject(()=>removeFile(ids.owner,second,2),/Office or administrative/);
+  await reject(()=>removeFile(ids.office,second,1),/changed/);
+  const result=await removeFile(ids.office,second,2);assert.equal(result.status,"uploaded");assert.equal(result.version,3);
+  await reject(()=>removeFile(ids.office,second,3),/not found/);
+  await reject(()=>removeFile(ids.office,randomUUID(),3),/not found/);
+  await reject(()=>db.query("update training_request_city_authorization_files set file_name='changed' where id=$1",[first]),/immutable/);
+  await reject(()=>db.query("update training_request_city_authorization_files set removed_by_name='Someone else' where id=$1",[second]),/immutable/);
+  await reject(()=>db.query("delete from training_request_city_authorization_files where id=$1",[second]),/immutable/);
+  await role("authenticated","office");await reject(()=>removeFile(ids.office,first,3),/permission denied/);
+ });
+ it("blocks removal on deleted requests",async()=>{
+  await decide();await upload();const [fileId]=await fileIds();
+  await db.exec("reset role;alter table training_requests disable trigger user");await db.query("update training_requests set deleted_at=now(),deleted_by_personnel_id=$2,deleted_by_name='Admin',deletion_reason='Duplicate' where id=$1",[requestId,ids.admin]);await db.exec("alter table training_requests enable trigger user");
+  await role();await reject(()=>removeFile(ids.office,fileId,1),/after Deputy Chief approval/);
  });
  it("keeps the storage bucket private and unavailable through client storage policies",async()=>{
   await db.exec("reset role");assert.equal((await db.query("select public from storage.buckets where id='city-authorizations'")).rows[0].public,false);

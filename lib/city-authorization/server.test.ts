@@ -11,7 +11,8 @@ const client={
  const query={select(){return query;},eq(k:string,v:unknown){filters[k]=v;return query;},async order(){return result();},async maybeSingle(){const value=result();return {...value,data:Array.isArray(value.data)?value.data[0]??null:value.data};}};return query;
  },
  storage:{from(){return {async upload(path:string,bytes:Uint8Array){state.uploads++;if(state.uploadError)return {error:{message:"Unavailable"}};state.objects.set(path,bytes);return {error:null};},async download(path:string){const bytes=state.objects.get(path);return bytes?{data:new Blob([Buffer.from(state.corrupt?new Uint8Array([1]):bytes)]),error:null}:{data:null,error:{message:"Missing"}};}};}},
- async rpc(_name:string,args:Record<string,unknown>){state.rpcCalls++;if(state.rpcError)return {data:null,error:{message:"Unable to confirm database save"}};
+ async rpc(name:string,args:Record<string,unknown>){state.rpcCalls++;if(state.rpcError)return {data:null,error:{message:"Unable to confirm database save"}};
+ if(name==="record_city_authorization_file_removal"){if(Number(args.p_expected_version)!==state.authorization?.version)return {data:null,error:{message:"This authorization changed. Reload before removing a file"}};const target=state.files.find(f=>f.id===args.p_file_id&&!f.removed_at);if(!target)return {data:null,error:{message:"City Authorization file not found"}};target.removed_at="2026-11-21T13:00:00Z";target.removed_by_name="Office Staff";const left=state.files.some(f=>!f.removed_at);state.authorization={...state.authorization,version:state.authorization.version+1,...(left?{}:{status:"pending",completed_at:null,completed_by_name:null})};return {data:state.authorization,error:null};}
  const version=Number(args.p_expected_version)+1;state.authorization={request_id:requestId,status:"uploaded",version,created_at:"2026-11-19T12:00:00Z",completed_at:"2026-11-19T13:00:00Z",completed_by_name:"Office Staff"};
  state.files.push({id:String(args.p_file_id),request_id:requestId,version,file_name:String(args.p_file_name),storage_path:String(args.p_storage_path),content_type:String(args.p_content_type),file_size_bytes:Number(args.p_file_size_bytes),sha256:String(args.p_sha256),uploaded_by_name:"Office Staff",uploaded_at:"2026-11-19T13:00:00Z"});return {data:state.authorization,error:null};}
 };
@@ -51,6 +52,19 @@ describe("City Authorization private upload and download",async()=>{
  });
  it("preserves the uploaded object after an ambiguous database response",async()=>{
   state.rpcError=true;await assert.rejects(upload,/database save/);assert.equal(state.objects.size,1);assert.equal(state.authorization,null);
+ });
+ it("removes a wrong file, hides it from requesters and blocks its download",async()=>{
+  await upload();const file=state.files[0];const rpcBefore=state.rpcCalls;
+  state.actor={id:ownerId,role:"firefighter",active:true};await assert.rejects(()=>server.removeCityAuthorizationFile(requestId,{fileId:file.id,version:1}),/Office or administrative/);assert.equal(state.rpcCalls,rpcBefore);
+  state.actor={id:officeId,role:"office",active:true,mustChangePassword:false};
+  for(const input of [null,{},{fileId:"bad",version:1},{fileId:file.id,version:0},{fileId:file.id,version:"1"}])await assert.rejects(()=>server.removeCityAuthorizationFile(requestId,input));
+  await assert.rejects(()=>server.removeCityAuthorizationFile(requestId,{fileId:file.id,version:5}),/changed/);
+  const result=await server.removeCityAuthorizationFile(requestId,{fileId:file.id,version:1});assert.equal(result.status,"pending");
+  assert.equal(state.objects.size,1);
+  const office=await server.cityAuthorizationDetail(requestId);assert.equal(office.files.length,0);assert.equal(office.removedFiles.length,1);
+  state.actor={id:ownerId,role:"firefighter",active:true};const owner=await server.cityAuthorizationDetail(requestId);assert.equal(owner.files.length,0);assert.equal(owner.removedFiles.length,0);
+  await assert.rejects(()=>server.downloadCityAuthorization(requestId,file.id),/not found/);
+  state.actor={id:officeId,role:"office",active:true,mustChangePassword:false};await assert.rejects(()=>server.removeCityAuthorizationFile(requestId,{fileId:file.id,version:2}),/not found/);
  });
  it("checks file ownership and hash on every download",async()=>{
   await upload();const file=state.files[0];state.corrupt=true;await assert.rejects(()=>server.downloadCityAuthorization(requestId,file.id),/verified/);state.corrupt=false;
