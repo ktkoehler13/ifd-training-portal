@@ -1,6 +1,6 @@
 "use client";
 
-import { PortalHeading } from "@/components/layout/PortalBrand";
+import { PageHeader } from "@/components/layout/PageHeader";
 
 import Link from "next/link";
 import { startTransition, useCallback, useEffect, useState } from "react";
@@ -170,32 +170,7 @@ function ApprovalReviewContent({
 
   return (
     <div className="flex flex-1 flex-col bg-zinc-100">
-      <header className="border-b border-zinc-200 bg-white">
-        <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 px-4 py-5 sm:flex-row sm:items-start sm:justify-between sm:px-6">
-          <PortalHeading>
-            <h1 className="text-xl font-semibold tracking-tight text-zinc-900 sm:text-2xl">
-              Review Training Request
-            </h1>
-            <p className="mt-1 text-sm text-zinc-600">
-              Review the complete request, action history, and workflow actions.
-            </p>
-          </PortalHeading>
-          <div className="flex flex-col gap-3 sm:flex-row">
-            <Link
-              href="/approvals"
-              className="inline-flex h-11 items-center justify-center rounded-xl border border-zinc-200 bg-white px-5 text-sm font-semibold text-zinc-800 shadow-sm transition-colors hover:bg-zinc-50"
-            >
-              Approval Queue
-            </Link>
-            <Link
-              href="/dashboard"
-              className="inline-flex h-11 items-center justify-center rounded-xl border border-zinc-200 bg-white px-5 text-sm font-semibold text-zinc-800 shadow-sm transition-colors hover:bg-zinc-50"
-            >
-              Dashboard
-            </Link>
-          </div>
-        </div>
-      </header>
+      <PageHeader title="Review Training Request" description="Review the complete request, action history, and workflow actions." actions={<Link href="/approvals" className="inline-flex h-11 items-center justify-center rounded-xl border border-zinc-200 bg-white px-5 text-sm font-semibold text-zinc-800 shadow-sm transition-colors hover:bg-zinc-50">Back to Approvals</Link>} />
 
       <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 px-4 py-8 sm:px-6">
         {isLoading ? (

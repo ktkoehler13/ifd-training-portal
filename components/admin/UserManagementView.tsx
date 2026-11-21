@@ -1,8 +1,7 @@
 "use client";
 
-import { PortalHeading } from "@/components/layout/PortalBrand";
+import { PageHeader } from "@/components/layout/PageHeader";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { startTransition, useCallback, useEffect, useMemo, useState } from "react";
 import { AddUserForm } from "@/components/admin/AddUserForm";
@@ -11,7 +10,6 @@ import { EditUserModal } from "@/components/admin/EditUserModal";
 import { ResetPasswordConfirmDialog } from "@/components/admin/ResetPasswordConfirmDialog";
 import { StatusChangeDialog } from "@/components/admin/StatusChangeDialog";
 import { UsersTable } from "@/components/admin/UsersTable";
-import { SignOutButton } from "@/components/auth/SignOutButton";
 import { AdminGate } from "@/components/layout/AuthGate";
 import { signOutClientSession } from "@/lib/auth/client";
 import { PASSWORD_RESET_SUCCESS_MESSAGE } from "@/lib/auth/password-reset-messages";
@@ -301,28 +299,7 @@ function UserManagementContent({ currentPersonnel }: UserManagementContentProps)
   return (
     <>
       <div className="flex flex-1 flex-col bg-zinc-100">
-        <header className="border-b border-zinc-200 bg-white">
-          <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 px-4 py-5 sm:flex-row sm:items-start sm:justify-between sm:px-6">
-            <PortalHeading>
-              <h1 className="text-xl font-semibold tracking-tight text-zinc-900 sm:text-2xl">
-                User Management
-              </h1>
-              <p className="mt-1 text-sm text-zinc-600">
-                Manage personnel records and password-based Supabase Auth
-                accounts keyed by badge number and department email.
-              </p>
-            </PortalHeading>
-            <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
-              <Link
-                href="/dashboard"
-                className="inline-flex h-11 items-center justify-center rounded-xl border border-zinc-200 bg-white px-5 text-sm font-semibold text-zinc-800 shadow-sm transition-colors hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 focus-visible:ring-offset-2"
-              >
-                Dashboard
-              </Link>
-              <SignOutButton className="px-5" />
-            </div>
-          </div>
-        </header>
+        <PageHeader title="User Management" description="Manage personnel records and password-based sign-in accounts keyed by badge number and department email." />
 
         <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 px-4 py-8 sm:px-6">
           <div

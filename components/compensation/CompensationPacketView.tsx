@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { AuthGate } from "@/components/layout/AuthGate";
-import { PortalHeading } from "@/components/layout/PortalBrand";
+import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/Button";
 import { WorkflowSignatureSetup } from "@/components/signature/WorkflowSignatureSetup";
 import { blankMileage, blankTime, blankVoucher, COMPENSATION_STATUS, compensationTotals, formatCompensationRate, OFFICE_CODES, timeMinutes, type CompensationEvent, type CompensationInput, type CompensationPacket, type OfficeCode } from "@/lib/compensation/model";
@@ -86,7 +86,7 @@ export function PacketContent({requestId}:{requestId:string}) {
   const totals=compensationTotals(form,packet?.identity.mileageRate??detail.request.mileageRate);
   const rowInput=(label:string,value:string,onChange:(value:string)=>void,type="text",props:Record<string,string|number>={})=><Field label={label}><input className={inputClass} type={type} value={value} onChange={e=>onChange(e.target.value)} {...props}/></Field>;
   return <main className="min-h-screen bg-zinc-50 pb-12 text-zinc-900">
-    <header className="border-b border-zinc-200 bg-white"><div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-4 px-4 py-5 sm:px-6"><PortalHeading><h1 className="text-2xl font-bold">Compensation Packet</h1><p className="mt-1 text-sm text-zinc-600">Record actual training time and reimbursement details.</p></PortalHeading><Link className="text-sm font-semibold text-red-700 underline" href="/compensation">All Compensation Packets</Link></div></header>
+    <PageHeader title="Compensation Packet" description="Record actual training time and reimbursement details." actions={<Link className="text-sm font-semibold text-red-700 underline" href="/compensation">All Compensation Packets</Link>}/>
     <div className="mx-auto max-w-5xl space-y-6 px-4 py-6 sm:px-6">
       <section className="rounded-xl border border-zinc-200 bg-white p-5"><div className="flex flex-wrap justify-between gap-3"><div><p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">{detail.request.requestNumber}</p><h2 className="mt-1 text-xl font-semibold">{detail.request.course}</h2><p className="mt-2 text-sm text-zinc-600">{detail.request.name} · Badge {detail.request.badge}</p></div><span className="h-fit rounded-full bg-amber-50 px-3 py-1.5 text-sm font-semibold text-amber-900">{packet?COMPENSATION_STATUS[packet.status]:"New Packet"}</span></div>{(owner||detail.actor.role!=="office")&&<Link className="mt-3 inline-block text-sm font-medium text-red-700 underline" href={`/requests/${requestId}/confirmation`}>View Training Request</Link>}<p className="mt-4 text-sm text-zinc-600">Submit within one month of completing your training assignment. The MTO reviews and signs before the office assigns compensation codes.</p></section>
       {!detail.eligible&&<p className="rounded-lg border border-amber-200 bg-amber-50 p-4">This packet can be completed after the approved training has ended.</p>}
