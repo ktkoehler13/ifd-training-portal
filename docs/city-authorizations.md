@@ -6,6 +6,8 @@ On the approved request, select a PDF, PNG or JPEG (up to 4 MB), then **Upload C
 
 ## Cutover and access
 
+Production installation was completed and verified November 19, 2026 with commit `ccc7e5a`. See [PROJECT_STATUS.md](../PROJECT_STATUS.md) for evidence and outstanding live acceptance; the instructions below also describe setup for another environment.
+
 - Apply `20261119180000_city_authorizations.sql` after `20261119160000_compensation_current_mileage_rate.sql` and `20261119170000_office_application_role.sql`, before deploying the website changes.
 - There is no historical backfill: only signed DC approvals after installation create pending tasks. Existing approved requests can still receive a manual upload from their request details, without creating a historical action backlog.
 - Office gains read-only access to approved, undeleted requests, their approval history and approved PDF packets for City processing. It cannot edit requests, approve training, delete requests, manage accounts or change settings.

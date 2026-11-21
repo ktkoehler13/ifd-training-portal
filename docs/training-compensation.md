@@ -22,6 +22,8 @@ Review queues and dashboard badges provide action notices in the portal. Office-
 
 ## Database and deployment
 
+The initial migration was installed November 16, 2026; the mileage and Office-role refinements below were installed November 19 with production commit `ccc7e5a`. See [PROJECT_STATUS.md](../PROJECT_STATUS.md) for current verification and outstanding acceptance. Apply only missing migrations when preparing another environment.
+
 Apply **20261116160000_training_compensation_packets.sql** before publishing the website. It creates:
 
 - `training_compensation_packets` and immutable `training_compensation_events`.

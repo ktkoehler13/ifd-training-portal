@@ -1,824 +1,247 @@
 # IFD Training Portal
 
-Next.js application for Ithaca Fire Department training request workflows and personnel access.
+Ithaca Fire Department's portal for training requests, MTO/DC approvals, official forms, City authorizations and post-training compensation.
 
-## Getting Started
+Production: [ifdtraining.org](https://ifdtraining.org)
 
-Copy the example environment file and set local values:
+Source: [ktkoehler13/ifd-training-portal](https://github.com/ktkoehler13/ifd-training-portal)
 
-```bash
-cp .env.local.example .env.local
-```
+## Start here
 
-Required local variables:
+- [PROJECT_VISION.md](PROJECT_VISION.md): confirmed requirements, user preferences and scope boundaries.
+- [PROJECT_STATUS.md](PROJECT_STATUS.md): current release, evidence, gaps and exact next steps.
+- [AGENTS.md](AGENTS.md): shared working/testing/documentation rules.
+- [DECISIONS.md](DECISIONS.md): significant decisions, rationale and unresolved choices.
+- [Compensation workflow](docs/training-compensation.md) and [City Authorizations](docs/city-authorizations.md): detailed access, state and file behavior.
 
-- `NEXT_PUBLIC_SUPABASE_URL` — Supabase project URL
-- `NEXT_PUBLIC_SUPABASE_ANON_KEY` — Supabase anon/public key
-- `NEXT_PUBLIC_GSA_MILEAGE_RATE` — optional transitional fallback when `system_settings.gsa_mileage_rate` is not set; administrators should configure the live rate under **System Settings** in the app
-- `SUPABASE_SERVICE_ROLE_KEY` — server-only secret for immutable approval signature snapshots and approved PDF packet storage. Never prefix with `NEXT_PUBLIC_`.
+The repository is the source of project knowledge. Files in a developer's chat workspace, downloads folder or another clone are not setup dependencies.
 
-Never commit `.env.local`. Never add a Supabase service-role key to browser code or to `.env.local.example`.
+## Stack and layout
 
-Run the development server:
+Next.js **16.2.10**, React **19.2.4**, strict TypeScript, Tailwind CSS 4, Supabase SSR/Auth/PostgreSQL/private Storage, pdf-lib, Resend and Vercel. Install the versions in `package-lock.json`; dependency ranges in `package.json` alone are not a tested lock.
+
+| Path | Responsibility |
+| --- | --- |
+| `app/` | App Router pages, auth callbacks and protected API routes |
+| `components/requests/`, `components/approvals/` | Request wizard, review, signatures, approved packet UI |
+| `components/compensation/`, `components/city-authorization/` | Post-training compensation and Office City tasks |
+| `lib/auth/`, `lib/supabase/` | Auth/personnel identity, password recovery, authorized clients |
+| `lib/training-request-*.ts`, `types/` | Request validation, mapping, transitions and action/snapshot records |
+| `lib/pdf/` | Renderers, immutable snapshot inputs, field geometry and source templates |
+| `lib/compensation/`, `lib/city-authorization/` | Domain rules, protected services and isolated workflow tests |
+| `supabase/migrations/` | Ordered schema/RLS/workflow evolution; later files replace earlier functions |
+| `supabase/functions/send-training-request-notifications/` | Separately deployed request-email worker |
+| `supabase/ops/`, `supabase/templates/` | Email scheduling and Auth recovery template |
+| `scripts/` | PDF inspection/sample rendering and privileged password support utilities |
+
+## Local installation
+
+Use an isolated development Supabase project, not production credentials/data for routine tests.
+
+1. Install Node and npm. The November 21 handoff verified **Node 26.5.0 / npm 11.17.0**. No `engines` or version-manager pin exists yet; other runtimes are not certified by this check. Tests use `node:module.registerHooks`, so an older Node that can run Next.js may still fail this suite.
+2. From the repository root, run `npm ci`.
+3. Copy `.env.local.example` to `.env.local` and supply the variables below through local/deployment secrets. The example intentionally does not contain the server secret.
+4. Initialize the development database and an administrator as described below.
+5. Run:
 
 ```bash
 npm run dev
+# Open http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000).
-
-## Supabase Setup
-
-### 1. Create a Supabase project
-
-1. Sign in to [Supabase](https://supabase.com/).
-2. Create a new project for development.
-3. Choose a strong database password and save it securely.
-
-### 2. Find the project URL and anon key
-
-In the Supabase dashboard:
-
-1. Open **Project Settings**.
-2. Open **API**.
-3. Copy **Project URL** into `NEXT_PUBLIC_SUPABASE_URL`.
-4. Copy **anon public** key into `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
-
-Use only the anon key in this application. Do not expose the service-role key in the browser or in committed files.
-
-### 3. Configure `.env.local`
+Production-style local run:
 
 ```bash
-NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
-NEXT_PUBLIC_GSA_MILEAGE_RATE=0.70
+npm run build
+npm start
 ```
 
-Restart `npm run dev` after changing environment variables.
+The build fetches the existing Geist/Geist Mono fonts from Google. Allow network access for those downloads or report the environment blocker; don't change fonts just to bypass the check.
 
-### 4. Run the migrations
+### Website environment variables
 
-Apply these files in order using the Supabase SQL editor:
+| Variable | Where / purpose |
+| --- | --- |
+| `NEXT_PUBLIC_SUPABASE_URL` | Browser/server project URL |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Browser-safe public/anon key; RLS still required |
+| `SUPABASE_SERVICE_ROLE_KEY` | **Server secret** for account provisioning, signed workflows and private files; also signs session-bound recovery proofs. Never expose through `NEXT_PUBLIC_`. |
+| `APP_BASE_URL` | Server origin; use `http://localhost:3000` locally and `https://ifdtraining.org` for production |
+| `NEXT_PUBLIC_GSA_MILEAGE_RATE` | Transitional fallback for training-request estimates when the database setting is unavailable. Example `0.00` is not an approved live rate. Compensation submissions require the actual database setting. |
+| `VERCEL_URL` | Platform-provided fallback only when APP_BASE_URL is absent; set the canonical origin explicitly in production |
 
-1. `supabase/migrations/20260718140000_create_personnel.sql`
-2. `supabase/migrations/20260718150000_personnel_login_allowed.sql`
-3. `supabase/migrations/20260718160000_expand_administrative_roles.sql`
-4. `supabase/migrations/20260718170000_create_training_requests.sql`
-5. `supabase/migrations/20260718180000_add_personnel_names.sql`
-6. `supabase/migrations/20260718190000_training_request_approval_workflow.sql`
-7. `supabase/migrations/20260718200000_human_readable_request_numbers.sql`
-8. `supabase/migrations/20260718210000_personnel_signatures.sql`
-9. `supabase/migrations/20260718220000_approval_signature_snapshots_and_packets.sql`
-10. `supabase/migrations/20260718230000_delete_own_training_request_drafts.sql`
-11. `supabase/migrations/20260718240000_password_authentication.sql`
-12. `supabase/migrations/20260718250000_personnel_must_change_password.sql`
-13. `supabase/migrations/20260718260000_legacy_password_setup.sql`
-14. `supabase/migrations/20260719200000_add_password_setup_completed_at.sql`
-15. `supabase/migrations/20260719220000_add_personnel_title.sql`
-16. `supabase/migrations/20260719230000_expand_personnel_titles.sql`
+Do not commit `.env.local`, service credentials, SMTP/API keys or authentication links. `.gitignore` excludes environment files except the blank example, build output, dependencies and `.vercel`. Restart the dev server after environment changes.
 
-If you apply migrations manually through the Supabase SQL Editor rather than the Supabase CLI, PostgREST may continue serving a stale schema cache and report errors such as `Could not find the 'title' column of 'personnel' in the schema cache`. After applying new migrations, reload the schema cache:
+## Database, Auth and initial administrator
+
+Apply **all** `supabase/migrations/*.sql` files in filename order to an empty development Supabase project. Obtain the inventory rather than relying on an obsolete numbered subset:
+
+```bash
+find supabase/migrations -maxdepth 1 -name '*.sql' -print | sort
+```
+
+Migrations rely on Supabase's Auth/Storage schemas and roles; a bare PostgreSQL instance is insufficient without that platform setup. Automated PGlite fixtures supply isolated stand-ins.
+
+For existing environments, determine which migrations actually ran. Prior production releases used the SQL Editor; CLI migration history may not reflect those installations. **Do not blindly run a bulk database push or replay migrations.** Reconcile first, apply only missing reviewed files, then:
 
 ```sql
 notify pgrst, 'reload schema';
 ```
 
-Migration `20260719220000_add_personnel_title.sql` adds `personnel.title` for department rank. Existing rows default safely to `firefighter` without changing their application `role`. Migration `20260719230000_expand_personnel_titles.sql` expands valid ranks to Firefighter, Lieutenant, Assistant Chief, Deputy Chief, and Fire Chief. Rank remains separate from application authorization role.
+A schema-cache “column not found” error often indicates an unapplied migration or stale cache. Check the schema and ordered migration dependencies before changing the app or removing constraints.
 
-### 5. Create the first administrator manually
+Enable Supabase Email/password authentication and disable unrestricted public signup. For a fresh development environment:
 
-Because public signup is disabled, the first administrator must be created manually:
-
-1. In the Supabase dashboard, open **Authentication -> Users** and create a user with the personnel department email and a strong temporary password.
-2. Insert the matching personnel row:
+1. Create a confirmed Auth user with an example development email and temporary password privately through Supabase.
+2. Insert its matching personnel record using that exact email; the email-link trigger establishes the Auth association:
 
 ```sql
-insert into public.personnel (
-  badge_number,
-  email,
-  first_name,
-  last_name,
-  title,
-  role,
-  active
-)
-values (
-  '207',
-  'ifd.mto@gmail.com',
-  'Kevin',
-  'Koehler',
-  'firefighter',
-  'mto',
-  true
-);
+-- Development example only. First create the matching confirmed Auth account.
+insert into public.personnel
+  (badge_number, email, first_name, last_name, title, role, active, must_change_password)
+values
+  ('DEV-ADMIN', 'admin@example.test', 'Example', 'Administrator',
+   'firefighter', 'admin', true, true);
 ```
 
-3. Sign in at `/` using badge number and password.
+3. Sign in by badge and password and complete the required personal-password setup.
+4. Use **User Management** for further accounts; it provisions Auth and personnel together. The old commented `supabase/seed.example.sql` is not a complete account bootstrap and does not establish a future SSO requirement.
 
-After the first administrator exists, additional personnel should be created through **User Management**, which provisions both the `public.personnel` row and the Supabase Auth account server-side.
+Passwords stay in Auth. Temporary initial passwords require at least 6 characters; permanent passwords require at least 12 with uppercase, lowercase, number and special character. Ordinary login sends no email. Account email edits run through User Management's dedicated email operation; self-email changes sign out the user, who should retain the same badge/password. Do not update only `personnel.email` or relink an account by name.
 
-Do not add real personnel information to the repository.
+Set Supabase Site URL and allowlisted callback/recovery URLs to match each environment:
 
-## Password Authentication
+- Production Site URL: `https://ifdtraining.org`.
+- `https://ifdtraining.org/auth/callback` and `https://ifdtraining.org/reset-password`.
+- Development equivalents under `http://localhost:3000` in a development project.
+- Preserve any separately approved legacy password-setup redirect paths.
 
-The login page uses badge number and password only. Users do not enter their department email during sign-in.
+Configure the mileage rate and primary DC in **System Settings**. Assign Office to the intended office personnel in **User Management**; migrations do not choose people.
 
-Internally, Supabase Auth still uses the personnel email address. The application resolves that email on the server from `public.personnel` using the submitted badge number, then calls `signInWithPassword()` through the Supabase SSR server client.
+## Roles and access
 
-Normal login does not send magic links, OTP messages, or sign-in emails.
+| Capability | User (`firefighter`) | MTO | DC | Admin | Office |
+| --- | --- | --- | --- | --- | --- |
+| Own requests/profile/signature/compensation | Yes | Yes | Yes | Yes | Yes |
+| MTO training decision / expense review | No | Yes | No | No | No |
+| Final DC training decision | No | No | Yes | No | No |
+| Personnel / settings / recoverable request deletion | No | Yes | Yes | Yes | No |
+| Reset another user's password | No | Yes | No | Yes | No |
+| MTO compensation review/signature | No | Yes | No | No | No |
+| Office compensation coding/submission | No | Backup | Backup | Backup | Yes |
+| City Authorization upload | No | Backup | Backup | Backup | Yes |
 
-After an administrator assigns a temporary password, users with `must_change_password = true` are redirected to `/settings/password` before accessing other application pages.
+All access requires an active authorized session; sensitive actions also enforce password setup and workflow state. Office can read other users' compensation only after signed MTO handoff, and approved undeleted requests/forms for City processing. Requesters can download their own City files but cannot upload. Office has no general administration power.
 
-### Legacy magic-link transition
+The primary DC setting controls routine review **email**, not DC signing eligibility or backup review queues. Until selected it preserves all-active-DC emailing. MTO review emails currently route to eligible active MTOs; there is no primary-MTO setting. Office-stage portal badges belong only to Office, not backup processors.
 
-Some existing personnel signed in only through Supabase email magic links and therefore do not have a badge-number password yet.
+## Workflow and documents
 
-The login page keeps badge number and password as the normal sign-in method and adds a secondary action:
+Requests follow `draft → pending_mto → pending_deputy_chief → approved`. Either reviewing role may deny or return for correction; resubmission restarts MTO review with the original request number. Legacy `submitted`/`cancelled` values may exist; do not assume every enum value has a current user-facing transition.
 
-- **Set up my password** → `/setup-password`
+Database-assigned identifiers use `LastName, FirstInitial, CourseName, Year.Sequence`; drafts display Draft. Ownership uses personnel UUID. Saved name/badge/account email and request contact email serve different purposes; contact edits never change ownership.
 
-That page accepts badge number only. Trusted server code resolves the department email, confirms a matching Supabase Auth account exists, and sends a one-time password-setup link through Supabase Auth. The browser always receives the same generic response:
+Approval/denial signatures use reserved, immutable actor metadata, private PNG copies and verified bytes before service-only completion. Returns require comments but no signature. MTO expense edits require a reason and produce history; they are not approval.
 
-`If an active account matches that badge number, a password setup link has been sent to the department email on file.`
-
-Password-setup links redirect to:
-
-`/auth/callback?flow=password-setup`
-
-After the callback establishes a session, the user is forced to create a password at `/settings/password?required=1&setup=legacy` before accessing the rest of the portal.
-
-Successful first password creation:
-
-- clears `must_change_password`
-- sets `personnel.password_setup_completed_at`
-- redirects to `/dashboard`
-
-Future sign-ins use badge number and password only.
-
-Migration `20260718260000_legacy_password_setup.sql` adds `password_setup_completed_at` and documents a reviewed one-time backfill for active legacy accounts. Review that commented SQL before applying it in production.
-
-Migration `20260719200000_add_password_setup_completed_at.sql` is a corrective migration that ensures `password_setup_completed_at` exists on environments that applied earlier personnel migrations without that column.
-
-Migration `20260719220000_add_personnel_title.sql` adds `personnel.title` for department rank, separate from application authorization role.
-
-Migration `20260719230000_expand_personnel_titles.sql` adds Deputy Chief and Fire Chief as valid department ranks without changing application roles.
-
-### Administrator temporary-password alternative
-
-Administrators can still reset passwords from **User Management**. That workflow assigns a temporary password server-side, sets `must_change_password = true`, and shows the temporary password once to the administrator.
-
-Use this when:
-
-- the user cannot access their department email
-- Auth email delivery is rate-limited or unavailable
-- a password-setup email fails
-
-Administrator reset never requires the user's old password.
-
-### Auth email quota warning
-
-The legacy password-setup workflow sends a Supabase Auth email and therefore consumes the project's Auth email quota. Do not treat this workflow as unlimited while using Supabase's default email sender.
-
-For production rollout, configure either:
-
-- custom SMTP in Supabase, or
-- administrator-assigned temporary passwords
-
-Ordinary badge-number and password login does not send email after setup is complete.
-
-### Required Supabase callback URLs
-
-Add these redirect URLs in **Authentication -> URL Configuration**:
-
-- `http://localhost:3000/auth/callback`
-- your production application URL, for example `https://training.example.gov/auth/callback`
-
-Set `APP_BASE_URL` in server environment configuration so password-setup links use the correct production origin.
-
-### Enable email/password authentication
-
-In the Supabase dashboard:
-
-1. Open **Authentication**.
-2. Open **Providers**.
-3. Ensure **Email** is enabled for password sign-in.
-
-Disable unrestricted public signup. This portal provisions accounts only through administrative personnel management or manual first-administrator setup.
-
-### Sign-in flow
-
-1. The user enters badge number and password on `/`.
-2. The browser POSTs to `/api/auth/login`.
-3. Trusted server code resolves exactly one active personnel row by badge number using a server-only lookup.
-4. The server calls `signInWithPassword()` with the resolved personnel email and submitted password.
-5. The server verifies the authenticated Supabase user email matches the personnel email, the personnel row is still active, and the role is valid.
-6. On success, the SSR session cookie is established and the user is redirected to `/dashboard`.
-7. On any failure, the server returns the generic error: `Unable to sign in. Check your badge number and password.`
-
-The application does not reveal whether a badge exists, whether an account is active, or which email belongs to a badge.
-
-### Password requirements
-
-**Permanent passwords** (forced first-login setup and ordinary Change Password) must be at least 12 characters and include upper- and lowercase letters, a number, and a special character.
-
-**Initial passwords** (Add User and administrator reset) require only at least 6 characters and cannot be entirely whitespace. They are temporary credentials meant to be easy to remember, communicate, and enter.
-
-After first sign-in, users with `must_change_password = true` must replace an initial password with a permanent password that meets the stronger rules.
-
-### Administrator account provisioning
-
-Administrators with `mto`, `deputy_chief`, or `admin` roles can create personnel from `/admin/users`.
-
-The Add User form assigns an **initial password** of at least 6 characters. Initial passwords are intentionally easy to remember and enter. They are temporary credentials only.
-
-The protected server route `/api/admin/personnel`:
-
-1. Verifies the signed-in administrator.
-2. Validates the administrator-assigned initial password server-side.
-3. Creates the Supabase Auth user with the personnel email and that initial password.
-4. Creates the matching `public.personnel` row with `must_change_password = true`.
-5. Reconciles partial failures so an Auth user is not left behind without a personnel row.
-
-Passwords are stored only in Supabase Auth. They are never saved to `public.personnel`, returned in the API response, or displayed after account creation.
-
-Administrators must communicate the initial password to the user securely outside the portal. After first sign-in, the user must choose a stronger permanent password before accessing the rest of the application.
-
-Administrator password reset uses the same relaxed initial-password policy and generates memorable temporary passwords such as `Cedar7` or `Ladder4`.
-
-### Change password
-
-Authenticated users can update their password at `/settings/password`.
-
-When `must_change_password` is true, the page shows only **New Password** and **Confirm New Password**. The server decides whether Current Password is required from the personnel record; the browser cannot bypass that check.
-
-When `must_change_password` is false, the page verifies the current password, validates the new password against the same strength rules, and updates the Supabase Auth password through a protected server route.
-
-### Email confirmation and recovery callback
-
-`/auth/callback` handles Supabase email confirmation, invitation, recovery, and legacy password-setup links. It is not used for ordinary badge-number sign-in.
-
-Password-setup links use `flow=password-setup` and redirect to forced password creation.
-
-Self-service password recovery:
-
-- `/forgot-password` accepts a badge number and sends a Supabase recovery email when a matching active account exists.
-- Recovery emails use `resetPasswordForEmail` with `redirectTo` set to `${APP_BASE_URL}/reset-password` (or the current request origin during local development).
-- `/reset-password` lets the user choose a new permanent password after following the email link.
-- `/auth/callback` still handles Supabase recovery codes with `type=recovery` and redirects to `/reset-password`.
-
-Configure Supabase **Authentication → URL Configuration → Redirect URLs** to include:
-
-- `https://YOUR-PRODUCTION-DOMAIN/reset-password`
-- `http://localhost:3000/reset-password`
-
-Do not rely on Site URL alone; the recovery redirect must be explicitly allowlisted.
-
-If you customize the Supabase recovery email template, keep the link target driven by `{{ .ConfirmationURL }}` / the redirect supplied by `resetPasswordForEmail`. Do not hard-code `/` or `/login` in the template.
-
-## Authentication and Authorization
-
-- Login uses Supabase secure session cookies through `@supabase/ssr`
-- The app does not use `sessionStorage` or `localStorage` for authentication
-- Middleware refreshes Supabase sessions and protects authenticated routes
-- After password sign-in, the app confirms the authenticated email matches an active personnel row
-- Roles come only from `public.personnel`, never from browser input after login
-- Passwords remain entirely in Supabase Auth; `public.personnel` does not store passwords
-
-Protected routes:
-
-- `/dashboard`
-- `/requests`
-- `/requests/new`
-- `/approvals`
-- `/admin/users`
-- `/admin/requests`
-- `/settings/password`
-- `/settings/signature`
-
-Authorization:
-
-- `firefighter`, `mto`, `deputy_chief`, and `admin` may use normal request routes
-- `firefighter` is the only non-administrative role and has no personnel-management permissions
-- `mto`, `deputy_chief`, and `admin` have equal administrative permissions: read, add, edit, activate, deactivate, assign any valid role (including `admin`), reset passwords, and hard-delete personnel records
-- Administrative roles may access `/admin/users` and manage personnel through Supabase RLS plus protected server provisioning routes
-- Distinct role values remain for future workflow routing only: MTO approval actions go to `mto`, Deputy Chief approval actions go to `deputy_chief`, and `admin` has administrative access without an automatic approval stage
-
-## Personnel Data Model
-
-The `personnel` table stores only:
-
-- badge number
-- email
-- first name
-- last name
-- role
-- active status
-- created/updated timestamps
-
-First and last names are trimmed on write and stored as null when blank. Names are required before a personnel user can create a training request. Login uses badge number and password only; the department email remains linked to Supabase Auth internally and must match the Auth user email.
-
-Active badge numbers must be unique. The database enforces case-insensitive uniqueness among active personnel records.
-
-It intentionally does not store phone numbers, addresses, passwords, medical information, or payroll information.
-
-Do not add real personnel data to shared environments until production authentication and governance are complete.
-
-After applying the personnel names migration, update existing personnel records manually in the Supabase SQL editor. Example for a development test user:
-
-```sql
-update public.personnel
-set first_name = 'Kevin', last_name = 'Koehler'
-where badge_number = '207';
-```
-
-Do not commit real personnel names into shared migrations or seed files.
-
-## Training Requests
-
-Training requests are stored in Supabase in `public.training_requests`. They are shared across browsers and devices for authenticated personnel.
-
-### Request schema
-
-Each request stores requester identity, course details, expense fields, workflow status, and timestamps. Additional preserved form fields include:
-
-- requester name
-- course number
-- number of days on duty
-- airfare, rental vehicle, and other expense amounts
-- GSA mileage rate and total reimbursable miles
-- transportation notes in `department_vehicle_details`
-
-### Request numbers
-
-Human-readable request numbers are assigned by the database at submission time, not when a draft is inserted.
-
-Format:
-
-`LastName, FirstInitial, CourseName, Year.Sequence`
-
-Example:
-
-`Koehler, K, Fire Officer I, 2026.1`
-
-Rules:
-
-- the yearly sequence is department-wide and resets each calendar year
-- the sequence is not zero-padded
-- drafts use `request_number = null` and display as **Draft**
-- the final number is immutable after first assignment
-- resubmitted returned requests keep their original number
-- the browser never supplies the final request number
-
-Existing IFD-format test records created before this migration remain unchanged. Newly submitted requests use the human-readable format.
-
-Optional disposable cleanup before re-testing numbering:
-
-```sql
-delete from public.training_requests where request_number like 'IFD-%';
-```
-
-Drafts remain editable by the requester only. Submitted requests follow the approval workflow below.
-
-### Editing estimates during MTO review
-
-Active MTO personnel can select **Edit Estimated Expenses** while a request is
-pending MTO review. They can revise registration, lodging, airfare, rental
-vehicle, meals, Other Expense and its description, and reimbursable miles. The
-request's stored GSA rate and department-vehicle choice remain fixed. Mileage and
-the total are calculated automatically. A reason is required; original and
-revised values are recorded with the reviewer and timestamp in the request
-history and the PDF audit trail. Saving does not approve the request.
-
-Apply `supabase/migrations/20261005210000_mto_expense_review.sql` after
-`20261005180000_add_other_expense_description.sql`, before deploying this UI.
-The migration adds an expense-history column and narrowly scoped RPCs without
-granting MTOs general request-update access. It rejects stale saves and stale
-signature attempts, and blocks expense editing while a signature reservation is
-active (up to 15 minutes if a signing attempt is abandoned). Existing approval
-snapshots and the TAL layout are unchanged. Historical missing Other Expense
-descriptions remain valid when that amount is unchanged; changing a positive
-Other Expense requires a description. Previously opened review tabs must be
-refreshed before signing after this release.
-
-`npm test` includes isolated PostgreSQL tests that apply every migration and
-exercise the actual RLS policies and workflow functions; no production records
-are used.
-
-## Approval Workflow
-
-Training requests move through role-specific signing steps. MTO, Deputy Chief, and Admin have equal administrative permissions for personnel management, but workflow signing remains role-specific:
-
-- only active personnel with role `mto` may perform MTO review actions
-- only active personnel with role `deputy_chief` may perform Deputy Chief review actions
-- `admin` may view all requests but is not treated as MTO or Deputy Chief for signing unless their personnel role is changed
-
-### Workflow stages
-
-1. Firefighter submits request:
-   - status = `pending_mto`
-   - `current_action_role` = `mto`
-   - notify all active MTO personnel
-2. MTO approves:
-   - record MTO electronic signature
-   - status = `pending_deputy_chief`
-   - `current_action_role` = `deputy_chief`
-   - notify all active Deputy Chief personnel
-3. MTO returns for correction:
-   - status = `returned_for_correction`
-   - `current_action_role` = `firefighter`
-   - requester may edit and resubmit
-4. MTO denies:
-   - status = `denied`
-   - `current_action_role` = `null`
-5. Deputy Chief approves:
-   - record Deputy Chief electronic signature
-   - status = `approved`
-   - `current_action_role` = `null`
-6. Deputy Chief returns for correction:
-   - status = `returned_for_correction`
-   - `current_action_role` = `firefighter`
-   - resubmission restarts at `pending_mto`
-7. Deputy Chief denies:
-   - status = `denied`
-   - `current_action_role` = `null`
-
-Supported statuses:
-
-- `draft`
-- `submitted`
-- `pending_mto`
-- `pending_deputy_chief`
-- `returned_for_correction`
-- `approved`
-- `denied`
-- `cancelled`
-
-### Electronic signatures
-
-Approvals use authenticated electronic signature acknowledgment rather than handwritten drawing. Reviewers must:
-
-- confirm they are signing electronically in the review dialog
-- see their authenticated full name and badge number
-- optionally enter comments on approve, or required comments on return/deny
-- click a role-specific button such as **Sign and Approve as MTO**
-
-Signature intent is enforced in both places:
-
-- the approval review dialog requires the acknowledgment checkbox before calling the workflow RPC
-- the database approval RPC functions require `p_electronic_signature_confirmed = true` and reject false or missing acknowledgment with a clear error
-
-The database stores trusted actor identity snapshots and signature metadata in `public.training_request_actions`, including `electronic_signature_confirmed`. Browser clients cannot supply signature identity fields directly.
-
-### Action history
-
-`public.training_request_actions` stores immutable workflow history including:
-
-- actor personnel ID, name, badge, and role snapshots
-- action type (`submitted`, `mto_approved`, `mto_returned`, `deputy_chief_approved`, etc.)
-- comments
-- `signature_name`, `signed_at`, and `electronic_signature_confirmed` for approval actions
-
-History rows are inserted only by trusted `SECURITY DEFINER` workflow functions.
-
-### Workflow database functions
-
-Apply workflow transitions through RPC functions rather than direct table updates:
-
-- `submit_training_request(request_id)`
-- `resubmit_training_request(request_id)`
-- `mto_approve_training_request(request_id, comments, electronic_signature_confirmed)`
-- `mto_return_training_request(request_id, comments)`
-- `mto_deny_training_request(request_id, comments)`
-- `deputy_approve_training_request(request_id, comments, electronic_signature_confirmed)`
-- `deputy_return_training_request(request_id, comments)`
-- `deputy_deny_training_request(request_id, comments)`
-
-### Approval UI
-
-- `/approvals` — queue for the signed-in user's exact workflow role
-- `/approvals/[id]` — full request review page with signing actions
-- `/admin/requests` — administrative view of all requests without automatic signing rights for `admin`
-
-Dashboard quick actions include:
-
-- **Requests Requiring My Action** for MTO and Deputy Chief users
-- **Administrative Request View** for administrative roles
-
-### Email notification outbox
-
-Workflow functions enqueue rows in `public.training_request_notifications` in the same database transaction as the workflow action. The outbox is not exposed to browser users except for administrative delivery-status visibility on review/detail pages.
-
-Notification events:
-
-- `pending_mto`
-- `pending_deputy_chief`
-- `returned_for_correction`
-- `denied`
-- `approved`
-
-Duplicate notifications for the same workflow transition and recipient are prevented by a unique constraint on `(source_action_id, event_type, recipient_email)`.
-
-Workflow commits even if email delivery is temporarily unavailable. Failed sends remain retry-safe in the outbox.
-
-### Edge Function: `send-training-request-notifications`
-
-The sender is disabled by default. Deploy `supabase/functions/send-training-request-notifications/`
-with gateway JWT verification enabled. The handler additionally requires
-a verified project service-role credential: normal user tokens and the public anon
-key cannot dispatch mail. The browser never calls this function.
-
-Required Supabase Edge Function settings:
-
-- `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` (default project secrets)
-- `RESEND_API_KEY` (use a sending-only key scoped to the verified sending domain)
-- `RESEND_FROM_EMAIL` (for example, `IFD Training Portal <notifications@your-verified-domain.org>`)
-- `APP_BASE_URL=https://ifd-training-portal.vercel.app`
-- `NOTIFICATIONS_ENABLED=false` until sender verification and delivery testing finish
-- `NOTIFICATIONS_START_AT` (explicit UTC ISO timestamp for activation)
-
-Keep secrets out of Git and `NEXT_PUBLIC_*` variables. Apply
-`20261008180000_training_notification_delivery.sql` before activating delivery.
-It adds the `skipped` delivery state and a service-only authorization check
-without changing request/approval records.
-
-Delivery covers MTO review, Deputy Chief review, requester corrections, and
-approved/denied outcomes. Resubmissions create a new MTO alert. Expense edits do
-not create mail. Corrections and denials include the reviewer comments. Each
-HTML and plain-text message names the request, requester, course, and action,
-and links to a protected portal page. Request links survive normal sign-in and
-required password changes; only recognized request paths are accepted as return
-URLs. Approval and signature actions still happen inside the portal.
-
-Before sending, the worker verifies that the request is still at the event's
-stage, that the source is the latest workflow action (expense edits do not
-supersede it), and that the recipient is active with the correct role or requester
-identity and email address. Older, superseded, or ineligible alerts become
-`skipped` with an explanation. Nothing older than `NOTIFICATIONS_START_AT` is
-sent. This prevents historical test queues from being mailed on first activation.
-
-A batch claims up to ten rows with the existing database lock, sends through
-Resend with each notification UUID as its idempotency key, and records provider
-acceptance as `sent`. This status means accepted by the provider, not guaranteed
-inbox delivery. Temporary failures retry up to five attempts with backoff.
-Retries older than 23 hours from notification creation are skipped for manual
-review to avoid replaying a provider-accepted email after Resend's 24-hour
-idempotency window. Database acknowledgement failures return a service error for
-monitoring; they are not silently reported as success.
-
-For automatic processing and retries, use the Supabase scheduler setup in
-`supabase/ops/schedule-training-notifications.sql`. It runs every minute and reads
-its existing project credential from Vault, never from a literal in a job or
-migration. The script requires its two named Vault secrets before scheduling.
-This is application infrastructure and runs independently of an open browser.
-The endpoint is:
-
-`https://<project-ref>.supabase.co/functions/v1/send-training-request-notifications`
-
-Rollout order:
-
-1. Register/verify the sending domain in Resend, then configure the sender secrets.
-2. Apply the migration and deploy the function with delivery disabled.
-3. Set an activation timestamp. Confirm the 18 historical pending alerts observed
-   before rollout will be skipped rather than mailed.
-4. Test delivery with a controlled request and named test recipient before
-   enabling the schedule for routine requests. Check both the provider result
-   and the recipient inbox. Do not submit or approve a real training request for a test.
-5. Enable the scheduler and `NOTIFICATIONS_ENABLED=true` after the controlled test.
-   Monitor delivery status and provider failures. Pause delivery by setting
-   `NOTIFICATIONS_ENABLED=false`; workflow actions continue to queue normally.
-
-Local verification:
-
-- `npm test` includes HTML escaping, all five events, protected links, return-path
-  validation, service-only dispatch, activation/backlog checks, recipient and
-  workflow eligibility, delivery acknowledgements and retry failures.
-- `npx tsc --noEmit --strict --target es2022 --module esnext --moduleResolution bundler --allowImportingTsExtensions --skipLibCheck supabase/functions/send-training-request-notifications/handler.ts supabase/functions/send-training-request-notifications/email.ts`
-  also checks the portable Edge Function code (excluded from the Next build).
-
-### Approval workflow test procedure
-
-1. Apply all migrations in order.
-2. Ensure at least one active `mto`, one active `deputy_chief`, and one active `firefighter` test user exist with first and last names populated.
-3. Sign in as the firefighter, submit a training request, and confirm status becomes `pending_mto`.
-4. Sign in as MTO, open `/approvals`, review the request, and sign/approve.
-5. Sign in as Deputy Chief, review the request from `/approvals`, and sign/approve.
-6. Confirm the requester sees the full approval timeline on the request detail page.
-7. Repeat a return-for-correction path and confirm the requester can edit/resubmit without changing the request number.
-8. Confirm a newly submitted 2026 request receives `LastName, F, Course, 2026.1`, the next request receives `.2`, and resubmission does not consume another sequence.
-9. Verify notification rows are created in `public.training_request_notifications`.
-10. Deploy the Edge Function, configure Resend secrets and `APP_BASE_URL`, then trigger the webhook or scheduled job and confirm rows move to `sent`.
-
-### Personnel signatures (Phase 1)
-
-Migration `20260718210000_personnel_signatures.sql` adds secure stored signatures for active **MTO** and **Deputy Chief** personnel only. Admin users do not receive signature access unless their personnel role is exactly `mto` or `deputy_chief`.
-
-**Private storage bucket:** `personnel-signatures`
-
-- The bucket is private (`public = false`).
-- Each owner stores one normalized final object at `<personnel-id>/signature.png`.
-- Staged replacements upload to `<personnel-id>/pending/<uuid>.png` and only promote to the final path after server-side PNG validation succeeds.
-- If a final signature already exists, the server backs it up under `<personnel-id>/pending/backup-<uuid>.png` before promotion and restores it when promotion or metadata save fails.
-- Storage policies allow an authenticated owner to read, write, replace, and delete only their own final object and owner-scoped pending objects. Path traversal is rejected.
-- All Storage mutations run through protected `/api/settings/signature` route handlers using the authenticated server Supabase client. The browser does not upload directly to Storage.
-- Cross-user access and anonymous access are denied.
-- The browser never receives a permanent public URL. Previews use short-lived signed URLs for `<authenticated-personnel-id>/signature.png` only; arbitrary storage paths from the client or metadata are not trusted.
-- Future PDF generation will use the Supabase service role to read signature bytes server-side. Do not add a service-role key to browser code or `NEXT_PUBLIC_*` variables.
-
-**Supported roles:** `mto`, `deputy_chief`
-
-**Upload rules:**
-
-- PNG only (`image/png`), verified from actual file bytes on the server
-- Maximum file size: 1 MB (actual byte length)
-- IHDR dimensions must be at least 150 × 50 px and no larger than 2000 × 1000 px
-- Rejected formats include JPEG, SVG, GIF, and PDF even when mislabeled in the browser
-
-**Certification:** Before saving, the owner must confirm:
-
-“I certify that this is my official signature and authorize the IFD Training Portal to place it on training documents I electronically approve.”
-
-The save API rejects any request where `certificationConfirmed` is not literal `true`. The database trigger requires `certification_confirmed = true` and assigns `certified_at` on the server. Client-supplied personnel IDs or certification timestamps are not trusted.
-
-Storage policy helper functions (`can_manage_own_personnel_signature`, `expected_personnel_signature_storage_path`, `is_personnel_signature_pending_object_path`, and `is_personnel_signature_owner_object_path`) are executable by `authenticated` users only so Storage RLS can evaluate owner-scoped paths. They do not grant cross-user access.
-
-**Application route:** `/settings/signature`
-
-MTO and Deputy Chief users can draw or upload a signature, preview the stored PNG, replace it, or delete it. Firefighters and admin-only accounts see access denied. Stale metadata can be deleted even when the Storage object is already missing.
-
-**Approval snapshot preparation:** Phase 2 copies the reviewer's stored PNG into immutable approval snapshots and records metadata on `public.training_request_actions`. Replacing a live personnel signature later does not change historical action snapshots.
-
-### Phase 2 — Approval Snapshots and Approved PDF Packets
-
-Apply migration #9 after migration #8.
-
-**Server environment variable**
-
-- `SUPABASE_SERVICE_ROLE_KEY` — required on the Next.js server for snapshot uploads, packet uploads, and protected downloads. Never expose this value in browser code or `NEXT_PUBLIC_*` variables.
-
-**Private storage buckets**
-
-- `training-request-signature-snapshots` — immutable approval PNG copies at `<request-id>/<action-id>/signature.png`
-- `training-request-packets` — approved merged PDF packets at `<request-id>/approved-packet.pdf`
-
-**PDF templates (server-side only)**
+The approved packet consists of the Training Request, separate TAL, conditional Academy Registration and audit/continuation pages. Do not promise exactly two or three physical pages. Source templates:
 
 - `lib/pdf/templates/training-request-form-2026.pdf`
 - `lib/pdf/templates/tal.pdf`
+- `lib/pdf/templates/academy-registration.pdf`
+- `lib/pdf/templates/training-compensation-2026.pdf`
 
-Inspect AcroForm field names during development:
+Training header and Travel Authorization are embedded unchanged. TAL/Academy fields use the authorized saved data and snapshots. Academy payment fields remain blank. PDFs are flattened; saved signatures are not live references to personnel profiles. Approved training packets can be regenerated through authorized retry using historical inputs; compensation signed revisions and City upload history are versioned.
 
-```bash
-npx tsx scripts/inspect-pdf-fields.ts
-npx tsx scripts/inspect-pdf-field-rects.ts
-```
+Private buckets: `personnel-signatures`, `training-request-signature-snapshots`, `training-request-packets`, `training-compensation`, `city-authorizations`. Never make them public as a download fix. File routes check role/ownership and hashes. The original staff signature store normalizes PNGs; uploaded signatures are limited to 1 MB and validated dimensions of 150×50 through 2000×1000.
 
-Field mappings live in `lib/pdf/field-mapping.ts`.
+Compensation: requester signs → MTO signs/returns → Office codes and marks Submitted. Stored final key stays `completed`. Current rate freezes on each requester submission; historical training-rate snapshots are separate. See [workflow details](docs/training-compensation.md).
 
-**Signature snapshot workflow**
+City: new signed DC approval creates a parallel pending Office task; private upload completes it. Old approved requests can receive manual attachments without a backfilled queue. Requester approval email does not wait for this upload. See [workflow details](docs/city-authorizations.md).
 
-1. Authenticated reviewer calls `POST /api/training-requests/[id]/workflow`.
-2. Database reserves an action ID and immutable reviewer identity through `reserve_training_request_signature_action`.
-3. Server downloads and re-validates the reviewer's current personnel signature PNG.
-4. Server uploads immutable snapshot bytes to the private snapshot bucket using the service role.
-5. Server re-downloads the uploaded snapshot object, verifies the PNG bytes, and derives SHA-256 from the actual stored object.
-6. Database completes the workflow through `complete_training_request_signature_action` using the **service-role client only**.
-7. If database completion fails, the unused snapshot object is deleted.
+## Email and password recovery operations
 
-`complete_training_request_signature_action` is **not** executable by browser sessions. Completion derives the actor from the reservation identity snapshot rather than `auth.uid()`.
+Two independent email systems must be configured:
 
-Signature-required actions:
+**Training-request email worker** — `send-training-request-notifications`, deployed separately from Vercel. Its required environment names are:
 
-- `mto_approve`, `mto_deny`, `deputy_approve`, `deputy_deny`
+| Name | Purpose |
+| --- | --- |
+| `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | Project-provided server credentials |
+| `RESEND_API_KEY` | Sending-only credential restricted to the authorized domain |
+| `RESEND_FROM_EMAIL` | Approved sender, currently `IFD Training Portal <notifications@ifdtraining.org>` |
+| `APP_BASE_URL` | HTTPS origin used for protected request links |
+| `NOTIFICATIONS_ENABLED` | Delivery switch; keep false while preparing a new environment |
+| `NOTIFICATIONS_START_AT` | Explicit UTC activation cutoff; prevents historical backlog delivery |
 
-Return-for-correction does not require a signature snapshot.
+Keep gateway JWT verification enabled; the handler also verifies service-role authority. A browser/user token must not dispatch mail. The transactional outbox deduplicates action/recipient events, checks current stage and eligible recipient, skips stale alerts and retries temporary errors. Provider acceptance recorded as `sent` does not prove inbox receipt.
 
-Error when no signature exists:
+The worker sends MTO/DC review, correction, denial and approval mail. Only final approval attaches a ready, hash-checked approved PDF and requester-responsibility instructions. No compensation or City Authorization email worker exists.
 
-`You must save your signature before signing this training request action.`
+The one-minute scheduler is `supabase/ops/schedule-training-notifications.sql`. Before running it, configure the Vault entries `training_notifications_project_url` and `training_notifications_service_role` privately. Never paste a key into SQL source. For a new environment, approve a controlled recipient/test, verify delivery, then enable the switch/schedule with a suitable cutoff. Pause mail with NOTIFICATIONS_ENABLED=false without disabling request processing.
 
-**Approved packet generation**
+**Account recovery/legacy setup email** — Supabase Auth SMTP, configured separately. Recorded production setup uses Resend SMTP, host `smtp.resend.com`, port 465, username `resend`, and sender `notifications@ifdtraining.org`; store the restricted key only in Supabase SMTP settings. Check current provider documentation before changing those settings.
 
-After Deputy Chief approval:
+Use `supabase/templates/recovery.html` as the Reset password template and preserve its legacy-setup fallback. The new link opens a confirmation screen; an explicit POST consumes the token. Successful recovery-specific verification creates a signed 30-minute proof bound to account and session. Ordinary OTP/password sessions are insufficient. On success the user signs out and signs in with the new password. Replace older incompatible emails by requesting fresh ones. A real-user reset test must leave password entry to the user and verify old-link reuse fails.
 
-1. Request status becomes `approved`.
-2. A `training_request_packets` row is upserted with status `pending`.
-3. Server-side code generates a two-page PDF (Training Request Form + TAL), validates required AcroForm fields, verifies the final merged PDF is noninteractive, uploads it to the private packet bucket, and marks the packet `ready`.
-4. Failed generation leaves the request approved, marks the packet `failed`, stores a safe error message, and allows authorized administrative retry.
+## Tests and checks
 
-Repeated generation replaces `<request-id>/approved-packet.pdf` and reuses the single packet metadata row.
-
-**Protected download**
-
-`GET /api/training-requests/[id]/approved-packet`
-
-Authorized roles:
-
-- request owner
-- `mto`
-- `deputy_chief`
-- `admin`
-
-Requirements:
-
-- request status is `approved`
-- packet status is `ready`
-- response streams the private PDF with `Content-Type: application/pdf`
-- `Content-Disposition` filename uses the exact safe request-number filename such as `Koehler, K, Fire Officer I, 2026.1.pdf`
-
-Administrative retry:
-
-`POST /api/training-requests/[id]/approved-packet/retry`
-
-**Signature placement**
-
-- Training Request Form: MTO snapshot on the MTO line, Deputy Chief snapshot on the Deputy Chief line, with approval dates in `undefined_2` and `undefined_3`
-- TAL agency authorization: same immutable MTO snapshot at the `Signature1` box
-- Firefighter/student TAL signature fields remain blank; the firefighter signs after downloading the approved packet
-
-**Future TAL personnel fields left blank until trusted data exists**
-
-- middle initial
-- address
-- city
-- state
-- ZIP
-- phone
-- NY training ID
-- SCBA clearance
-
-**Phase 3**
-
-Approval email delivery with the saved PDF attached will be implemented in the next phase. Phase 2 does not attach PDFs to approval emails.
-
-### Row Level Security
-
-- Authenticated personnel may create and update their own draft requests only when the requester fields match their active personnel record
-- Requesters may submit their own drafts into `pending_mto`
-- Requesters may read their own requests
-- MTO, Deputy Chief, and Admin may read all requests
-- Requesters may edit draft or returned requests and resubmit through trusted workflow functions
-- Workflow signing and status transitions occur only through `SECURITY DEFINER` RPC functions
-- Anonymous access is denied
-
-Authorization uses the authenticated personnel record from Supabase Auth. The browser cannot assign another user's personnel ID or role for authorization.
-
-On insert, a database trigger assigns `requester_personnel_id`, `requester_badge_number`, `requester_email`, and `requester_name` from the authenticated personnel row. `requester_personnel_id` is the stable ownership key. Email, badge, and name values stored on the request are historical snapshots and do not change when personnel records are edited later.
-
-Personnel must have both a first and last name before creating a training request.
-
-### Document filename standard
-
-Approved packet downloads and packet metadata use the exact submitted request number as the filename base:
-
-`Koehler, K, Fire Officer I, 2026.1.pdf`
-
-The confirmation and request detail pages display this filename for approved packets. Only characters unsafe for the operating system are removed from the filename helper; the visible request number and filename base otherwise match exactly.
-
-Request detail and confirmation routes use the stable request UUID:
-
-`/requests/[id]/confirmation`
-
-### localStorage removal
-
-Older prototype requests saved in browser `localStorage` are not migrated automatically. The app now reads and writes requests only through Supabase.
-
-## Useful Commands
+Run from the repository root:
 
 ```bash
 npm run lint
-npx tsc --noEmit
+npx tsc --noEmit --incremental false
+npm test
 npm run build
-npm run test
+git diff --check
 ```
 
-## Learn More
+The test script uses Node's test runner with tsx and an **explicit test-file list**. Add new files to `package.json`. Application TypeScript excludes `*.test.ts` and `supabase/functions`; execution of tests does not imply static type-checking of every test.
 
-- [Next.js Documentation](https://nextjs.org/docs)
-- [Supabase Documentation](https://supabase.com/docs)
+Check portable email modules separately:
 
-### Password recovery email delivery and link confirmation
+```bash
+npx tsc --noEmit --strict --target es2022 --module esnext \
+  --moduleResolution bundler --allowImportingTsExtensions --skipLibCheck \
+  supabase/functions/send-training-request-notifications/handler.ts \
+  supabase/functions/send-training-request-notifications/email.ts \
+  supabase/functions/send-training-request-notifications/attachment.ts
+```
 
-Account emails use Supabase Auth's SMTP configuration, separately from the request-notification Edge Function. Configure Resend SMTP with a sending-only key restricted to `ifdtraining.org`, host `smtp.resend.com`, port `465`, username `resend`, sender `notifications@ifdtraining.org`, and sender name `IFD Training Portal`. Store the key only in Supabase's encrypted SMTP settings, never in this repository or public environment variables.
+This does not certify the Deno entrypoint/platform deployment. PGlite tests exercise migration chains, RLS and actual workflow functions against synthetic data; mocked Auth/Storage and browser previews cannot prove live email/storage behavior.
 
-After deploying the updated website, set the Supabase **Reset password** email template to `supabase/templates/recovery.html` (subject: `Reset your IFD Training Portal password`). The template uses the token-hash confirmation flow when the destination is `<Site URL>/reset-password`, and preserves the existing confirmation link for the separate legacy password-setup flow. The Site URL must be `https://ifdtraining.org` without a trailing slash, and `APP_BASE_URL` and allowed recovery redirects must agree with it.
+For PDF rendering install Poppler (`pdftoppm`) and usable system fonts. Render helpers return without raster verification when Poppler is absent, so inspect the log/environment, not just the skip count. To inspect source fields and generate synthetic previews:
 
-Opening the new email link shows a confirmation screen. Only pressing **Continue to reset password** consumes the one-time token via a POST, so a simple email-scanner GET does not consume it. The server verifies a recent Supabase `recovery` authentication event for the current user before accepting a password change; an old `recovery_sent_at` timestamp is not sufficient. Password validation, active-personnel checks, generic badge responses, and sign-out after successful reset remain in place. Old incompatible reset emails should be replaced by requesting a new email after rollout.
+```bash
+node --import tsx scripts/inspect-pdf-fields.ts
+node --import tsx scripts/inspect-pdf-field-rects.ts
+node --import tsx scripts/render-approved-packet-fixture.ts
+```
 
-Production acceptance still requires an authorized tester to request a reset, receive the email, choose their own new password, sign in with it, and check that reuse of the link fails. Do not log or include real reset tokens in screenshots or reports.
+If a restricted macOS environment has Fontconfig errors, create a temporary local configuration with system font paths and a writable cache, then pass FONTCONFIG_FILE:
 
-### Primary Deputy Chief for approval email alerts
+```bash
+mkdir -p /tmp/ifd-font-cache
+cat > /tmp/ifd-fonts.conf <<'EOF'
+<?xml version="1.0"?>
+<!DOCTYPE fontconfig SYSTEM "urn:fontconfig:fonts.dtd">
+<fontconfig><dir>/System/Library/Fonts</dir><dir>/Library/Fonts</dir><cachedir>/tmp/ifd-font-cache</cachedir></fontconfig>
+EOF
+FONTCONFIG_FILE=/tmp/ifd-fonts.conf npm test
+```
 
-Apply `20261011120000_primary_deputy_chief_notifications.sql`, deploy the updated `send-training-request-notifications` Edge Function, and deploy the website. In **System Settings → Deputy Chief approval alerts**, select the active DC responsible for routine reviews. Only that DC receives new Deputy Chief review emails; other active DCs retain their review queues and signed approve/return/deny permissions as backups. Notifications about a DC's own request still follow the normal requester rules.
+Use platform-appropriate font directories elsewhere. These files are local workarounds, not secrets or repository dependencies. File-sync-created duplicate generated `.next/types/* 2.ts` files have previously broken checks; inspect/move aside generated duplicates and regenerate types rather than modifying source or weakening tsconfig.
 
-The migration preserves the existing all-active-DC routing until an administrator explicitly selects someone; it never guesses who should be primary. The selection is saved transactionally with an audit entry. Outstanding unsent current alerts are transferred without changing their age; historical skipped alerts and previously sent emails are not replayed. The dispatcher rechecks the selection before sending. An email already handed to the provider cannot be recalled. Select a replacement before deactivating, deleting, or changing the role of the current primary DC.
+## Deployment and rollback
 
-No training-request content, existing approval/signature snapshots, PDF layout, or TAL layout is changed by this setting.
+Production identifiers (not credentials): Supabase project `dnvowshtloojgnerxydx`, dashboard name `ifd-training-portal-dev`, branch **main PRODUCTION**; Vercel `kevins-projects-fb9d1826/ifd-training-portal`. The “dev” label is misleading: do not treat it as disposable. The canonical domain is ifdtraining.org; registrar/DNS is Porkbun.
 
+1. Review Git diff, exact migrations, assumptions and verification results with the user; obtain approval for the concrete release.
+2. Check remote `main` against the intended base. Commit only reviewed, relevant files. Preserve unrelated work.
+3. Install missing approved migrations in order and verify constraints, RLS, function grants and private buckets before dependent app code.
+4. Deploy changed Edge Function code separately with existing JWT verification and secrets retained. Update SMTP/template/Vault/schedule only if part of the approved release. The repo currently has no complete Supabase CLI configuration; configure/link a known project before using the CLI, and reconcile manual migration history first.
+5. Push the reviewed commit to `main` to trigger Vercel. Confirm deployment success for that exact SHA and verify the canonical domain.
+6. Check authorized live pages/API behavior without altering real approvals/claims or sending unapproved mail. Check PDF templates are included in server bundles when renderer dependencies change.
+7. Update PROJECT_STATUS and relevant feature docs with migration/deployment evidence, limitations and remaining acceptance.
 
-### Personnel email changes
+Rollback should prefer reverting the website release while preserving additive database structures and immutable records. Analyze compatibility before reverting functions; never drop historical tables/buckets or erase signatures as rollback. Email can be paused independently. Reset scripts in `scripts/` are privileged support tools, not routine setup/test commands.
 
-Apply `supabase/migrations/20261013160000_personnel_auth_email_sync.sql` before deploying the email-edit route. It links existing personnel to their current Auth user ID, synchronizes confirmed Auth email changes into personnel within the same database transaction, and rejects direct profile-only email changes (including from older browser tabs). Existing passwords and historical request/approval snapshots stay unchanged. Auth account deletion clears the link without deleting personnel history.
-
-In User Management, save an email change separately from name, badge, rank, role, or status changes. The server updates the existing Auth account through the admin API and verifies both records agree before reporting success. Editing your own email signs you out; sign back in with the same badge and password. Password reset then targets the updated address.
-
-If a historical profile is already out of sync, reconcile it with the correct original Auth account before applying this migration. Never infer an account link from a matching name, create a replacement Auth account, or reset a password just to repair an email mismatch. Unmatched profiles remain unlinked and email edits fail safely until repaired. Backfill only an unambiguous confirmed account association.
+The November 19 production release and November 21 local verification are recorded in PROJECT_STATUS. This README is not a claim that live integrations were retested during the documentation handoff.
