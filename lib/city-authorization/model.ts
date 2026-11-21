@@ -21,6 +21,8 @@ export interface CityAuthorizationFile {
   sha256: string;
   uploaded_by_name: string;
   uploaded_at: string;
+  removed_at?: string | null;
+  removed_by_name?: string | null;
 }
 export interface CityAuthorizationQueueItem extends CityAuthorization {
   request: { id: string; request_number: string | null; training_title: string; requester_name: string; start_date: string | null };

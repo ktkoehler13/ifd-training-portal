@@ -82,6 +82,7 @@ Rank and application role are separate concepts. Exact implemented access, inclu
 - Provide **Upload City Authorization** on the approved request and keep the uploaded document with it.
 - A successful upload completes the Office step and clears the action alert.
 - Start the queue with **new approvals only**, not existing approvals.
+- **Confirmed, Nov 21:** allow removing a wrong document. This covers the file picked before upload and an already-uploaded file. A removed file is hidden from the request and downloads but kept, with who removed it and when, for the audit trail. If no file remains, the request returns to Awaiting Office and Office's action alert returns.
 
 ## Desired experience and nonfunctional constraints
 
