@@ -4,9 +4,9 @@ Updated **November 21, 2026**. Read [PROJECT_VISION.md](PROJECT_VISION.md) for u
 
 ## Checkpoint
 
-- Production application: **ccc7e5a667759eb16799bfe58cd1e634b3272a38**, “Add Office handoffs and private City Authorizations”, published November 19. [Recorded successful deployment](https://vercel.com/kevins-projects-fb9d1826/ifd-training-portal/9ffAreXAJwVYszAoPRgH2sNYQbL1).
+- Last functional production release: **ccc7e5a667759eb16799bfe58cd1e634b3272a38**, “Add Office handoffs and private City Authorizations”, published November 19. [Recorded successful deployment](https://vercel.com/kevins-projects-fb9d1826/ifd-training-portal/9ffAreXAJwVYszAoPRgH2sNYQbL1). The subsequent documentation-only commits retain that application source.
 - Canonical site: https://ifdtraining.org. Production Supabase project: `dnvowshtloojgnerxydx` (misleading dashboard name: `ifd-training-portal-dev`).
-- Handoff started on local branch `main` at that commit with a **clean worktree**. This documentation-only task creates a local checkpoint named **docs: create self-contained agent handoff**; no push/deployment is authorized by the handoff request.
+- Handoff commit **06fe67954e4c40513009190acc31d69b0127d0a8**, **docs: create self-contained agent handoff**, was created from a clean `main` worktree. The user subsequently authorized pushing the handoff on November 21. This publication-status follow-up changes documentation only; no application migration or functional update accompanies it. Check the current remote SHA and Vercel status for publication evidence.
 - Last production database changes were installed and verified November 19, in order:
   1. `20261119160000_compensation_current_mileage_rate.sql`
   2. `20261119170000_office_application_role.sql`
@@ -93,7 +93,7 @@ No live site, account, password, delivery queue, database or deployment was chan
 
 ## Next agent's first actions
 
-Read the six root documents and the relevant feature doc. Inspect `git status` and the handoff commit; do not push this local documentation checkpoint without a new publishing instruction. Ask which acceptance/clarification item the user wants next, while doing only independent read-only preparation. Follow README's commands and record results in this file. Remove resolved tasks rather than appending permanent historical status reports.
+Read the six root documents and the relevant feature doc. Inspect `git status`, recent commits and the current remote state; the handoff push was explicitly authorized, but future releases need their own applicable authorization. Ask which acceptance/clarification item the user wants next, while doing only independent read-only preparation. Follow README's commands and record results in this file. Remove resolved tasks rather than appending permanent historical status reports.
 
 ## Evidence basis and uncertainty
 
