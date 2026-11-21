@@ -4,14 +4,16 @@ Updated **November 21, 2026**. Read [PROJECT_VISION.md](PROJECT_VISION.md) for u
 
 ## Checkpoint
 
-- Last functional production release: **ccc7e5a667759eb16799bfe58cd1e634b3272a38**, “Add Office handoffs and private City Authorizations”, published November 19. [Recorded successful deployment](https://vercel.com/kevins-projects-fb9d1826/ifd-training-portal/9ffAreXAJwVYszAoPRgH2sNYQbL1). The subsequent documentation-only commits retain that application source.
+- Last functional production release: **f3e4db6**, merge of ktkoehler13/ifd-training-portal#2 “Allow removing a wrong City Authorization file”, published November 21. Vercel reported the production deployment successful to GitHub (deployment 7966493447, 17:01 UTC). The Vercel connector wasn't authorized for the team, so the Vercel dashboard wasn't checked directly. After the release, ifdtraining.org returned 200 and the new DELETE route returned 401 when called without a session. Previous release: `ccc7e5a` (November 19).
 - Canonical site: https://ifdtraining.org. Production Supabase project: `dnvowshtloojgnerxydx` (misleading dashboard name: `ifd-training-portal-dev`).
 - Handoff commit **06fe67954e4c40513009190acc31d69b0127d0a8**, **docs: create self-contained agent handoff**, was created from a clean `main` worktree. The user subsequently authorized pushing the handoff on November 21. This publication-status follow-up changes documentation only; no application migration or functional update accompanies it. Check the current remote SHA and Vercel status for publication evidence.
-- Last production database changes were installed and verified November 19, in order:
-  1. `20261119160000_compensation_current_mileage_rate.sql`
-  2. `20261119170000_office_application_role.sql`
-  3. `20261119180000_city_authorizations.sql`
-- **Pending website release:** City Authorization removal, PR ktkoehler13/ifd-training-portal#2 (branch `feature/city-authorization-remove`). Its migration `20261121120000_city_authorization_file_removal.sql` was **applied to production on November 21** with the user's approval. Supabase history records it as version `20261121165918 city_authorization_file_removal`, the only row in that history, so earlier manual installs still need reconciling before any CLI push. Verified after applying: the three removal columns exist; the old pending-state check was replaced; the file-read policy hides removed rows; the removal function is security definer and executable by `service_role` only, not `authenticated` or `anon`; the immutability trigger is enabled; existing data was unchanged (1 pending task, 0 files). The website code is safe to merge now. Checks run November 21: all City Authorization tests passed (22), and the full `npm test` run gave 695 passed, 1 failed. The failure was the pre-existing README redirect-URL check, fixed separately on `docs/restore-local-redirect-urls`. Lint, `tsc` and `npm run build` passed. The panel was not checked in a browser.
+- Production database changes, all installed and verified:
+  1. November 19: `20261119160000_compensation_current_mileage_rate.sql`
+  2. November 19: `20261119170000_office_application_role.sql`
+  3. November 19: `20261119180000_city_authorizations.sql`
+  4. November 21, with the user's approval: `20261121120000_city_authorization_file_removal.sql`
+- No pending migration or unreleased application code.
+- **City Authorization removal release details:** the migration was applied before the website merge. Supabase history records it as version `20261121165918 city_authorization_file_removal`, the only row in that history, so earlier manual installs still need reconciling before any CLI push. Verified after applying: the three removal columns exist; the old pending-state check was replaced; the file-read policy hides removed rows; the removal function is security definer and executable by `service_role` only, not `authenticated` or `anon`; the immutability trigger is enabled; existing data was unchanged (1 pending task, 0 files). Checks run November 21: all City Authorization tests passed (22), and the full `npm test` run gave 695 passed, 1 failed. The failure was the pre-existing README redirect-URL check, fixed in the follow-up docs PR. Lint, `tsc` and `npm run build` passed. **Not yet done:** a live removal. The panel wasn't checked in a browser, and production had no uploaded files to remove at release time.
 
 ## Implemented baseline and vision comparison
 
@@ -24,7 +26,7 @@ Updated **November 21, 2026**. Read [PROJECT_VISION.md](PROJECT_VISION.md) for u
 | V4 accounts/recovery | `lib/auth/`, `supabase/templates/recovery.html` | Badge login, forced setup, email synchronization and session-bound recovery proof tested. Latest real-user recovery-email/password completion is still unverified. |
 | V4 request emails | `supabase/functions/send-training-request-notifications/`, `supabase/ops/` | Outbox/eligibility/retries and approved-only attachments/responsibilities implemented; primary DC email setting exists. Automated checks pass. Delivery was historically confirmed, but not retested end-to-end today. |
 | V5 compensation | `lib/compensation/`, `components/compensation/`, `lib/pdf/render-compensation-packet.ts` | Time/lunch/mileage/voucher/receipts, employee and MTO signatures, current-rate capture, returns and Office coding/Submitted implemented. Tests and prior mocked browser review passed; no live claim was signed as a release test. |
-| V6 City Authorization | `lib/city-authorization/`, `components/city-authorization/`, `app/api/training-requests/[id]/city-authorization/` | New DC approvals queue Office; successful private upload completes it, preserves revisions and permits requester download. Removal of wrong files is pending deployment (see Checkpoint). Tests pass; live queue/upload controls verified November 19 without making a real upload. |
+| V6 City Authorization | `lib/city-authorization/`, `components/city-authorization/`, `app/api/training-requests/[id]/city-authorization/` | New DC approvals queue Office; successful private upload completes it, preserves revisions and permits requester download. Removal of wrong files (hide, keep the record, return to Awaiting Office if none remain) released November 21; no live removal has been exercised yet. Tests pass; live queue/upload controls verified November 19 without making a real upload. |
 
 The later TAL changes, Academy SSN collection, expanded administrative deletion and compensation current-rate rule are **authorized evolution**, not accidental departures from the original narrower PDF task. Approved outputs remain flattened rather than editable downloaded forms; editable PDFs were not established as an additional requirement.
 
@@ -34,7 +36,7 @@ The later TAL changes, Academy SSN collection, expanded administrative deletion 
 
 | Check | Result |
 | --- | --- |
-| `npm test` | **692 passed, 0 failed, 0 skipped; 138 suites** |
+| `npm test` | **692 passed, 0 failed, 0 skipped; 138 suites**. Recheck after `npm ci` on handoff commit `0b8c8fd`: 691 passed, 1 failed. The README rewrite had dropped the explicit `localhost:3000/reset-password` redirect that `lib/auth/password-recovery.test.ts` requires. README restored in the follow-up docs PR. |
 | `npm run lint` | Passed |
 | `npx tsc --noEmit --incremental false` | Passed |
 | `npm run build` | Passed; existing Next.js middleware-to-proxy deprecation notice |
