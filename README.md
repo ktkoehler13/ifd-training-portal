@@ -108,11 +108,11 @@ values
 
 Passwords stay in Auth. Temporary initial passwords require at least 6 characters; permanent passwords require at least 12 with uppercase, lowercase, number and special character. Ordinary login sends no email. Account email edits run through User Management's dedicated email operation; self-email changes sign out the user, who should retain the same badge/password. Do not update only `personnel.email` or relink an account by name.
 
-Set Supabase Site URL and allowlisted callback/recovery URLs to match each environment:
+Set Supabase Site URL and allowlisted callback/recovery URLs (**Authentication → URL Configuration → Redirect URLs**) to match each environment. Recovery redirects must be explicitly allowlisted; Site URL alone is not enough.
 
 - Production Site URL: `https://ifdtraining.org`.
 - `https://ifdtraining.org/auth/callback` and `https://ifdtraining.org/reset-password`.
-- Development equivalents under `http://localhost:3000` in a development project.
+- Development project: `http://localhost:3000/auth/callback` and `http://localhost:3000/reset-password`.
 - Preserve any separately approved legacy password-setup redirect paths.
 
 Configure the mileage rate and primary DC in **System Settings**. Assign Office to the intended office personnel in **User Management**; migrations do not choose people.

@@ -34,7 +34,7 @@ The later TAL changes, Academy SSN collection, expanded administrative deletion 
 
 | Check | Result |
 | --- | --- |
-| `npm test` | **692 passed, 0 failed, 0 skipped; 138 suites** |
+| `npm test` | **692 passed, 0 failed, 0 skipped; 138 suites**. Recheck after `npm ci` on handoff commit `0b8c8fd`: 691 passed, 1 failed. The README rewrite had dropped the explicit `localhost:3000/reset-password` redirect that `lib/auth/password-recovery.test.ts` requires. README restored on branch `docs/restore-local-redirect-urls`; 692 passed again. |
 | `npm run lint` | Passed |
 | `npx tsc --noEmit --incremental false` | Passed |
 | `npm run build` | Passed; existing Next.js middleware-to-proxy deprecation notice |
