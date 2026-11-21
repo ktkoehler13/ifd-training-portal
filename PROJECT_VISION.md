@@ -84,6 +84,13 @@ Rank and application role are separate concepts. Exact implemented access, inclu
 - Start the queue with **new approvals only**, not existing approvals.
 - **Confirmed, Nov 21:** allow removing a wrong document. This covers the file picked before upload and an already-uploaded file. A removed file is hidden from the request and downloads but kept, with who removed it and when, for the audit trail. If no file remains, the request returns to Awaiting Office and Office's action alert returns.
 
+### V7 — Approval routing (confirmed Nov 21)
+
+- System Settings has an **Approval routing** section. Next to the existing primary DC, administrators choose a **primary MTO**, a **primary Office** person and the **Fire Chief**. The model is one primary person per role, not a general rules editor.
+- **Primary MTO**, same model as the DC: only that MTO gets MTO review emails. Other MTOs keep reviewing and signing as backups. Until one is chosen, all active MTOs get the emails.
+- **Primary Office:** gets the Office action badge **and** new Office emails for City Authorization tasks and MTO-signed compensation packets. Other Office users can still process tasks quietly. Until one is chosen, all Office users get the badge and emails.
+- **Fire Chief:** recorded only, for later use. No alerts or approval steps.
+
 ## Desired experience and nonfunctional constraints
 
 The product should feel like a straightforward department tool, with familiar terms, clear next actions, sensible prefilling, a visible completion result and readable official documents. Avoid development notes and implementation terminology in normal user flows. Preserve mobile usability and existing branding.
@@ -97,13 +104,13 @@ Existing architectural safeguards are part of the baseline to preserve: authenti
 - Approved PDFs are flattened, noninteractive snapshots; editing occurs in the portal. The historical conversation title alone does not establish a requirement for editable downloaded PDFs.
 - Compensation is one packet per approved request, available when its end date has arrived in America/New_York and the requester certifies completion. Standalone packets for unapproved training are not implemented.
 - UI says **EMT Travel Time?**, while the initial user wording was “EMT time”; confirm any intended broader distinction before changing it.
-- Office handoffs currently provide portal badges/queues, not compensation or City Authorization emails. “Notify Office” did not conclusively specify a delivery channel.
+- Fire Chief is recorded in System Settings only; it drives no alert or approval step.
 - City uploads accept PDF/PNG/JPEG up to 4 MB and retain prior revisions. Requesters download their own files; administrative backups can upload. These limits/access details are implementation choices.
 - The City process itself remains external; uploaded authorization is the completion evidence. No automated City approval or payroll transmission is promised.
 - Office-use Travel Authorization account/Chief/Controller lines remain blank in the generated training form; no portal data entry for those fields was requested.
 
 ## Remaining vision gaps and completion standard
 
-Confirmed major workflows are implemented. Beta readiness still requires the operational assignments and real-user acceptance in [PROJECT_STATUS.md](PROJECT_STATUS.md); implementation is not the same as a successful live end-to-end test. Help & Instructions remains a placeholder. Single designated-MTO routing was asked about but not conclusively specified or implemented. Office email delivery and backup-DC portal alert behavior need clarification if expected.
+Confirmed major workflows are implemented. Beta readiness still requires the operational assignments and real-user acceptance in [PROJECT_STATUS.md](PROJECT_STATUS.md); implementation is not the same as a successful live end-to-end test. Help & Instructions remains a placeholder. Backup-DC portal alert behavior needs clarification if expected.
 
 A successfully completed product lets authorized personnel finish the full request → MTO → DC → approved forms/notification journey, Office City processing, and post-training compensation → MTO signature → Office submission without losing work or history. It must preserve official artwork and prior signed records, enforce role/ownership boundaries, handle corrections and failures clearly, and pass documented automated checks plus authorized beta acceptance. Final beta sign-off and any expansion of this vision belong to the user.

@@ -4,7 +4,7 @@ Updated **November 21, 2026**. Read [PROJECT_VISION.md](PROJECT_VISION.md) for u
 
 ## Checkpoint
 
-- Last functional production release: **f3e4db6**, merge of ktkoehler13/ifd-training-portal#2 “Allow removing a wrong City Authorization file”, published November 21. Vercel reported the production deployment successful to GitHub (deployment 7966493447, 17:01 UTC). The Vercel connector wasn't authorized for the team, so the Vercel dashboard wasn't checked directly. After the release, ifdtraining.org returned 200 and the new DELETE route returned 401 when called without a session. Previous release: `ccc7e5a` (November 19).
+- Last functional production release: approval routing, ktkoehler13/ifd-training-portal#4 (see below), November 21. Previous releases: `f3e4db6` (City Authorization removal, PR #2) and `ccc7e5a` (November 19).
 - Canonical site: https://ifdtraining.org. Production Supabase project: `dnvowshtloojgnerxydx` (misleading dashboard name: `ifd-training-portal-dev`).
 - Handoff commit **06fe67954e4c40513009190acc31d69b0127d0a8**, **docs: create self-contained agent handoff**, was created from a clean `main` worktree. The user subsequently authorized pushing the handoff on November 21. This publication-status follow-up changes documentation only; no application migration or functional update accompanies it. Check the current remote SHA and Vercel status for publication evidence.
 - Production database changes, all installed and verified:
@@ -12,7 +12,15 @@ Updated **November 21, 2026**. Read [PROJECT_VISION.md](PROJECT_VISION.md) for u
   2. November 19: `20261119170000_office_application_role.sql`
   3. November 19: `20261119180000_city_authorizations.sql`
   4. November 21, with the user's approval: `20261121120000_city_authorization_file_removal.sql`
-- No pending migration or unreleased application code.
+  5. November 21, with the user's approval: `20261121180000_approval_routing_settings.sql`
+- **Approval routing released November 21** (ktkoehler13/ifd-training-portal#4), in this order:
+  1. Migration `20261121180000_approval_routing_settings.sql` applied to production. Supabase history records it as `20261121181047 approval_routing_settings`.
+  2. Email worker deployed as version 12 (bundled with esbuild, JWT verification kept on). Before replacing it, live version 11 was compared to the `main` source and matched. The worker logs showed a clean boot and 200 responses on its every-minute runs.
+  3. Website merged.
+  - **The order matters:** the migration must go first. The new worker treats a missing `primary_approval_mto` setting as an error and retries, so deploying it first would stall MTO review emails.
+  - Verified after the migration: the four routing settings exist and are empty; the new event types, one-source check and compensation source column exist; the City and compensation Office triggers and the personnel protection trigger are enabled; `set_approval_routing` is executable by `authenticated` only (not `anon`); `enqueue_office_notifications` isn't callable by clients; the email queue was unchanged (16 sent, 19 skipped). Production had 1 MTO, 2 DCs, no Office users and nobody ranked Fire Chief, so no new emails result until those are assigned.
+  - Checks run November 21: `npm test` gave 718 passed, 0 failed. Worker typecheck, `tsc`, lint and build passed.
+  - Not done: browser check of the settings section; a live Office email.
 - **City Authorization removal release details:** the migration was applied before the website merge. Supabase history records it as version `20261121165918 city_authorization_file_removal`, the only row in that history, so earlier manual installs still need reconciling before any CLI push. Verified after applying: the three removal columns exist; the old pending-state check was replaced; the file-read policy hides removed rows; the removal function is security definer and executable by `service_role` only, not `authenticated` or `anon`; the immutability trigger is enabled; existing data was unchanged (1 pending task, 0 files). Checks run November 21: all City Authorization tests passed (22), and the full `npm test` run gave 695 passed, 1 failed. The failure was the pre-existing README redirect-URL check, fixed in the follow-up docs PR. Lint, `tsc` and `npm run build` passed. **Not yet done:** a live removal. The panel wasn't checked in a browser, and production had no uploaded files to remove at release time.
 
 ## Implemented baseline and vision comparison
@@ -70,8 +78,7 @@ No live site, account, password, delivery queue, database or deployment was chan
    - Acceptance: correct files/roles/notifications and immutable history throughout; no actual reimbursement/City submission performed just to test software. Automated tests already cover these transitions, but production integrations require controlled acceptance.
 
 4. **Clarify gaps before implementing.**
-   - Does “notify Office” require email as well as the implemented portal alert?
-   - Is a single primary MTO desired, and should backup DC portal indicators also be suppressed?
+   - Should backup DC portal indicators also be suppressed? (The primary MTO and Office questions were settled November 21; see D24.)
    - Does “EMT time” mean something broader than the current EMT Travel Time field?
    - Acceptance: explicit decisions recorded in DECISIONS/PROJECT_VISION, then scoped tests and implementation. Do not mark these as confirmed unimplemented features without that clarification.
 

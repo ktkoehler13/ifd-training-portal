@@ -23,8 +23,8 @@ export function canReadCompensationPacket(
 
 // Action alerts belong to the assigned workflow role; backup processing access
 // is intentionally independent of the Office notification queue.
-export function compensationNeedsAction(packet: QueuePacket, actor: Actor): boolean {
+export function compensationNeedsAction(packet: QueuePacket, actor: Actor, primaryOfficeId?: string | null): boolean {
   return (packet.requester_id === actor.id && packet.status === "returned") ||
     (actor.role === "mto" && packet.status === "pending_mto") ||
-    (actor.role === "office" && packet.status === "pending_office");
+    (actor.role === "office" && packet.status === "pending_office" && (!primaryOfficeId || primaryOfficeId === actor.id));
 }

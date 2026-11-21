@@ -67,7 +67,39 @@ export function createNotificationHandler(config: DeliveryConfig, fetcher: Fetch
             ? "Retry window expired; manual review required" : null;
         let training: EmailRequest | undefined;
         let action: Action | undefined;
-        if (!skipReason) {
+        const officeEvent = notification.event_type === "office_city_authorization" || notification.event_type === "office_compensation";
+        if (!skipReason && officeEvent) {
+          // Office alerts follow the City Authorization / compensation task, not the
+          // training request's approval status.
+          const [requests, recipients, settings] = await Promise.all([
+            database<(EmailRequest & { deleted_at: string | null })[]>(`training_requests?id=eq.${notification.training_request_id}&select=id,request_number,requester_name,requester_personnel_id,request_contact_email,training_title,status,current_action_role,deleted_at`),
+            notification.recipient_personnel_id
+              ? database<Recipient[]>(`personnel?id=eq.${notification.recipient_personnel_id}&select=id,email,role,active`)
+              : Promise.resolve([]),
+            database<{ value: string }[]>("system_settings?key=eq.primary_office&select=value"),
+          ]);
+          const row = requests[0];
+          training = row;
+          const recipient = recipients[0];
+          let current = false;
+          if (row && row.status === "approved" && !row.deleted_at) {
+            if (notification.event_type === "office_city_authorization") {
+              const tasks = await database<{ status: string }[]>(`training_request_city_authorizations?request_id=eq.${notification.training_request_id}&select=status`);
+              current = tasks[0]?.status === "pending";
+            } else {
+              const packets = await database<{ id: string; status: string }[]>(`training_compensation_packets?request_id=eq.${notification.training_request_id}&select=id,status`);
+              const events = packets[0] ? await database<{ id: string }[]>(`training_compensation_events?packet_id=eq.${packets[0].id}&select=id&order=version.desc&limit=1`) : [];
+              current = packets[0]?.status === "pending_office" && events[0]?.id === notification.source_compensation_event_id;
+            }
+          }
+          if (settings.length !== 1) throw new Error("Office routing setting is missing");
+          if (!current) skipReason = "Office task is no longer awaiting action";
+          else if (!recipient?.active || recipient.role !== "office" || recipient.email.toLowerCase() !== notification.recipient_email.toLowerCase()) {
+            skipReason = "Recipient is no longer eligible for this alert";
+          } else if (settings[0].value && settings[0].value !== recipient.id) {
+            skipReason = "Office alert recipient changed";
+          }
+        } else if (!skipReason) {
           const [requests, actions, recipients] = await Promise.all([
             database<EmailRequest[]>(`training_requests?id=eq.${notification.training_request_id}&select=id,request_number,requester_name,requester_personnel_id,request_contact_email,training_title,status,current_action_role`),
             database<Action[]>(`training_request_actions?training_request_id=eq.${notification.training_request_id}&action=in.(${workflowActions})&select=id,comments&order=created_at.desc,id.desc&limit=1`),
@@ -85,11 +117,12 @@ export function createNotificationHandler(config: DeliveryConfig, fetcher: Fetch
             || (role ? recipient.role !== role || training.current_action_role !== role : recipient.id !== training.requester_personnel_id)) {
             skipReason = "Recipient is no longer eligible for this alert";
           }
-          if (!skipReason && role === "deputy_chief") {
-            const settings = await database<{ value: string }[]>("system_settings?key=eq.primary_approval_deputy_chief&select=value");
-            if (settings.length !== 1) throw new Error("Deputy Chief approval setting is missing");
+          if (!skipReason && role) {
+            const key = role === "mto" ? "primary_approval_mto" : "primary_approval_deputy_chief";
+            const settings = await database<{ value: string }[]>(`system_settings?key=eq.${key}&select=value`);
+            if (settings.length !== 1) throw new Error(role === "mto" ? "MTO approval setting is missing" : "Deputy Chief approval setting is missing");
             if (settings[0].value && settings[0].value !== recipient?.id) {
-              skipReason = "Deputy Chief approval recipient changed";
+              skipReason = role === "mto" ? "MTO approval recipient changed" : "Deputy Chief approval recipient changed";
             }
           }
         }

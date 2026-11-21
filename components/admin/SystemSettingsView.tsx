@@ -9,6 +9,7 @@ import { SignOutButton } from "@/components/auth/SignOutButton";
 import { Button } from "@/components/ui/Button";
 import { Field } from "@/components/ui/Field";
 import { Input } from "@/components/ui/Input";
+import { ApprovalRoutingSettings } from "@/components/admin/ApprovalRoutingSettings";
 import { DeputyChiefApprovalSettings } from "@/components/admin/DeputyChiefApprovalSettings";
 import { formatMileageRate } from "@/lib/currency";
 import {
@@ -54,6 +55,7 @@ export function SystemSettingsView() {
           <div className="mx-auto w-full max-w-5xl flex-1 px-4 py-8 sm:px-6">
             <GsaMileageRateSettings personnelLabel={personnel.email} />
             <DeputyChiefApprovalSettings />
+            <ApprovalRoutingSettings />
           </div>
         </div>
       )}
