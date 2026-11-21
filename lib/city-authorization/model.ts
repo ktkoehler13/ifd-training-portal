@@ -30,8 +30,10 @@ export interface CityAuthorizationQueueItem extends CityAuthorization {
 export function canProcessCityAuthorization(role: PersonnelRole): boolean {
   return role === "office" || isAdministrativeRole(role);
 }
-export function cityAuthorizationNeedsAction(status: CityAuthorization["status"], role: PersonnelRole): boolean {
-  return role === "office" && status === "pending";
+// With a primary Office person chosen, only that person gets the action badge;
+// other Office users and administrative backups can still process quietly.
+export function cityAuthorizationNeedsAction(status: CityAuthorization["status"], role: PersonnelRole, actorId?: string, primaryOfficeId?: string | null): boolean {
+  return role === "office" && status === "pending" && (!primaryOfficeId || primaryOfficeId === actorId);
 }
 export function canReadCityAuthorization(actor: {id:string;role:PersonnelRole}, request: {requester_personnel_id:string;status:string;deleted_at?:string|null}): boolean {
   return request.status === "approved" && !request.deleted_at &&

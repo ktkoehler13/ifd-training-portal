@@ -33,7 +33,8 @@ export async function listCityAuthorizations() {
   const {data,error}=await db.from("training_request_city_authorizations")
     .select("*,request:training_requests(id,request_number,training_title,requester_name,start_date)").order("created_at",{ascending:false});
   if(error) throw new CityAuthorizationError("Unable to load City Authorizations.",503);
-  return {items:((data??[]) as unknown as CityAuthorizationQueueItem[]).filter(item=>item.request),role:actor.role};
+  const {data:setting}=await db.from("system_settings").select("value").eq("key","primary_office").maybeSingle();
+  return {items:((data??[]) as unknown as CityAuthorizationQueueItem[]).filter(item=>item.request),role:actor.role,actorId:actor.id,primaryOfficeId:(setting?.value as string|undefined)||null};
 }
 export async function cityAuthorizationDetail(requestId:string) {
   const {actor,service}=await context(requestId);

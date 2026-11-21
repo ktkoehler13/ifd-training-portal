@@ -12,7 +12,7 @@ const config: DeliveryConfig = { supabaseUrl: "https://database.test", serviceRo
 const packetBytes = new TextEncoder().encode("%PDF-1.7 approved forms fixture");
 const packet = { request_id: id, storage_bucket: "training-request-packets", storage_path: `${id}/approved-packet.pdf`, filename: "approved-forms.pdf", sha256: createHash("sha256").update(packetBytes).digest("hex"), file_size_bytes: packetBytes.length, status: "ready" };
 const now = Date.parse("2026-10-08T15:00:00Z");
-function harness(options: { config?: Partial<DeliveryConfig>; notification?: Partial<EmailNotification>; request?: Partial<EmailRequest>; recipient?: object; action?: object; providerStatus?: number; patchFailure?: boolean; claimFailure?: boolean; primaryDeputy?: string; missingDeputySetting?: boolean; packet?: object; corruptPacket?: boolean; downloadStatus?: number; requestAfterDownload?: Partial<EmailRequest> } = {}) {
+function harness(options: { config?: Partial<DeliveryConfig>; notification?: Partial<EmailNotification>; request?: Partial<EmailRequest>; recipient?: object; action?: object; providerStatus?: number; patchFailure?: boolean; claimFailure?: boolean; primaryDeputy?: string; missingDeputySetting?: boolean; packet?: object; corruptPacket?: boolean; downloadStatus?: number; requestAfterDownload?: Partial<EmailRequest>; settings?: Record<string, string>; cityStatus?: string; compensation?: { status: string; latestEvent: string } } = {}) {
   let downloaded = false;
   const calls: { url: string; init?: RequestInit }[] = [];
   const patches: Record<string, unknown>[] = [];
@@ -29,7 +29,14 @@ function harness(options: { config?: Partial<DeliveryConfig>; notification?: Par
     if (url.includes("/training_requests?")) return Response.json([{ ...request, ...options.request, ...(downloaded ? options.requestAfterDownload : {}) }]);
     if (url.includes("/training_request_packets?")) return Response.json([{ ...packet, ...options.packet }]);
     if (url.includes("/storage/v1/object/authenticated/")) { downloaded = true; return new Response(options.corruptPacket ? new TextEncoder().encode("%PDF-wrong") : packetBytes, { status: options.downloadStatus ?? 200 }); }
-    if (url.includes("/system_settings?")) return Response.json(options.missingDeputySetting ? [] : [{ value: options.primaryDeputy ?? "" }]);
+    if (url.includes("/system_settings?")) {
+      const key = /key=eq\.([a-z_]+)/.exec(url)?.[1] ?? "";
+      if (options.settings) return Response.json(key in options.settings ? [{ value: options.settings[key] }] : []);
+      return Response.json(options.missingDeputySetting ? [] : [{ value: options.primaryDeputy ?? "" }]);
+    }
+    if (url.includes("/training_request_city_authorizations?")) return Response.json(options.cityStatus ? [{ status: options.cityStatus }] : []);
+    if (url.includes("/training_compensation_packets?")) return Response.json(options.compensation ? [{ id: "packet", status: options.compensation.status }] : []);
+    if (url.includes("/training_compensation_events?")) return Response.json(options.compensation ? [{ id: options.compensation.latestEvent }] : []);
     if (url.includes("/training_request_actions?")) return Response.json([{ id: "action", comments: "Correct the course dates", ...options.action }]);
     if (url.includes("/personnel?")) return Response.json([{ id: "mto", email: "mto@example.test", role: "mto", active: true, ...options.recipient }]);
     throw new Error(`Unexpected request: ${url}`);
@@ -159,5 +166,51 @@ describe("approved-form email attachments", () => {
   });
   it("keeps reviewer alerts on the reviewer's account email", async () => {
     const h = harness({ request: { request_contact_email: "alternate@example.test" } }); await h.run(); assert.deepEqual(h.sent[0].to, ["mto@example.test"]);
+  });
+});
+
+describe("Office and primary MTO routing in the worker", () => {
+  const office = { id: "office", email: "office@example.test", role: "office", active: true };
+  const approved = { status: "approved", current_action_role: null };
+  const cityAlert = { event_type: "office_city_authorization", recipient_personnel_id: "office", recipient_email: "office@example.test" };
+  const compAlert = { event_type: "office_compensation", source_action_id: null, source_compensation_event_id: "event-2", recipient_personnel_id: "office", recipient_email: "office@example.test" };
+  it("links Office emails to the request and the compensation packet", () => {
+    assert.equal(buildNotificationEmail(request, { ...notification, ...cityAlert }, "https://portal.test", null).link, `https://portal.test/requests/${id}/confirmation`);
+    const comp = buildNotificationEmail(request, { ...notification, ...compAlert }, "https://portal.test", null);
+    assert.equal(comp.link, `https://portal.test/compensation/${id}`);
+    assert.ok(existsSync("app/compensation/[requestId]/page.tsx"));
+    assert.match(comp.subject, /^Compensation packet ready for Office/);
+    assert.doesNotMatch(comp.text, /Your responsibilities/);
+  });
+  it("sends a City Authorization alert while the task is pending", async () => {
+    const h = harness({ notification: cityAlert, request: approved, recipient: office, settings: { primary_office: "" }, cityStatus: "pending" });
+    await h.run();
+    assert.equal(h.sent.length, 1); assert.deepEqual(h.sent[0].to, ["office@example.test"]); assert.equal(h.patches[0].status, "sent");
+  });
+  it("sends a compensation alert only for the latest MTO-signed handoff", async () => {
+    const ok = harness({ notification: compAlert, request: approved, recipient: office, settings: { primary_office: "office" }, compensation: { status: "pending_office", latestEvent: "event-2" } });
+    await ok.run(); assert.equal(ok.sent.length, 1);
+    const stale = harness({ notification: compAlert, request: approved, recipient: office, settings: { primary_office: "" }, compensation: { status: "pending_office", latestEvent: "event-3" } });
+    await stale.run(); assert.equal(stale.sent.length, 0); assert.equal(stale.patches[0].last_error, "Office task is no longer awaiting action");
+  });
+  for (const [label, options, reason] of [
+    ["an uploaded City Authorization", { cityStatus: "uploaded" }, "Office task is no longer awaiting action"],
+    ["a deleted request", { cityStatus: "pending", request: { ...approved, deleted_at: "2026-11-21" } }, "Office task is no longer awaiting action"],
+    ["a recipient who is no longer Office", { cityStatus: "pending", recipient: { ...office, role: "firefighter" } }, "Recipient is no longer eligible for this alert"],
+    ["a different primary Office person", { cityStatus: "pending", settings: { primary_office: "office2" } }, "Office alert recipient changed"],
+  ] as const) it(`skips the Office alert for ${label}`, async () => {
+    const h = harness({ notification: cityAlert, request: approved, recipient: office, settings: { primary_office: "" }, ...options });
+    await h.run();
+    assert.equal(h.sent.length, 0); assert.equal(h.patches[0].status, "skipped"); assert.equal(h.patches[0].last_error, reason);
+  });
+  it("retries instead of guessing when the Office routing setting is missing", async () => {
+    const h = harness({ notification: cityAlert, request: approved, recipient: office, settings: {}, cityStatus: "pending" });
+    await h.run(); assert.equal(h.sent.length, 0); assert.equal(h.patches[0].status, "failed");
+  });
+  it("rechecks the primary MTO before sending an MTO review alert", async () => {
+    const other = harness({ settings: { primary_approval_mto: "mto2" } });
+    await other.run(); assert.equal(other.sent.length, 0); assert.equal(other.patches[0].last_error, "MTO approval recipient changed");
+    const chosen = harness({ settings: { primary_approval_mto: "mto" } });
+    await chosen.run(); assert.equal(chosen.sent.length, 1);
   });
 });

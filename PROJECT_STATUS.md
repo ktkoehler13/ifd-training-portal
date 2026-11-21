@@ -12,7 +12,12 @@ Updated **November 21, 2026**. Read [PROJECT_VISION.md](PROJECT_VISION.md) for u
   2. November 19: `20261119170000_office_application_role.sql`
   3. November 19: `20261119180000_city_authorizations.sql`
   4. November 21, with the user's approval: `20261121120000_city_authorization_file_removal.sql`
-- No pending migration or unreleased application code.
+- **Pending release: approval routing** (branch `feature/approval-routing-settings`). Deploy order:
+  1. Deploy the updated `send-training-request-notifications` Edge Function. It understands the new Office email types and the primary MTO check, and works before the migration.
+  2. Apply `20261121180000_approval_routing_settings.sql`.
+  3. Merge the website.
+  - Checks run November 21: `npm test` gave 718 passed, 0 failed, including 9 new PGlite routing tests and 9 new worker tests. Worker typecheck, `tsc`, lint and build passed. `tsc` initially failed only on duplicate `.next/types/* 2.ts` cache copies, which were deleted and are not source.
+  - Not done: browser check of the settings section, live email delivery.
 - **City Authorization removal release details:** the migration was applied before the website merge. Supabase history records it as version `20261121165918 city_authorization_file_removal`, the only row in that history, so earlier manual installs still need reconciling before any CLI push. Verified after applying: the three removal columns exist; the old pending-state check was replaced; the file-read policy hides removed rows; the removal function is security definer and executable by `service_role` only, not `authenticated` or `anon`; the immutability trigger is enabled; existing data was unchanged (1 pending task, 0 files). Checks run November 21: all City Authorization tests passed (22), and the full `npm test` run gave 695 passed, 1 failed. The failure was the pre-existing README redirect-URL check, fixed in the follow-up docs PR. Lint, `tsc` and `npm run build` passed. **Not yet done:** a live removal. The panel wasn't checked in a browser, and production had no uploaded files to remove at release time.
 
 ## Implemented baseline and vision comparison
@@ -70,8 +75,7 @@ No live site, account, password, delivery queue, database or deployment was chan
    - Acceptance: correct files/roles/notifications and immutable history throughout; no actual reimbursement/City submission performed just to test software. Automated tests already cover these transitions, but production integrations require controlled acceptance.
 
 4. **Clarify gaps before implementing.**
-   - Does “notify Office” require email as well as the implemented portal alert?
-   - Is a single primary MTO desired, and should backup DC portal indicators also be suppressed?
+   - Should backup DC portal indicators also be suppressed? (The primary MTO and Office questions were settled November 21; see D24.)
    - Does “EMT time” mean something broader than the current EMT Travel Time field?
    - Acceptance: explicit decisions recorded in DECISIONS/PROJECT_VISION, then scoped tests and implementation. Do not mark these as confirmed unimplemented features without that clarification.
 

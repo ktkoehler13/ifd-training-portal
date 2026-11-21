@@ -132,7 +132,7 @@ Configure the mileage rate and primary DC in **System Settings**. Assign Office 
 
 All access requires an active authorized session; sensitive actions also enforce password setup and workflow state. Office can read other users' compensation only after signed MTO handoff, and approved undeleted requests/forms for City processing. Requesters can download their own City files but cannot upload. Office has no general administration power.
 
-The primary DC setting controls routine review **email**, not DC signing eligibility or backup review queues. Until selected it preserves all-active-DC emailing. MTO review emails currently route to eligible active MTOs; there is no primary-MTO setting. Office-stage portal badges belong only to Office, not backup processors.
+The primary DC setting controls routine review **email**, not DC signing eligibility or backup review queues. Until selected it preserves all-active-DC emailing. **Approval routing** in System Settings adds a primary MTO (review emails only; other MTOs remain backups), a primary Office person (Office badge plus Office emails; other Office users process quietly) and the Fire Chief (recorded only). An empty choice means everyone in that role. Office-stage badges never go to Admin/MTO/DC backup processors.
 
 ## Workflow and documents
 
@@ -174,7 +174,7 @@ Two independent email systems must be configured:
 
 Keep gateway JWT verification enabled; the handler also verifies service-role authority. A browser/user token must not dispatch mail. The transactional outbox deduplicates action/recipient events, checks current stage and eligible recipient, skips stale alerts and retries temporary errors. Provider acceptance recorded as `sent` does not prove inbox receipt.
 
-The worker sends MTO/DC review, correction, denial and approval mail. Only final approval attaches a ready, hash-checked approved PDF and requester-responsibility instructions. No compensation or City Authorization email worker exists.
+The worker sends MTO/DC review, correction, denial and approval mail. Only final approval attaches a ready, hash-checked approved PDF and requester-responsibility instructions. It also sends Office alerts for new City Authorization tasks and MTO-signed compensation packets to the primary Office person, or to all Office users if none is chosen. These alerts are skipped if the task is no longer awaiting Office.
 
 The one-minute scheduler is `supabase/ops/schedule-training-notifications.sql`. Before running it, configure the Vault entries `training_notifications_project_url` and `training_notifications_service_role` privately. Never paste a key into SQL source. For a new environment, approve a controlled recipient/test, verify delivery, then enable the switch/schedule with a suitable cutoff. Pause mail with NOTIFICATIONS_ENABLED=false without disabling request processing.
 

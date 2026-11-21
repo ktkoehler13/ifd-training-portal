@@ -12,7 +12,8 @@ export interface EmailRequest {
 export interface EmailNotification {
   id: string;
   training_request_id: string;
-  source_action_id: string;
+  source_action_id: string | null;
+  source_compensation_event_id?: string | null;
   recipient_personnel_id: string | null;
   recipient_email: string;
   event_type: string;
@@ -26,6 +27,8 @@ const events: Record<string, { heading: string; action: string; button: string }
   returned_for_correction: { heading: "Training request needs corrections", action: "Read the reviewer’s comments, edit your request, and resubmit it.", button: "Review corrections" },
   approved: { heading: "Training request approved", action: "Your training request has been approved. Your approved forms are attached. You can also view your request and download the forms in the portal.", button: "View approved request" },
   denied: { heading: "Training request denied", action: "Open the portal to review the decision and reviewer’s comments.", button: "View decision" },
+  office_city_authorization: { heading: "City Authorization needed", action: "A Deputy Chief approved this training request. Complete the City Authorization and upload it to the request.", button: "Open request" },
+  office_compensation: { heading: "Compensation packet ready for Office", action: "The MTO signed this compensation packet. Select the compensation codes and mark it as submitted.", button: "Open compensation packet" },
 };
 
 const approvalResponsibilities = [
@@ -57,7 +60,9 @@ export function buildNotificationEmail(
   const id = encodeURIComponent(request.id);
   const path = notification.event_type.startsWith("pending_")
     ? `/approvals/${id}`
-    : `/requests/${id}/confirmation`;
+    : notification.event_type === "office_compensation"
+      ? `/compensation/${id}`
+      : `/requests/${id}/confirmation`;
   const link = new URL(path, base).href;
   const reviewComments = ["returned_for_correction", "denied"].includes(notification.event_type)
     ? comments?.trim() : null;

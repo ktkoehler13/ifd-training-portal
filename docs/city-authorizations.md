@@ -18,7 +18,7 @@ Production installation was completed and verified November 19, 2026 with commit
 - There is no historical backfill: only signed DC approvals after installation create pending tasks. Existing approved requests can still receive a manual upload from their request details, without creating a historical action backlog.
 - Office gains read-only access to approved, undeleted requests, their approval history and approved PDF packets for City processing. It cannot edit requests, approve training, delete requests, manage accounts or change settings.
 - Pending, denied and deleted requests do not permit City Authorization uploads or downloads. Deleting a request hides its task and files; restoring it restores their prior visibility and pending/completed state.
-- The shared Office queue is separate from compensation coding. This change adds portal action alerts, not a new email notification. Existing requester approval emails are unaffected.
+- The shared Office queue is separate from compensation coding. Each new task also emails Office: the primary Office person from System Settings → Approval routing, or every Office user if none is chosen. With a primary chosen, only that person gets the action badge. Existing requester approval emails are unaffected.
 - The Training Request, Travel Authorization, TAL, Academy Registration layouts and all immutable signature/approval snapshots are unchanged.
 
 ## Storage and integrity

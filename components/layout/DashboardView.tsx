@@ -154,22 +154,22 @@ function DashboardContent({ personnel }: { personnel: AuthenticatedPersonnel }) 
       try {
         const response = await fetch("/api/city-authorizations", {cache:"no-store"});
         if (!response.ok) return;
-        const data = await response.json() as {items:CityAuthorizationQueueItem[]};
-        if (active) setPendingCityAuthorizationCount(data.items.filter(item=>cityAuthorizationNeedsAction(item.status,personnel.role)).length);
+        const data = await response.json() as {items:CityAuthorizationQueueItem[];primaryOfficeId?:string|null};
+        if (active) setPendingCityAuthorizationCount(data.items.filter(item=>cityAuthorizationNeedsAction(item.status,personnel.role,personnel.id,data.primaryOfficeId)).length);
       } catch { /* The City Authorizations page provides a retryable error. */ }
     }
     void refresh(); window.addEventListener("focus", refresh);
     const timer = window.setInterval(refresh,60000);
     return () => {active=false;window.removeEventListener("focus",refresh);window.clearInterval(timer);};
-  }, [personnel.role]);
+  }, [personnel.role, personnel.id]);
   useEffect(() => {
     let active = true;
     async function refresh() {
       try {
         const response = await fetch("/api/compensation", { cache: "no-store" });
         if (!response.ok) return;
-        const data = await response.json() as {packets: Array<Pick<CompensationPacket, "requester_id" | "status">>};
-        if (active) setPendingCompensationCount(data.packets.filter(packet => compensationNeedsAction(packet, {id:personnel.id,role:personnel.role})).length);
+        const data = await response.json() as {packets: Array<Pick<CompensationPacket, "requester_id" | "status">>; primaryOfficeId?: string | null};
+        if (active) setPendingCompensationCount(data.packets.filter(packet => compensationNeedsAction(packet, {id:personnel.id,role:personnel.role}, data.primaryOfficeId)).length);
       } catch { /* The packet list provides a retryable error if unavailable. */ }
     }
     void refresh(); window.addEventListener("focus", refresh);
