@@ -53,7 +53,7 @@ Rank and application role are separate concepts. Exact implemented access, inclu
 - Collect and print **only the last four SSN digits** for Academy requests. This later choice supersedes the initial decision to leave them blank.
 - Ignore Academy payment information fields; the requester does not need to handle them. Date of birth remains outside portal entry.
 - Prefill Academy registration at $25 and commuter meals at $8/day, allowing adjustments. The user chose commuter, not the proposed $40/day resident option. These are configured defaults, not a guarantee of current external fees.
-- Signature setup should support drawing, PNG upload and typed creation within submission/approval workflows. **Add Signature** saves and closes the setup window, making the next step clear; a failed save stays open. Saving a signature does not itself approve or submit a request.
+- Signature setup should support drawing, PNG upload and typed creation within submission/approval workflows. **Sign and Save Signature** (originally "Add Signature") saves to the profile for reuse and closes the setup window, making the next step clear; a failed save stays open. Saving a signature does not itself approve or submit a request.
 - Keep the supplied IFD crest on website headers.
 
 ### V4 — Approval communications and account access
