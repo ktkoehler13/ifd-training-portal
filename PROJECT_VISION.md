@@ -25,7 +25,8 @@ Rank and application role are separate concepts. Exact implemented access, inclu
 - Keep the request journey clear and usable: each wizard page starts at the top; the accuracy certification is visible before submitting; users do not need to submit once just to reveal it.
 - Prefill known requester information. Name and badge remain tied to the signed-in person; contact information, including the email for that request, may be changed.
 - Offer **NYS Fire Academy**, **SPTC**, or **Other** for location; Other opens a free-text field.
-- MTO may revise estimated expenses **only during MTO review**. Require a reason and preserve original/revised values and actor history.
+- MTO may revise estimated expenses during MTO review, and the Deputy Chief during DC review. Require a reason and preserve original/revised values and actor history. *(Broadened by the user on November 22 from the original MTO-review-only rule; see D27.)*
+- Before the course start date, MTO or Deputy Chief may change a final decision (Approved ↔ Denied) or edit an approved request's expenses, with a reason and their signature. Signed records are never altered; each change is a new signed action, and the requester receives the usual approval/denial email.
 - Show a red badge on action controls and bold entries requiring action in administrative review.
 - Permit recoverable request deletion and restoration for **any administrative role, including MTO**. Preserve signatures/history. The earlier Admin-only choice was explicitly broadened.
 - Retain approved-training visibility and existing request history; do not break established working features.

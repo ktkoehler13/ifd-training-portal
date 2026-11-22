@@ -8,6 +8,19 @@ import { formatActionTimestamp } from "@/lib/training-request-actions";
 import { cn } from "@/lib/utils";
 import { getExpenseChangeRows } from "@/lib/mto-expense-review";
 
+function formatTimelineActionLabel(action: TrainingRequestActionRecord): string {
+  const role = action.action.startsWith("mto_") ? "MTO" : "Deputy Chief";
+  if (action.decisionChange) {
+    return action.action.endsWith("_denied")
+      ? `Decision Changed to Denied by ${role}`
+      : `Decision Changed to Approved by ${role}`;
+  }
+  if (action.expenseChanges && action.action.endsWith("_approved")) {
+    return `Expenses Updated and Re-signed by ${role}`;
+  }
+  return TRAINING_REQUEST_ACTION_LABELS[action.action];
+}
+
 interface RequestActionTimelineProps {
   actions: TrainingRequestActionRecord[];
   className?: string;
@@ -43,7 +56,7 @@ export function RequestActionTimeline({
           <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <p className="text-sm font-semibold text-zinc-900">
-                {TRAINING_REQUEST_ACTION_LABELS[action.action]}
+                {formatTimelineActionLabel(action)}
               </p>
               <p className="mt-1 text-sm text-zinc-600">
                 {action.actorName} · Badge {action.actorBadgeNumber}
@@ -117,7 +130,7 @@ export function RequestActionTimeline({
           {action.comments ? (
             <div className="mt-3 rounded-lg bg-zinc-50 px-3 py-2 text-sm text-zinc-700">
               <p className="text-xs font-medium tracking-wide text-zinc-500 uppercase">
-                {action.action === "mto_expenses_updated"
+                {action.expenseChanges || action.decisionChange
                   ? "Reason for Changes"
                   : "Comments"}
               </p>

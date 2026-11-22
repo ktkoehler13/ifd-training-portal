@@ -1,5 +1,6 @@
 import type { WorkflowActionKind } from "@/lib/training-request-workflow";
 import {
+  isDecisionChangeKind,
   isSignatureRequiredWorkflowKind,
   mapWorkflowKindToExpectedAction,
   SIGNATURE_REQUIRED_MESSAGE,
@@ -30,6 +31,10 @@ export function validateSignatureWorkflowActionInput(input: {
 
   if (isDenialWorkflowKind(input.action) && !input.comments?.trim()) {
     throw new Error("Comments are required when denying a training request.");
+  }
+
+  if (isDecisionChangeKind(input.action) && !input.comments?.trim()) {
+    throw new Error("Enter a reason for this change.");
   }
 }
 

@@ -123,7 +123,8 @@ Configure the mileage rate and primary DC in **System Settings**. Assign Office 
 | --- | --- | --- | --- | --- | --- |
 | Own requests/profile/signature/compensation | Yes | Yes | Yes | Yes | Yes |
 | MTO training decision / expense review | No | Yes | No | No | No |
-| Final DC training decision | No | No | Yes | No | No |
+| Final DC training decision / DC-review expense edits | No | No | Yes | No | No |
+| Change a final decision or re-sign approved expenses (before course start) | No | Yes | Yes | No | No |
 | Personnel / settings / recoverable request deletion | No | Yes | Yes | Yes | No |
 | Reset another user's password | No | Yes | No | Yes | No |
 | MTO compensation review/signature | No | Yes | No | No | No |
@@ -140,7 +141,7 @@ Requests follow `draft → pending_mto → pending_deputy_chief → approved`. E
 
 Database-assigned identifiers use `LastName, FirstInitial, CourseName, Year.Sequence`; drafts display Draft. Ownership uses personnel UUID. Saved name/badge/account email and request contact email serve different purposes; contact edits never change ownership.
 
-Approval/denial signatures use reserved, immutable actor metadata, private PNG copies and verified bytes before service-only completion. Returns require comments but no signature. MTO expense edits require a reason and produce history; they are not approval.
+Approval/denial signatures use reserved, immutable actor metadata, private PNG copies and verified bytes before service-only completion. Returns require comments but no signature. MTO (MTO review) and DC (DC review) expense edits require a reason and produce history; they are not approval. Before the course start date, MTO or DC may switch Approved ↔ Denied or re-sign edited expenses on an approved request; each is a new signed action with a reason (D27). Switching to Approved goes to the other role's queue if that role has no current approval.
 
 The approved packet consists of the Training Request, separate TAL, conditional Academy Registration and audit/continuation pages. Do not promise exactly two or three physical pages. Source templates:
 

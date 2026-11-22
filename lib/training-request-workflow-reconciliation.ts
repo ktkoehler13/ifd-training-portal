@@ -92,7 +92,6 @@ export async function handleSignatureWorkflowCompletionFailure(
 
   if (reconciliation.status === "committed") {
     if (
-      input.action === "deputy_approve" &&
       reconciliation.request.status === "approved" &&
       input.generateApprovedPacket
     ) {

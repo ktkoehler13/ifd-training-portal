@@ -15,7 +15,10 @@ export type WorkflowActionKind =
   | "mto_deny"
   | "deputy_approve"
   | "deputy_return"
-  | "deputy_deny";
+  | "deputy_deny"
+  | "change_to_denied"
+  | "change_to_approved"
+  | "resign_expenses";
 
 function mapWorkflowRow(data: unknown): TrainingRequestRecord {
   return mapTrainingRequestRow(data as TrainingRequestRow);
@@ -45,6 +48,7 @@ async function callSignatureWorkflowApi(
   comments: string | null,
   electronicSignatureConfirmed: boolean,
   expectedUpdatedAt: string,
+  expenses?: MtoExpenseValues,
 ): Promise<TrainingRequestRecord> {
   const response = await fetch(
     `/api/training-requests/${encodeURIComponent(requestId)}/workflow`,
@@ -58,6 +62,7 @@ async function callSignatureWorkflowApi(
         comments,
         electronicSignatureConfirmed,
         expectedUpdatedAt,
+        ...(expenses ? { expenses } : {}),
       }),
     },
   );
@@ -174,6 +179,27 @@ export async function deputyDenyTrainingRequest(
   );
 }
 
+/**
+ * Signed change to a final decision, or a re-signed edit of an approved
+ * request's expenses (D27). The database derives MTO/DC from the signer.
+ */
+export async function changeTrainingRequestDecision(
+  request: TrainingRequestRecord,
+  action: "change_to_denied" | "change_to_approved" | "resign_expenses",
+  reason: string,
+  electronicSignatureConfirmed: boolean,
+  expenses?: MtoExpenseValues,
+): Promise<TrainingRequestRecord> {
+  return callSignatureWorkflowApi(
+    request.id,
+    action,
+    reason.trim(),
+    electronicSignatureConfirmed,
+    request.updatedAt,
+    expenses,
+  );
+}
+
 export { isSignatureRequiredWorkflowKind };
 
 export async function countPendingApprovalsForRole(
@@ -240,6 +266,48 @@ export function canPerformDeputyChiefReview(
   status: TrainingRequestRecord["status"],
 ): boolean {
   return role === "deputy_chief" && status === "pending_deputy_chief";
+}
+
+/** True while today's date in Ithaca is before the course start date. */
+export function isBeforeCourseStart(startDate: string | null | undefined, now = new Date()): boolean {
+  if (!startDate) return false;
+  const today = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/New_York",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(now);
+  return startDate > today;
+}
+
+/** MTO or Deputy Chief may change a final decision before the course starts (D27). */
+export function canChangeDecision(
+  role: string,
+  request: Pick<TrainingRequestRecord, "status" | "courseStartDate" | "deletedAt">,
+  now = new Date(),
+): boolean {
+  return (
+    (role === "mto" || role === "deputy_chief") &&
+    (request.status === "approved" || request.status === "denied") &&
+    !request.deletedAt &&
+    isBeforeCourseStart(request.courseStartDate, now)
+  );
+}
+
+export async function deputyUpdateTrainingRequestExpenses(
+  request: TrainingRequestRecord,
+  expenses: MtoExpenseValues,
+  reason: string,
+): Promise<TrainingRequestRecord> {
+  const { data, error } = await createClient().rpc("deputy_update_training_request_expenses", {
+    p_request_id: request.id,
+    p_expected_updated_at: request.updatedAt,
+    p_expenses: expenses,
+    p_reason: reason,
+  });
+  if (error) throw new Error(getTrainingRequestErrorMessage(error));
+  if (!data) throw new Error("Unable to confirm expense changes. Reload the request to check whether they were saved.");
+  return mapWorkflowRow(data);
 }
 
 export async function mtoUpdateTrainingRequestExpenses(

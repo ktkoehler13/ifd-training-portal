@@ -48,6 +48,19 @@ export function canEditMtoExpenses(
   );
 }
 
+/** MTO during MTO review, or Deputy Chief during Deputy Chief review (D27). */
+export function canEditReviewExpenses(
+  role: string,
+  request: Pick<TrainingRequestRecord, "status" | "currentActionRole">,
+): boolean {
+  return (
+    canEditMtoExpenses(role, request) ||
+    (role === "deputy_chief" &&
+      request.status === "pending_deputy_chief" &&
+      request.currentActionRole === "deputy_chief")
+  );
+}
+
 export function createMtoExpenseDraft(
   request: TrainingRequestRecord,
 ): MtoExpenseDraft {

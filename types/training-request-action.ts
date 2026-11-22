@@ -10,6 +10,7 @@ export const TRAINING_REQUEST_ACTIONS = [
   "deputy_chief_approved",
   "deputy_chief_returned",
   "deputy_chief_denied",
+  "deputy_chief_expenses_updated",
   "resubmitted",
   "cancelled",
   "request_deleted",
@@ -31,6 +32,7 @@ export const TRAINING_REQUEST_ACTION_LABELS: Record<
   deputy_chief_approved: "Deputy Chief Approved",
   deputy_chief_returned: "Returned by Deputy Chief",
   deputy_chief_denied: "Denied by Deputy Chief",
+  deputy_chief_expenses_updated: "Estimated Expenses Updated by Deputy Chief",
   resubmitted: "Resubmitted",
   cancelled: "Cancelled",
   request_deleted: "Request Deleted",
@@ -39,6 +41,7 @@ export const TRAINING_REQUEST_ACTION_LABELS: Record<
 
 export interface TrainingRequestActionRow {
   expense_changes?: ExpenseChangeSnapshot | null;
+  decision_change?: boolean | null;
   id: string;
   training_request_id: string;
   actor_personnel_id: string;
@@ -60,6 +63,7 @@ export interface TrainingRequestActionRow {
 
 export interface TrainingRequestActionRecord {
   expenseChanges?: ExpenseChangeSnapshot | null;
+  decisionChange?: boolean;
   id: string;
   trainingRequestId: string;
   actorPersonnelId: string;

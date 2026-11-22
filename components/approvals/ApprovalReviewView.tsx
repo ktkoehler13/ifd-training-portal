@@ -7,7 +7,7 @@ import { startTransition, useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { WorkflowActionDialog } from "@/components/approvals/WorkflowActionDialog";
 import { MtoExpenseEditor } from "@/components/approvals/MtoExpenseEditor";
-import { canEditMtoExpenses } from "@/lib/mto-expense-review";
+import { canEditReviewExpenses, type MtoExpenseValues } from "@/lib/mto-expense-review";
 import { RequestActionTimeline } from "@/components/requests/RequestActionTimeline";
 import { RequestDetailPanel } from "@/components/requests/RequestDetailPanel";
 import { AuthGate } from "@/components/layout/AuthGate";
@@ -24,7 +24,9 @@ import {
 } from "@/lib/training-request-notifications";
 import { getTrainingRequestById } from "@/lib/training-requests";
 import {
+  canChangeDecision,
   canPerformDeputyChiefReview,
+  changeTrainingRequestDecision,
   canPerformMtoReview,
   deputyApproveTrainingRequest,
   deputyDenyTrainingRequest,
@@ -60,6 +62,9 @@ function ApprovalReviewContent({
   );
   const [actionError, setActionError] = useState<string | null>(null);
   const [isEditingExpenses, setIsEditingExpenses] = useState(false);
+  const [isResigningExpenses, setIsResigningExpenses] = useState(false);
+  const [pendingExpenses, setPendingExpenses] = useState<MtoExpenseValues | null>(null);
+  const [changeMessage, setChangeMessage] = useState<string | null>(null);
 
   const loadReview = useCallback(async () => {
     setIsLoading(true);
@@ -120,6 +125,36 @@ function ApprovalReviewContent({
     }
 
     setActionError(null);
+    setChangeMessage(null);
+
+    if (
+      input.action === "change_to_denied" ||
+      input.action === "change_to_approved" ||
+      input.action === "resign_expenses"
+    ) {
+      const updated = await changeTrainingRequestDecision(
+        request,
+        input.action,
+        input.comments,
+        input.electronicSignatureConfirmed,
+        input.action === "resign_expenses" ? pendingExpenses ?? undefined : undefined,
+      );
+      setIsResigningExpenses(false);
+      setPendingExpenses(null);
+      setChangeMessage(
+        updated.status === "approved"
+          ? input.action === "resign_expenses"
+            ? "Expenses updated and re-signed. New approved forms will be emailed to the requester."
+            : "Decision changed to Approved. New approved forms will be emailed to the requester."
+          : updated.status === "denied"
+            ? "Decision changed to Denied. The requester will be emailed."
+            : updated.status === "pending_mto"
+              ? "Your approval is signed. The request is now waiting for MTO approval."
+              : "Your approval is signed. The request is now waiting for Deputy Chief approval.",
+      );
+      await loadReview();
+      return;
+    }
 
     switch (input.action) {
       case "mto_approve":
@@ -197,7 +232,13 @@ function ApprovalReviewContent({
 
             <RequestDetailPanel request={request} />
 
-            {canEditMtoExpenses(personnel.role, request) ? (
+            {changeMessage ? (
+              <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800" role="status">
+                {changeMessage}
+              </div>
+            ) : null}
+
+            {canEditReviewExpenses(personnel.role, request) ? (
               isEditingExpenses ? (
                 <MtoExpenseEditor
                   key={request.updatedAt}
@@ -217,6 +258,45 @@ function ApprovalReviewContent({
                     Edit Estimated Expenses
                   </Button>
                 </div>
+              )
+            ) : null}
+
+            {canChangeDecision(personnel.role, request) ? (
+              isResigningExpenses ? (
+                <MtoExpenseEditor
+                  key={request.updatedAt}
+                  request={request}
+                  onCancel={() => setIsResigningExpenses(false)}
+                  onContinueToSign={(values) => {
+                    setPendingExpenses(values);
+                    setPendingAction("resign_expenses");
+                  }}
+                />
+              ) : (
+                <section className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm shadow-zinc-200/60">
+                  <h2 className="text-lg font-semibold text-zinc-900">Change Decision</h2>
+                  <p className="mt-2 text-sm text-zinc-600">
+                    {request.status === "approved"
+                      ? "Until the course starts, you can change this decision to Denied or update the expenses. Each change needs a reason and your signature, and the requester is emailed."
+                      : "Until the course starts, you can change this decision to Approved. You sign your approval; if the other reviewer has no current approval, it goes to their queue."}
+                  </p>
+                  <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+                    {request.status === "approved" ? (
+                      <>
+                        <Button variant="secondary" onClick={() => setIsResigningExpenses(true)}>
+                          Edit Expenses and Re-sign
+                        </Button>
+                        <Button variant="danger" onClick={() => setPendingAction("change_to_denied")}>
+                          Change to Denied
+                        </Button>
+                      </>
+                    ) : (
+                      <Button onClick={() => setPendingAction("change_to_approved")}>
+                        Change to Approved
+                      </Button>
+                    )}
+                  </div>
+                </section>
               )
             ) : null}
 
@@ -331,7 +411,10 @@ function ApprovalReviewContent({
       <WorkflowActionDialog
         action={pendingAction}
         personnel={personnel}
-        onClose={() => setPendingAction(null)}
+        onClose={() => {
+          if (pendingAction === "resign_expenses") setPendingExpenses(null);
+          setPendingAction(null);
+        }}
         onConfirm={handleWorkflowConfirm}
       />
     </div>

@@ -7,6 +7,8 @@ import { createClient } from "@/lib/supabase/server";
 import { createServiceRoleClient } from "@/lib/supabase/service";
 import { buildTrainingRequestFilename } from "@/lib/training-request-filename";
 import {
+  DECISION_CHANGE_KINDS,
+  isDecisionChangeKind,
   buildSignatureSnapshotMetadata,
   getApprovedPacketStoragePath,
   mapWorkflowKindToExpectedAction,
@@ -204,10 +206,7 @@ async function tryReturnCommittedSignatureWorkflowAction(input: {
     return null;
   }
 
-  if (
-    input.action === "deputy_approve" &&
-    reconciliation.request.status === "approved"
-  ) {
+  if (reconciliation.request.status === "approved") {
     try {
       await generateApprovedTrainingRequestPacket(input.requestId);
     } catch {
@@ -346,10 +345,12 @@ export async function executeSignatureWorkflowAction(input: {
   comments: string | null;
   electronicSignatureConfirmed: boolean;
   expectedUpdatedAt: string;
+  expenses?: Record<string, unknown> | null;
 }) {
+  const isDecisionChange = isDecisionChangeKind(input.action);
   const expectedAction = mapWorkflowKindToExpectedAction(input.action);
 
-  if (!expectedAction) {
+  if (!expectedAction && !isDecisionChange) {
     throw new TrainingRequestWorkflowValidationError("Unsupported workflow action.");
   }
 
@@ -366,15 +367,23 @@ export async function executeSignatureWorkflowAction(input: {
     throw new TrainingRequestWorkflowAccessError();
   }
 
+  if (input.action === "resign_expenses" && !input.expenses) {
+    throw new TrainingRequestWorkflowValidationError("Expense values are required.");
+  }
+
   const supabase = await createClient();
-  const { data: reservationId, error: reserveError } = await supabase.rpc(
-    "reserve_training_request_signature_action_for_version",
-    {
-      p_request_id: input.requestId,
-      p_expected_action: expectedAction,
-      p_expected_updated_at: input.expectedUpdatedAt,
-    },
-  );
+  const { data: reservationId, error: reserveError } = isDecisionChangeKind(input.action)
+    ? await supabase.rpc("reserve_training_request_decision_change", {
+        p_request_id: input.requestId,
+        p_change: DECISION_CHANGE_KINDS[input.action],
+        p_expected_updated_at: input.expectedUpdatedAt,
+        p_expenses: input.action === "resign_expenses" ? input.expenses : null,
+      })
+    : await supabase.rpc("reserve_training_request_signature_action_for_version", {
+        p_request_id: input.requestId,
+        p_expected_action: expectedAction,
+        p_expected_updated_at: input.expectedUpdatedAt,
+      });
 
   if (reserveError) {
     throw new Error(sanitizeWorkflowErrorMessage(reserveError));
@@ -446,7 +455,7 @@ export async function executeSignatureWorkflowAction(input: {
 
     const updatedRequest = mapTrainingRequestRow(data as TrainingRequestRow);
 
-    if (input.action === "deputy_approve" && updatedRequest.status === "approved") {
+    if (updatedRequest.status === "approved") {
       try {
         await generateApprovedTrainingRequestPacket(input.requestId);
       } catch {

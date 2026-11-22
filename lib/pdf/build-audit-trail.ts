@@ -65,6 +65,7 @@ export const AUDIT_ACTION_PHRASES: Record<TrainingRequestActionType, string> = {
   deputy_chief_approved: "Approved request",
   deputy_chief_returned: "Returned request for correction",
   deputy_chief_denied: "Denied request",
+  deputy_chief_expenses_updated: "Updated estimated expenses",
   resubmitted: "Resubmitted request",
   cancelled: "Cancelled request",
   request_deleted: "Deleted request (recoverable)",
@@ -129,6 +130,14 @@ export function formatAuditActor(action: TrainingRequestActionRecord): string {
 }
 
 export function formatAuditAction(action: TrainingRequestActionRecord): string {
+  if (action.decisionChange) {
+    return action.action.endsWith("_denied")
+      ? "Changed decision to Denied"
+      : "Changed decision to Approved";
+  }
+  if (action.expenseChanges && action.action.endsWith("_approved")) {
+    return "Re-signed approval with updated expenses";
+  }
   return AUDIT_ACTION_PHRASES[action.action];
 }
 
@@ -193,10 +202,15 @@ export function getAuditCommentLabel(
     return null;
   }
 
+  if (action.decisionChange || action.expenseChanges) {
+    return "Reason";
+  }
+
   switch (action.action) {
     case "mto_denied":
     case "mto_expenses_updated":
     case "deputy_chief_denied":
+    case "deputy_chief_expenses_updated":
       return "Reason";
     case "mto_returned":
     case "deputy_chief_returned":

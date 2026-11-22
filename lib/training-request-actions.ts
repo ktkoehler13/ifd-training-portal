@@ -22,6 +22,7 @@ export function mapTrainingRequestActionRow(
 ): TrainingRequestActionRecord {
   return {
     expenseChanges: row.expense_changes ?? null,
+    decisionChange: row.decision_change === true,
     id: row.id,
     trainingRequestId: row.training_request_id,
     actorPersonnelId: row.actor_personnel_id,
