@@ -1,6 +1,6 @@
 # Project status
 
-Updated **November 21, 2026**. Read [PROJECT_VISION.md](PROJECT_VISION.md) for user intent and [DECISIONS.md](DECISIONS.md) before changing behavior.
+Updated **November 22, 2026**. Read [PROJECT_VISION.md](PROJECT_VISION.md) for user intent and [DECISIONS.md](DECISIONS.md) before changing behavior.
 
 ## Checkpoint
 
@@ -15,6 +15,7 @@ Updated **November 21, 2026**. Read [PROJECT_VISION.md](PROJECT_VISION.md) for u
   5. November 21, with the user's approval: `20261121180000_approval_routing_settings.sql`
   6. November 22, with the user's approval: `20261122120000_decision_changes_and_expense_edits.sql`
   7. November 22, with the user's approval: `20261122180000_no_email_for_expense_resign.sql` (history name `no_email_for_expense_resign`). Verified: the completion function skips the requester email for approved-expense re-signatures, stays security definer and service-role only (not `authenticated`/`anon`); notifications (35), actions (34) and requests (15) unchanged. Decision changes still email. Website change (ktkoehler13/ifd-training-portal#11) is signing-dialog wording only.
+- **"Sign and Save Signature" wording released November 22** (ktkoehler13/ifd-training-portal#12, merge commit `63d1d48`; Vercel production deploy reported success, site returned HTTP 200). Website wording only, no migration or worker change. First-time signers see that their signature is saved for reuse; forms with a saved signature say "Using your saved signature" and offer "Change Signature". The expense re-signature email change (ktkoehler13/ifd-training-portal#11, `5c056de`) also released November 22, after migration 7 above. Checks: `npm test` 744 passed, `tsc` and lint passed. Not visually checked while signed in.
 - **Decision changes and later expense edits released November 22** (ktkoehler13/ifd-training-portal#9, merge commit `fa5f821`, D27). Migration `20261122120000_decision_changes_and_expense_edits.sql` was applied first via Supabase MCP (history name `decision_changes_and_expense_edits`) and verified: new constraint/columns present, completion stays service-only, reserve/DC-edit callable by `authenticated` only (not `anon`), no existing rows altered. Vercel production deploy reported success; a signed-out POST of the new action returned 403 (new route), with no data change. No email worker change.
   - MTO/DC can switch Approved ↔ Denied, and edit expenses on an approved request with a re-signature, until the course start date. DC can edit expenses during DC review.
   - Checks run November 22: `npm test` 742 passed (adds `lib/decision-changes.test.ts` and PGlite `lib/decision-changes-db.test.ts`); `tsc`, lint and production build passed. A synthetic approved packet's audit page was rendered (pdf-lib + macOS `sips`) and showed the new entries without overlap. Not yet exercised with a real decision change; do not test on a real request.
