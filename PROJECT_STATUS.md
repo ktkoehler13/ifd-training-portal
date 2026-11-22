@@ -13,7 +13,7 @@ Updated **November 21, 2026**. Read [PROJECT_VISION.md](PROJECT_VISION.md) for u
   3. November 19: `20261119180000_city_authorizations.sql`
   4. November 21, with the user's approval: `20261121120000_city_authorization_file_removal.sql`
   5. November 21, with the user's approval: `20261121180000_approval_routing_settings.sql`
-- **Pending release: shorter password rule** (branch `feature/password-rule-8-chars`). Website only: no migration or worker change. Permanent passwords need 8+ characters with uppercase, lowercase and a special character; a number is no longer required (D26). Checks run November 22: `npm test` 726 passed, `tsc` and lint on changed areas passed.
+- **Shorter password rule released November 22** (ktkoehler13/ifd-training-portal#7, merge commit `d1afe5f`; Vercel production deploy reported success and the live site's scripts contain the new 8-character message). Website only: no migration or worker change. Permanent passwords need 8+ characters with uppercase, lowercase and a special character; a number is no longer required (D26). Checks run November 22: `npm test` 726 passed, `tsc` and lint on changed areas passed.
 - **Navigation and dashboard refresh released November 21** (ktkoehler13/ifd-training-portal#5, merge commit `f0a9547`; Vercel production deploy reported success, site returned HTTP 200). Website only: no migration or worker change.
   - Every signed-in page gets a shared top bar inside `AuthGate`: crest, role-based sections, Admin menu, and an account menu with profile, signature, password and sign out. Page headers became a simple `PageHeader`.
   - The dashboard has a greeting, a "needs your attention" row, icon action cards and recent requests with colored status badges.
