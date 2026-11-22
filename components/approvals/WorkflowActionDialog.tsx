@@ -139,7 +139,7 @@ function WorkflowActionDialogContent({
   async function handleConfirm() {
     if (isSubmitting) return;
     if (copy.requireSignature && !signatureReady) {
-      setError("Add your signature before signing this action.");
+      setError("Sign and save your signature before signing this action.");
       return;
     }
     if (copy.requireComments && !comments.trim()) {

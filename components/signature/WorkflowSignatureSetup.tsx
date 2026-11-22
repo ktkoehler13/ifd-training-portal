@@ -39,15 +39,16 @@ export function WorkflowSignatureSetup({ onReady, onChange, defaultName, disable
   }
 
   return <div className="space-y-3">
-    {loading ? <p role="status" className="text-sm text-zinc-600">Loading your saved signature…</p> : preview ? (
+    {loading ? <p role="status" className="text-sm text-zinc-600">Loading your saved signature…</p> : preview ? (<>
+      <p className="text-sm font-medium text-zinc-800">Using your saved signature</p>
       <Image src={preview} alt="Your saved signature" width={300} height={100} unoptimized className="h-24 w-full max-w-xs rounded border border-zinc-200 bg-white object-contain p-2" />
-    ) : <p className="text-sm text-zinc-700">Add your signature here to continue. You can draw it, upload a PNG, or create it by typing your name.</p>}
+    </>) : <p className="text-sm text-zinc-700">You don&apos;t have a saved signature yet. Sign once here and it is saved for your future requests, compensation packets and approvals. You can draw it, upload a PNG, or type your name.</p>}
     {error ? <p role="alert" className="text-sm text-red-700">{error}</p> : null}
     <div className="flex flex-wrap items-center gap-3 text-sm">
-      <Button variant="secondary" disabled={disabled || loading} onClick={() => { onChange(); onReady(false); setShowEditor(true); setSavedMessage(false); }}>{preview ? "Update Signature" : "Add Signature"}</Button>
+      <Button variant="secondary" disabled={disabled || loading} onClick={() => { onChange(); onReady(false); setShowEditor(true); setSavedMessage(false); }}>{preview ? "Change Signature" : "Sign and Save Signature"}</Button>
       <Button variant="secondary" disabled={disabled || loading} onClick={refresh}>Check for saved signature</Button>
     </div>
-    {savedMessage && !loading && preview && !error ? <p role="status" className="text-sm text-green-800">Signature saved to your profile. Confirm the acknowledgment below to continue.</p> : null}
+    {savedMessage && !loading && preview && !error ? <p role="status" className="text-sm text-green-800">Signature saved. It will be used here and on your future forms; you can change it anytime from My signature in the account menu. Confirm the acknowledgment below to continue.</p> : null}
     {showEditor ? <AddSignatureDialog defaultName={defaultName} onClose={() => { setShowEditor(false); refresh(); }} onSaved={() => {
       setShowEditor(false); setSavedMessage(true); refresh();
     }} /> : null}

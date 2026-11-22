@@ -45,10 +45,10 @@ export function AddSignatureDialog({ onClose, onSaved, defaultName }: { onClose:
     onCancel={(event) => { event.preventDefault(); event.stopPropagation(); if (!saving.current) onClose(); }}
     className="fixed inset-0 m-auto max-h-[90dvh] w-[calc(100%-2rem)] max-w-2xl overflow-y-auto rounded-2xl border-0 bg-white p-5 shadow-xl backdrop:bg-black/50 sm:p-7">
     <div className="flex items-start justify-between gap-4">
-      <h2 id="add-signature-title" className="text-xl font-semibold text-zinc-900">Add your signature</h2>
+      <h2 id="add-signature-title" className="text-xl font-semibold text-zinc-900">Sign and save your signature</h2>
       <Button variant="secondary" disabled={busy} onClick={onClose}>Cancel</Button>
     </div>
-    <p className="mt-3 text-sm leading-6 text-zinc-600">Draw, upload, or create your signature, then select Add Signature. It will be saved to your profile and this window will close so you can continue where you left off.</p>
+    <p className="mt-3 text-sm leading-6 text-zinc-600">Draw, upload, or type your signature, then select Sign and Save Signature. It is saved to your profile, so on future requests, compensation packets and approvals you only need to confirm it. This window then closes so you can continue where you left off. You can change it anytime from My signature in the account menu.</p>
     <div className="mt-5 flex flex-wrap gap-3">
       <Button variant={method === "draw" ? "primary" : "secondary"} disabled={busy} onClick={() => setMethod("draw")}>Draw signature</Button>
       <Button variant={method === "upload" ? "primary" : "secondary"} disabled={busy} onClick={() => setMethod("upload")}>Upload PNG</Button>
@@ -58,11 +58,11 @@ export function AddSignatureDialog({ onClose, onSaved, defaultName }: { onClose:
       <input type="checkbox" checked={certified} disabled={busy} onChange={(event) => setCertified(event.target.checked)} className="mt-1 h-5 w-5 shrink-0 accent-red-700" />
       <span>I certify that this is my official signature and authorize the IFD Training Portal to place it on training documents I electronically sign or approve.</span>
     </label>
-    {method === "draw" ? <SignatureDrawCanvas compact disabled={busy} saveDisabled={!certified} saveLabel="Add Signature" onSave={save} /> : method === "create" ? <SignatureCreateCanvas defaultName={defaultName} disabled={busy} saveDisabled={!certified} onSave={save} /> : <div className="space-y-4">
+    {method === "draw" ? <SignatureDrawCanvas compact disabled={busy} saveDisabled={!certified} saveLabel="Sign and Save Signature" onSave={save} /> : method === "create" ? <SignatureCreateCanvas defaultName={defaultName} disabled={busy} saveDisabled={!certified} onSave={save} /> : <div className="space-y-4">
       <label className="block text-sm font-medium text-zinc-700">Signature PNG
         <input type="file" accept="image/png,.png" disabled={busy} onChange={(event) => { setFile(event.target.files?.[0] ?? null); setError(null); }} className="mt-2 block w-full text-sm" />
       </label>
-      <Button disabled={busy || !certified || !file} onClick={() => void save()}>{busy ? "Saving…" : "Add Signature"}</Button>
+      <Button disabled={busy || !certified || !file} onClick={() => void save()}>{busy ? "Saving…" : "Sign and Save Signature"}</Button>
     </div>}
     {error ? <p role="alert" className="mt-4 text-sm text-red-700">{error}</p> : null}
   </dialog>, document.body);
