@@ -106,7 +106,7 @@ values
 3. Sign in by badge and password and complete the required personal-password setup.
 4. Use **User Management** for further accounts; it provisions Auth and personnel together. The old commented `supabase/seed.example.sql` is not a complete account bootstrap and does not establish a future SSO requirement.
 
-Passwords stay in Auth. Temporary initial passwords require at least 6 characters; permanent passwords require at least 12 with uppercase, lowercase, number and special character. Ordinary login sends no email. Account email edits run through User Management's dedicated email operation; self-email changes sign out the user, who should retain the same badge/password. Do not update only `personnel.email` or relink an account by name.
+Passwords stay in Auth. Temporary initial passwords require at least 6 characters; permanent passwords require at least 8 with an uppercase letter, a lowercase letter and a special character (numbers optional). Ordinary login sends no email. Account email edits run through User Management's dedicated email operation; self-email changes sign out the user, who should retain the same badge/password. Do not update only `personnel.email` or relink an account by name.
 
 Set Supabase Site URL and allowlisted callback/recovery URLs (**Authentication → URL Configuration → Redirect URLs**) to match each environment. Recovery redirects must be explicitly allowlisted; Site URL alone is not enough.
 

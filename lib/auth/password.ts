@@ -22,7 +22,7 @@ export const INITIAL_PASSWORD_INVALID_SERVER_MESSAGE =
   "Initial password must be at least 6 characters and cannot contain only spaces.";
 
 const PERMANENT_PASSWORD_PATTERN =
-  /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{12,}$/;
+  /^(?=.*[a-z])(?=.*[A-Z])(?=.*[^A-Za-z0-9]).{8,}$/;
 
 /** @internal Used to keep pattern and validation aligned in tests. */
 export function matchesPermanentPasswordPattern(password: string): boolean {
@@ -30,8 +30,8 @@ export function matchesPermanentPasswordPattern(password: string): boolean {
 }
 
 export function validatePermanentPassword(password: string): string | null {
-  if (password.length < 12) {
-    return "Password must be at least 12 characters.";
+  if (password.length < 8) {
+    return "Password must be at least 8 characters.";
   }
 
   if (!/[a-z]/.test(password)) {
@@ -40,10 +40,6 @@ export function validatePermanentPassword(password: string): string | null {
 
   if (!/[A-Z]/.test(password)) {
     return "Password must include an uppercase letter.";
-  }
-
-  if (!/\d/.test(password)) {
-    return "Password must include a number.";
   }
 
   if (!/[^A-Za-z0-9]/.test(password)) {

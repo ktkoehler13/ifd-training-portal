@@ -265,8 +265,8 @@ export function PasswordRecoveryResetView({
           </div>
 
           <p className="text-sm text-zinc-600">
-            Password must be at least 12 characters and include upper- and
-            lowercase letters, a number, and a special character.
+            Password must be at least 8 characters and include an uppercase
+            letter, a lowercase letter, and a special character.
           </p>
 
           {error ? (
