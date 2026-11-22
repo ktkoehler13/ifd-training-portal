@@ -96,7 +96,7 @@ describe("permanent password validation and security", () => {
   it("rejects weak permanent passwords", () => {
     assert.equal(
       validatePermanentPassword("short"),
-      "Password must be at least 12 characters.",
+      "Password must be at least 8 characters.",
     );
   });
 

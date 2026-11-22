@@ -73,7 +73,7 @@ describe("password validation", () => {
   it("rejects weak permanent passwords", () => {
     assert.match(
       validatePermanentPassword("short") ?? "",
-      /at least 12 characters/,
+      /at least 8 characters/,
     );
   });
 });

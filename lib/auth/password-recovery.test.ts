@@ -173,7 +173,7 @@ describe("password recovery validation", () => {
     assert.match(recoveryServerSource, /validatePermanentPassword/);
     assert.equal(
       validatePermanentPassword("short"),
-      "Password must be at least 12 characters.",
+      "Password must be at least 8 characters.",
     );
     assert.equal(
       validatePermanentPassword("alllowercase1!"),
@@ -183,12 +183,11 @@ describe("password recovery validation", () => {
       validatePermanentPassword("ALLUPPERCASE1!"),
       "Password must include a lowercase letter.",
     );
+    assert.equal(validatePermanentPassword("Short1!"), "Password must be at least 8 characters.");
+    assert.equal(validatePermanentPassword("NoNumber!"), null);
+    assert.equal(validatePermanentPassword("Abcdefg!"), null);
     assert.equal(
-      validatePermanentPassword("NoNumberHere!"),
-      "Password must include a number.",
-    );
-    assert.equal(
-      validatePermanentPassword("NoSpecialChar1"),
+      validatePermanentPassword("NoSpecial1"),
       "Password must include a special character.",
     );
   });

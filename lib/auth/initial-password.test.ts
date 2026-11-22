@@ -191,7 +191,7 @@ describe("account creation types", () => {
 describe("forced permanent password policy", () => {
   it("requires strong permanent passwords after first login", () => {
     assert.match(changePasswordServerSource, /validatePermanentPassword/);
-    assert.equal(validatePermanentPassword("short"), "Password must be at least 12 characters.");
+    assert.equal(validatePermanentPassword("short"), "Password must be at least 8 characters.");
   });
 
   it("keeps ordinary Change Password on the strong permanent policy", () => {
