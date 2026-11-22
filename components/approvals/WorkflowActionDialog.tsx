@@ -90,7 +90,7 @@ function getActionCopy(action: WorkflowActionKind) {
       return {
         title: "Sign Updated Expenses",
         description:
-          "Your signature re-approves this request with the new estimated expenses. New approved forms are generated and emailed to the requester.",
+          "Your signature re-approves this request with the new estimated expenses. New approved forms are generated in the portal. The requester is not emailed.",
         confirmLabel: "Sign Updated Expenses",
         requireComments: true,
         requireSignature: true,

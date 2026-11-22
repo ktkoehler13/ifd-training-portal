@@ -141,7 +141,7 @@ Requests follow `draft → pending_mto → pending_deputy_chief → approved`. E
 
 Database-assigned identifiers use `LastName, FirstInitial, CourseName, Year.Sequence`; drafts display Draft. Ownership uses personnel UUID. Saved name/badge/account email and request contact email serve different purposes; contact edits never change ownership.
 
-Approval/denial signatures use reserved, immutable actor metadata, private PNG copies and verified bytes before service-only completion. Returns require comments but no signature. MTO (MTO review) and DC (DC review) expense edits require a reason and produce history; they are not approval. Before the course start date, MTO or DC may switch Approved ↔ Denied or re-sign edited expenses on an approved request; each is a new signed action with a reason (D27). Switching to Approved goes to the other role's queue if that role has no current approval.
+Approval/denial signatures use reserved, immutable actor metadata, private PNG copies and verified bytes before service-only completion. Returns require comments but no signature. MTO (MTO review) and DC (DC review) expense edits require a reason and produce history; they are not approval. Before the course start date, MTO or DC may switch Approved ↔ Denied or re-sign edited expenses on an approved request; each is a new signed action with a reason (D27). Decision changes email the requester as usual; an expense re-signature does not. Switching to Approved goes to the other role's queue if that role has no current approval.
 
 The approved packet consists of the Training Request, separate TAL, conditional Academy Registration and audit/continuation pages. Do not promise exactly two or three physical pages. Source templates:
 

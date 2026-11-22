@@ -185,7 +185,7 @@ describe("decision changes and later expense edits (D27)", () => {
     assert.equal(await latestEvent(), "pending_deputy_chief");
   });
 
-  it("re-signs approved expense edits, regenerates forms and records before/after", async () => {
+  it("re-signs approved expense edits without emailing the requester, regenerates forms and records before/after", async () => {
     await approveNormally();
     await change("mto", "expenses", "Registration price increased", { ...EXPENSES, registration_cost: 150 });
     assert.equal(Number((await state()).total_cost), 150);
@@ -194,7 +194,7 @@ describe("decision changes and later expense edits (D27)", () => {
     assert.equal(action.action, "mto_approved");
     assert.equal(action.decision_change, false);
     assert.ok(action.expense_changes);
-    assert.equal(await latestEvent(), "approved");
+    assert.equal(await latestEvent(), "", "no email for an expense re-signature");
     assert.equal((await db.query("select status from training_request_packets where request_id=$1", [requestId])).rows[0].status, "pending");
     assert.equal(await cityTasks(), 1);
   });
