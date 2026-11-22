@@ -11,18 +11,26 @@ import {
   MTO_EXPENSE_FIELDS,
   parseMtoExpenseDraft,
 } from "@/lib/mto-expense-review";
-import { mtoUpdateTrainingRequestExpenses } from "@/lib/training-request-workflow";
+import {
+  deputyUpdateTrainingRequestExpenses,
+  mtoUpdateTrainingRequestExpenses,
+} from "@/lib/training-request-workflow";
+import type { MtoExpenseValues } from "@/lib/mto-expense-review";
 import type { TrainingRequestRecord } from "@/types/training-request";
 
 export function MtoExpenseEditor({
   request,
   onSaved,
   onCancel,
+  onContinueToSign,
 }: {
   request: TrainingRequestRecord;
-  onSaved: () => Promise<void>;
+  onSaved?: () => Promise<void>;
   onCancel: () => void;
+  /** Approved requests: collect values here, then sign with a reason (D27). */
+  onContinueToSign?: (values: MtoExpenseValues) => void;
 }) {
+  const resign = Boolean(onContinueToSign);
   const [draft, setDraft] = useState(() => createMtoExpenseDraft(request));
   const [reason, setReason] = useState("");
   const [isSaving, setIsSaving] = useState(false);
@@ -39,13 +47,21 @@ export function MtoExpenseEditor({
     setError(null);
     try {
       const values = parseMtoExpenseDraft(draft, request);
+      if (onContinueToSign) {
+        onContinueToSign(values);
+        return;
+      }
       if (!reason.trim() || reason.length > 2000)
         throw new Error(
           "Enter a reason for the expense changes (up to 2000 characters).",
         );
       setIsSaving(true);
-      await mtoUpdateTrainingRequestExpenses(request, values, reason.trim());
-      await onSaved();
+      const update =
+        request.status === "pending_deputy_chief"
+          ? deputyUpdateTrainingRequestExpenses
+          : mtoUpdateTrainingRequestExpenses;
+      await update(request, values, reason.trim());
+      await onSaved?.();
     } catch (failure) {
       setError(
         failure instanceof Error
@@ -70,8 +86,9 @@ export function MtoExpenseEditor({
         Edit Estimated Expenses
       </h2>
       <p className="mt-2 text-sm text-zinc-600">
-        Your reason and the original and revised estimates will appear in the
-        request history. Save or cancel before signing.
+        {resign
+          ? "This request is already approved. After you continue, you will give a reason and sign again; new approved forms are then sent to the requester."
+          : "Your reason and the original and revised estimates will appear in the request history. Save or cancel before signing."}
       </p>
       <fieldset disabled={isSaving} className="mt-5 space-y-4">
         {MTO_EXPENSE_FIELDS.map(({ key, label }) => (
@@ -156,7 +173,7 @@ export function MtoExpenseEditor({
             <dd>{totals ? formatCurrency(totals.total) : "—"}</dd>
           </div>
         </dl>
-        <div>
+        {resign ? null : <div>
           <label
             htmlFor="expense-reason"
             className="text-sm font-medium text-zinc-800"
@@ -172,7 +189,7 @@ export function MtoExpenseEditor({
             onChange={(event) => setReason(event.target.value)}
             placeholder="Explain the revised estimate"
           />
-        </div>
+        </div>}
         {error ? (
           <p role="alert" className="text-sm text-red-700">
             {error}
@@ -180,7 +197,7 @@ export function MtoExpenseEditor({
         ) : null}
         <div className="flex flex-wrap gap-3">
           <Button type="submit" disabled={isSaving}>
-            {isSaving ? "Saving…" : "Save Expense Changes"}
+            {isSaving ? "Saving…" : resign ? "Continue to Sign" : "Save Expense Changes"}
           </Button>
           <Button variant="secondary" disabled={isSaving} onClick={onCancel}>
             Cancel

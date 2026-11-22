@@ -28,7 +28,10 @@ function isWorkflowActionKind(value: unknown): value is WorkflowActionKind {
     value === "mto_approve" ||
     value === "mto_deny" ||
     value === "deputy_approve" ||
-    value === "deputy_deny"
+    value === "deputy_deny" ||
+    value === "change_to_denied" ||
+    value === "change_to_approved" ||
+    value === "resign_expenses"
   );
 }
 
@@ -43,6 +46,7 @@ export async function POST(
       comments?: unknown;
       electronicSignatureConfirmed?: unknown;
       expectedUpdatedAt?: unknown;
+      expenses?: unknown;
     };
 
     if (!isWorkflowActionKind(body.action)) {
@@ -63,6 +67,10 @@ export async function POST(
       action: body.action,
       comments: typeof body.comments === "string" ? body.comments : null,
       electronicSignatureConfirmed: body.electronicSignatureConfirmed === true,
+      expenses:
+        body.expenses && typeof body.expenses === "object" && !Array.isArray(body.expenses)
+          ? (body.expenses as Record<string, unknown>)
+          : null,
     });
 
     return NextResponse.json({ request: updatedRequest });

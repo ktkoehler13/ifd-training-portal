@@ -64,6 +64,39 @@ function getActionCopy(action: WorkflowActionKind) {
         requireSignature: true,
         destructive: true,
       };
+    case "change_to_denied":
+      return {
+        title: "Change Decision to Denied",
+        description:
+          "This approved request will become Denied. The requester is emailed your reason. Approved forms are no longer available to them.",
+        confirmLabel: "Sign and Change to Denied",
+        requireComments: true,
+        requireSignature: true,
+        destructive: true,
+        commentsLabel: "Reason for change",
+      };
+    case "change_to_approved":
+      return {
+        title: "Change Decision to Approved",
+        description:
+          "You are signing your approval. If the other reviewer (MTO or Deputy Chief) has no current approval, the request goes to their queue to sign; otherwise it is approved now and new forms are emailed.",
+        confirmLabel: "Sign and Change to Approved",
+        requireComments: true,
+        requireSignature: true,
+        destructive: false,
+        commentsLabel: "Reason for change",
+      };
+    case "resign_expenses":
+      return {
+        title: "Sign Updated Expenses",
+        description:
+          "Your signature re-approves this request with the new estimated expenses. New approved forms are generated and emailed to the requester.",
+        confirmLabel: "Sign Updated Expenses",
+        requireComments: true,
+        requireSignature: true,
+        destructive: false,
+        commentsLabel: "Reason for expense changes",
+      };
     default:
       return {
         title: "Confirm Action",
@@ -188,7 +221,8 @@ function WorkflowActionDialogContent({
             htmlFor="workflow-action-comments"
             className="text-sm font-medium text-zinc-900"
           >
-            Comments{copy.requireComments ? " (required)" : " (optional)"}
+            {"commentsLabel" in copy ? copy.commentsLabel : "Comments"}
+            {copy.requireComments ? " (required)" : " (optional)"}
           </label>
           <Textarea
             id="workflow-action-comments"

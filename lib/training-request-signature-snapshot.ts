@@ -62,8 +62,21 @@ export function mapWorkflowKindToExpectedAction(action: string): string | null {
   }
 }
 
+/** Signed changes to a final decision or to an approved request's expenses (D27). */
+export const DECISION_CHANGE_KINDS = {
+  change_to_denied: "deny",
+  change_to_approved: "approve",
+  resign_expenses: "expenses",
+} as const;
+
+export type DecisionChangeKind = keyof typeof DECISION_CHANGE_KINDS;
+
+export function isDecisionChangeKind(action: string): action is DecisionChangeKind {
+  return Object.hasOwn(DECISION_CHANGE_KINDS, action);
+}
+
 export function isSignatureRequiredWorkflowKind(action: string): boolean {
-  return mapWorkflowKindToExpectedAction(action) !== null;
+  return mapWorkflowKindToExpectedAction(action) !== null || isDecisionChangeKind(action);
 }
 
 export { TRAINING_REQUEST_SIGNATURE_SNAPSHOT_BUCKET, TRAINING_REQUEST_PACKET_BUCKET };
