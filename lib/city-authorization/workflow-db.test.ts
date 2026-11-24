@@ -82,8 +82,9 @@ describe("City Authorization routing, file history and database permissions",()=
   await decide();for(const overrides of [{size:0},{size:4194305},{sha:"bad"},{name:""}])await reject(()=>upload(ids.office,0,overrides),/constraint/);
   assert.equal((await db.query("select status from training_request_city_authorizations where request_id=$1",[requestId])).rows[0].status,"pending");
  });
- it("allows approved-request reads to Office without granting edits or access to pending requests",async()=>{
-  await role("authenticated","office");assert.equal((await db.query("select id from training_requests where id=$1",[requestId])).rows.length,0);
+ it("gives Office administrative request reads, including pending requests, without direct edits",async()=>{
+  await role("authenticated","office");assert.equal((await db.query("select id from training_requests where id=$1",[requestId])).rows.length,1);
+  await role("authenticated","other");assert.equal((await db.query("select id from training_requests where id=$1",[requestId])).rows.length,0);
   await decide();await role("authenticated","office");
   assert.equal((await db.query("select id from training_requests where id=$1",[requestId])).rows.length,1);
   assert.equal((await db.query("select id from training_request_actions where training_request_id=$1",[requestId])).rows.length,1);

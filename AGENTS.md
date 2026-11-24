@@ -27,7 +27,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 - Follow nearby TypeScript/React conventions, named types and `@/` imports. Do not introduce a framework, dependency or formatting sweep to solve a small task.
 - Keep server secrets and privileged clients in server-only modules. Never put service credentials in `NEXT_PUBLIC_*`, browser bundles, fixtures, logs or committed configuration.
-- Derive actors from active personnel/Auth records, never client role or personnel IDs. Rank is not permission. Office is not a general administrative role.
+- Derive actors from active personnel/Auth records, never client role or personnel IDs. Rank is not permission. Office has the same administrative access as Admin (D28), but its Office-stage action alerts remain Office-only.
 - Validate on the server and in SQL where invariants must survive direct database calls. Keep client validation for usable feedback.
 - Preserve historical rates, identity, approval/signature snapshots and document hashes. Do not regenerate history with a user's current profile signature.
 - Training estimates/PDFs use the request's stored rate. Compensation submissions check the configured current rate and freeze it per signed revision. Never conflate the two.

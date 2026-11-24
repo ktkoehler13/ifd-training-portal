@@ -228,11 +228,11 @@ describe("rank and application role independence", () => {
 });
 
 describe("stored application role values", () => {
-  it("supports Office as an application role without granting general administrative access", () => {
+  it("supports Office as an application role with the same administrative access as Admin", () => {
     assert.equal(PERSONNEL_ROLE_LABELS.office, "Office");
     assert.equal(isPersonnelRole("office"), true);
     assert.equal(isPersonnelTitle("office"), false);
-    assert.equal(isAdministrativeRole("office"), false);
+    assert.equal(isAdministrativeRole("office"), true);
     assert.equal(isSignatureEligibleRole("office"), true);
   });
   it("keeps firefighter as the stored ordinary application role value", () => {

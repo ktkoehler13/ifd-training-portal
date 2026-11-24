@@ -144,10 +144,8 @@ describe("approval routing: primary MTO, primary Office and Fire Chief", () => {
     assert.equal(audit.length, 2);
   });
   it("rejects non-administrators, unknown keys and ineligible people", async () => {
-    for (const actor of ["owner", "office"] as const) {
-      await asUser(actor);
-      await reject(() => db.query("select set_approval_routing('primary_office',$1)", [ids.office]), /Administrative access required/);
-    }
+    await asUser("owner");
+    await reject(() => db.query("select set_approval_routing('primary_office',$1)", [ids.office]), /Administrative access required/);
     await asUser("mto");
     await reject(() => db.query("select set_approval_routing('primary_approval_deputy_chief',$1)", [ids.deputy]), /Unknown routing setting/);
     for (const [key, id] of [["primary_approval_mto", ids.office], ["primary_office", ids.mto], ["fire_chief", ids.mto], ["primary_office", "99999999-9999-4999-8999-999999999999"]]) {

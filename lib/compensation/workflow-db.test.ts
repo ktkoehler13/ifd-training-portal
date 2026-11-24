@@ -107,13 +107,13 @@ describe("compensation workflow database permissions and signed history",()=>{
   await db.exec("reset role;alter table training_requests disable trigger user");await db.query("update training_requests set end_date=current_date+1 where id=$1",[requestId]);await db.exec("alter table training_requests enable trigger user");await role();await reject(()=>act("save"),/after approved training/);
  });
  it("makes submitted history immutable even to a service writer",async()=>{await act("submit",ids.owner,signed);await reject(()=>db.query("update training_compensation_events set note='overwrite'"),/immutable/);await reject(()=>db.query("delete from training_compensation_events"),/immutable/);});
- it("routes packets to Office only after MTO signature and permits office coding",async()=>{
+ it("lets Office read packets like Admin but code them only after MTO signature",async()=>{
   await role("authenticated","office@example.test");
-  assert.equal((await db.query("select id from training_compensation_packets")).rows.length,0);
+  assert.equal((await db.query("select id from training_compensation_packets")).rows.length,1);
   await role();await act("submit",ids.owner,signed);
   await reject(()=>act("complete",ids.office,{...signed,codes:["TTM"]}),/after MTO approval/);
   await reject(()=>act("approve",ids.office,signed),/MTO review/);
-  await role("authenticated","office@example.test");assert.equal((await db.query("select id from training_compensation_packets")).rows.length,0);assert.equal((await db.query("select id from training_compensation_events")).rows.length,0);
+  await role("authenticated","office@example.test");assert.equal((await db.query("select id from training_compensation_packets")).rows.length,1);assert.equal((await db.query("select id from training_compensation_events")).rows.length,1);
   await role();await act("approve",ids.mto,{...signed,signature:fixture.mto_signature});
   await role("authenticated","office@example.test");
   assert.equal((await db.query("select id from training_compensation_packets")).rows.length,1);assert.equal((await db.query("select id from training_compensation_events")).rows.length,2);
@@ -125,16 +125,20 @@ describe("compensation workflow database permissions and signed history",()=>{
   assert.equal(packet.office_name,"office Sample");assert.equal(packet.status,"completed");assert.deepEqual(packet.requester_signature,fixture.requester_signature);assert.deepEqual(packet.mto_signature,fixture.mto_signature);
   await role("authenticated","office@example.test");assert.equal((await db.query("select id from training_compensation_packets")).rows.length,1);
  });
- it("denies Office user management, request deletion and settings administration",async()=>{
+ it("gives Office the same user management, request deletion and settings access as Admin",async()=>{
+  for(const email of ["office@example.test","admin@example.test"]){
+   await role("authenticated",email);
+   const permissions=(await db.query<{admin:boolean;routing:boolean;deletion:boolean;signature:boolean}>("select is_personnel_administrator() as admin,is_personnel_routing_role() as routing,is_training_request_deletion_admin() as deletion,can_manage_own_personnel_signature() as signature")).rows[0];
+   assert.deepEqual(permissions,{admin:true,routing:true,deletion:true,signature:true},email);
+   assert.ok((await db.query("select id from personnel")).rows.length>1,email);
+  }
+  await role("authenticated","owner@example.test");
+  const owner=(await db.query<{admin:boolean;deletion:boolean}>("select is_personnel_administrator() as admin,is_training_request_deletion_admin() as deletion")).rows[0];
+  assert.deepEqual(owner,{admin:false,deletion:false});
   await role("authenticated","office@example.test");
-  const permissions=(await db.query<{admin:boolean;routing:boolean;deletion:boolean;signature:boolean}>("select is_personnel_administrator() as admin,is_personnel_routing_role() as routing,is_training_request_deletion_admin() as deletion,can_manage_own_personnel_signature() as signature")).rows[0];
-  assert.deepEqual(permissions,{admin:false,routing:false,deletion:false,signature:true});
-  const before=(await db.query<{value:string}>("select value from system_settings where key='gsa_mileage_rate'")).rows[0].value;
-  await db.query("update system_settings set value='99' where key='gsa_mileage_rate'");
-  assert.equal((await db.query<{value:string}>("select value from system_settings where key='gsa_mileage_rate'")).rows[0].value,before);
-  await reject(()=>db.query("select admin_set_training_request_deleted($1,now(),true,'test')",[requestId]),/administrative personnel/);
-  await db.query("update personnel set role='admin' where id=$1",[ids.office]);
-  assert.equal((await db.query<{role:string}>("select role from personnel where id=$1",[ids.office])).rows[0].role,"office");
+  await db.query("select admin_set_training_request_deleted($1,now(),true,'Duplicate entry')",[requestId]);
+  await db.exec("reset role");
+  assert.ok((await db.query<{deleted_at:string|null}>("select deleted_at from training_requests where id=$1",[requestId])).rows[0].deleted_at);
  });
  it("blocks inactive Office accounts and deleted requests",async()=>{
   await act("submit",ids.owner,signed);await act("approve",ids.mto,signed);

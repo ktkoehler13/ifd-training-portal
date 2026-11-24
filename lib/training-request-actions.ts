@@ -151,6 +151,8 @@ export function formatCurrentActionRole(
       return "Deputy Chief";
     case "admin":
       return "Admin";
+    case "office":
+      return "Office";
     default:
       return role;
   }

@@ -9,16 +9,13 @@ export function canCompleteCompensation(role: PersonnelRole): boolean {
   return role === "office" || isAdministrativeRole(role);
 }
 
-/** Office access starts at the signed MTO handoff; it does not grant access to
- * unrelated training requests or another requester's unfinished packet. */
+/** Requesters read their own packets; administrative roles, including Office,
+ * read every packet. */
 export function canReadCompensationPacket(
   actor: Actor,
   requesterId: string,
-  packet: Pick<CompensationPacket, "status" | "mto_signature"> | null,
 ): boolean {
-  return actor.id === requesterId || isAdministrativeRole(actor.role) ||
-    (actor.role === "office" && Boolean(packet?.mto_signature) &&
-      (packet?.status === "pending_office" || packet?.status === "completed"));
+  return actor.id === requesterId || isAdministrativeRole(actor.role);
 }
 
 // Action alerts belong to the assigned workflow role; backup processing access

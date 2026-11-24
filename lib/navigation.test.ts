@@ -15,8 +15,7 @@ describe("portal navigation", () => {
   });
   it("limits the Admin menu to administrative roles", () => {
     assert.equal(adminNavLinks("firefighter").length, 0);
-    assert.equal(adminNavLinks("office").length, 0);
-    for (const role of ["mto", "deputy_chief", "admin"] as const) {
+    for (const role of ["mto", "deputy_chief", "admin", "office"] as const) {
       assert.deepEqual(adminNavLinks(role).map((link) => link.href), ["/admin/users", "/admin/requests", "/admin/approved-training", "/admin/settings"]);
     }
   });

@@ -27,7 +27,7 @@ export function canDownloadApprovedPacket(input: {
     return true;
   }
 
-  return isAdministrativeRole(input.personnel.role) || input.personnel.role === "office";
+  return isAdministrativeRole(input.personnel.role);
 }
 
 export function formatTrainingRequestPacketStatus(

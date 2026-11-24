@@ -63,8 +63,8 @@ export async function renderCompensationPacket(packet: CompensationPacket, signa
   }
   const office=await page(1);
   for(const code of packet.office_codes) field(office,1,officeFields[officeCodes.indexOf(code)],"X",true);
-  box(office,packet.office_name??"",[199,364,357,383],"Compensation approved by");
-  box(office,date(packet.office_completed_at??""),[386,364,499,383],"Office approval date");
+  // The approved-by name and date lines stay blank; the Office actor and date
+  // remain in portal history.
   stamp(office,"Office compensation codes");
   for(const [index,rows] of chunks(data.mileage,17).entries()) {
     const p=await page(2);
@@ -117,11 +117,9 @@ export async function renderCompensationPacket(packet: CompensationPacket, signa
       box(p,row.description.startsWith("Mileage for ")?formatCompensationRate(Number(row.unitPrice)):Number(row.unitPrice).toFixed(2),[399,bottom,479,y],"Unit price",true);
       box(p,money(Number(row.quantity)*Number(row.unitPrice)).toFixed(2),[482,bottom,573,y],"Amount",true); y=bottom;
     }
-    const subtotal=money(rows.reduce((s,r)=>s+money(Number(r.quantity)*Number(r.unitPrice)),0));
-    box(p,subtotal.toFixed(2),[482,317,573,331],"Voucher total",true);
-    box(p,subtotal.toFixed(2),[412,297,492,310],"Certified amount",true);
+    // The voucher total and certified-amount boxes stay blank.
     await sign(p,signatures.requester,[156,241,365,267]);
-    stamp(p,`Voucher ${index+1}/${voucherPages.length} | Combined claim: $${totals.voucherAmount.toFixed(2)}`);
+    stamp(p,`Voucher ${index+1}/${voucherPages.length}`);
   }
   if(overflow.length) {
     let p:PDFPage=pdf.addPage([612,792]),y=740;
