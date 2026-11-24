@@ -18,6 +18,10 @@ function voucherSignatureDate(page:PDFPage) {
  const date=texts.find(m=>Number(m[1])>=1&&Number(m[1])<125&&Number(m[2])>=236&&Number(m[2])<259);
  return date?Buffer.from(date[3],"hex").toString():null;
 }
+function textsIn(page:PDFPage,[x0,y0,x1,y1]:number[]) {
+ return [...addedContent(page).matchAll(/1 0 0 1 ([\d.]+) ([\d.]+) Tm\n<([0-9A-F]+)> Tj/g)]
+  .filter(m=>Number(m[1])>=x0&&Number(m[1])<x1&&Number(m[2])>=y0&&Number(m[2])<y1).map(m=>Buffer.from(m[3],"hex").toString());
+}
 describe("compensation packet PDF snapshots",()=>{
  it("retains four official pages and embeds both signatures with no mutable widgets or scripts",async()=>{
   const pdf=await PDFDocument.load(await renderCompensationPacket(compensationFixture,{requester:signature,mto:signature}));assert.equal(pdf.getPageCount(),4);assert.equal(countWidgetAnnotations(pdf),0);assert.equal(pdf.catalog.has(PDFName.of("AcroForm")),false);assert.equal(pdf.catalog.has(PDFName.of("OpenAction")),false);
@@ -50,6 +54,16 @@ describe("compensation packet PDF snapshots",()=>{
  it("wraps long text and creates detail pages for values that cannot fit",async()=>{
   const data={...compensationFixture.data,instructor:"Long name ".repeat(20),voucher:Array(20).fill({...compensationFixture.data.voucher[0],description:"Training meal and other supporting information ".repeat(21)})};
   const pdf=await PDFDocument.load(await renderCompensationPacket({...compensationFixture,data,identity:{...compensationFixture.identity,course:"Extended course title ".repeat(30)+" 🚒"}}));assert.ok(pdf.getPageCount()>4);assert.equal(countWidgetAnnotations(pdf),0);
+ });
+ it("leaves the voucher total, certified amount and office approved-by name and date blank",async()=>{
+  const pdf=await PDFDocument.load(await renderCompensationPacket(compensationFixture,{requester:signature,mto:signature}));
+  const voucher=pdf.getPage(3);
+  assert.ok(textsIn(voucher,[482,330,573,502]).length>0,"voucher line amounts still print");
+  assert.deepEqual(textsIn(voucher,[400,290,573,332]),[]);
+  assert.ok(!addedContent(voucher).includes(Buffer.from("Combined claim").toString("hex").toUpperCase()));
+  const office=pdf.getPage(1);
+  assert.deepEqual(textsIn(office,[190,355,510,390]),[]);
+  assert.ok(!addedContent(office).includes(Buffer.from("Sample Office").toString("hex").toUpperCase()));
  });
  it("renders an unsigned draft with no optional mileage or voucher rows",async()=>{
   const packet={...compensationFixture,requester_signature:null,mto_signature:null,office_codes:[],office_name:null,office_completed_at:null,data:{...compensationFixture.data,mileage:[],voucher:[],street:"",cityStateZip:""}};

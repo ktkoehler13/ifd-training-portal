@@ -125,13 +125,13 @@ Configure the mileage rate and primary DC in **System Settings**. Assign Office 
 | MTO training decision / expense review | No | Yes | No | No | No |
 | Final DC training decision / DC-review expense edits | No | No | Yes | No | No |
 | Change a final decision or re-sign approved expenses (before course start) | No | Yes | Yes | No | No |
-| Personnel / settings / recoverable request deletion | No | Yes | Yes | Yes | No |
-| Reset another user's password | No | Yes | No | Yes | No |
+| Personnel / settings / recoverable request deletion | No | Yes | Yes | Yes | Yes |
+| Reset another user's password | No | Yes | No | Yes | Yes |
 | MTO compensation review/signature | No | Yes | No | No | No |
 | Office compensation coding/submission | No | Backup | Backup | Backup | Yes |
 | City Authorization upload / remove | No | Backup | Backup | Backup | Yes |
 
-All access requires an active authorized session; sensitive actions also enforce password setup and workflow state. Office can read other users' compensation only after signed MTO handoff, and approved undeleted requests/forms for City processing. Requesters can download their own City files but cannot upload. Office has no general administration power.
+All access requires an active authorized session; sensitive actions also enforce password setup and workflow state. Office has the same administrative access as Admin (D28): all requests and compensation packets, User Management, System Settings, Approved Training and request deletion/restoration. Like Admin, it cannot make MTO/DC training decisions. Requesters can download their own City files but cannot upload.
 
 The primary DC setting controls routine review **email**, not DC signing eligibility or backup review queues. Until selected it preserves all-active-DC emailing. **Approval routing** in System Settings adds a primary MTO (review emails only; other MTOs remain backups), a primary Office person (Office badge plus Office emails; other Office users process quietly) and the Fire Chief (recorded only). An empty choice means everyone in that role. Office-stage badges never go to Admin/MTO/DC backup processors.
 

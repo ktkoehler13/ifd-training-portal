@@ -139,7 +139,7 @@ describe("approved packet download authorization", () => {
     assert.equal(canDownloadApprovedPacket({personnel:office,request:approvedRequest,packet:readyPacket}),true);
     assert.equal(canDownloadApprovedPacket({personnel:office,request:{...approvedRequest,status:"pending_deputy_chief"},packet:readyPacket}),false);
     assert.equal(canDownloadApprovedPacket({personnel:office,request:{...approvedRequest,deletedAt:"2026-11-19"},packet:readyPacket}),false);
-    assert.equal(canRetryApprovedPacketGeneration("office"),false);
+    assert.equal(canRetryApprovedPacketGeneration("office"),true);
   });
   it("blocks download when the packet is not ready", () => {
     assert.equal(

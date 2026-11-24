@@ -42,7 +42,7 @@ export async function loadCompensation(requestId:string) {
   const {data,error:packetError}=await service.from("training_compensation_packets").select("*").eq("request_id",requestId).maybeSingle();
   if(packetError) throw new CompensationError("Unable to load compensation. Please try again.",503);
   const packet=data as CompensationPacket|null;
-  if(!canReadCompensationPacket(actor,request.requester_personnel_id,packet)) throw new CompensationError("Request not found.",404);
+  if(!canReadCompensationPacket(actor,request.requester_personnel_id)) throw new CompensationError("Request not found.",404);
   return {actor,service,request,packet};
 }
 type Context=Awaited<ReturnType<typeof loadCompensation>>;

@@ -92,8 +92,8 @@ describe("compensation server authorization and immutable file capture",async()=
   assert.equal(state.objects.size,4);
   assert.deepEqual((await server.compensationFile(id,null,null)).bytes,state.objects.get(approved.pdf_path!));
  });
- it("conceals unfinished packets and their receipts from Office",async()=>{
-  state.actor!.id="office-person";state.actor!.role="office";
+ it("conceals unfinished packets and their receipts from other requesters",async()=>{
+  state.actor!.id="other-person";state.actor!.role="firefighter";
   for(const status of ["draft","returned","pending_mto"] as const){state.packet!.status=status;await assert.rejects(()=>server.compensationDetail(id),/not found/);await assert.rejects(()=>server.compensationFile(id,null,"receipt"),/not found/);}
   state.packet=null;await assert.rejects(()=>server.compensationDetail(id),/not found/);
   assert.equal(state.uploads,0);
@@ -111,9 +111,8 @@ describe("compensation server authorization and immutable file capture",async()=
   const completed=await server.actOnCompensation(id,{action:"complete",version:approved.version,officeCodes:["TTM"]});
   assert.equal(completed.status,"completed");assert.equal(completed.office_name,"Office Staff");assert.deepEqual(completed.requester_signature,requester);assert.deepEqual(completed.mto_signature,mto);
  });
- it("rejects Office access to a deleted or unsigned handoff",async()=>{
+ it("rejects Office access to a deleted request's packet",async()=>{
   state.actor!.id="office-person";state.actor!.role="office";state.packet!.status="pending_office";
-  await assert.rejects(()=>server.compensationDetail(id),/not found/);
   state.packet!.mto_signature=compensationFixture.mto_signature;state.request.deleted_at="2026-11-19";await assert.rejects(()=>server.compensationDetail(id),/not found/);
  });
  it("rejects oversized or mismatched receipt types",async()=>{for(const file of [new File([new Uint8Array(4*1024*1024+1)],"large.pdf",{type:"application/pdf"}),new File(["<svg/>"],"fake.png",{type:"image/png"})]){const form=new FormData();form.set("version","1");form.set("file",file);await assert.rejects(server.uploadCompensationReceipt(id,form));}assert.equal(state.uploads,0);});

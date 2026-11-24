@@ -13,7 +13,7 @@ This document preserves confirmed user intent. **Confirmed** below means explici
 - **Requester:** IFD personnel requesting training, updating returned requests, obtaining approved forms, providing a signature, and submitting actual hours, mileage, voucher details and receipts.
 - **MTO:** reviews training and estimates, signs decisions, reviews/signs compensation, and performs administrative work.
 - **Deputy Chief (DC):** final training approval; a designated DC receives routine approval emails while other DCs can act as backups.
-- **Office:** completes City authorization after DC approval and compensation coding/submission after MTO signature.
+- **Office:** completes City authorization after DC approval and compensation coding/submission after MTO signature. Office also has the same administrative access as Admin (user request, Nov 24).
 - **Admin:** personnel/settings administration and backup Office processing. An administrative role does not automatically grant MTO/DC training-signing authority.
 
 Rank and application role are separate concepts. Exact implemented access, including exceptions, is in [README.md](README.md#roles-and-access).
@@ -70,10 +70,10 @@ Rank and application role are separate concepts. Exact implemented access, inclu
 - Allow a requester to complete a compensation packet after training, from the request details or a separate compensation area.
 - Use the supplied Training Compensation Package 2026 artwork. Provide dated time rows with start/end and a second start/end pair to exclude lunch; **Add a row** supports additional days.
 - Provide dated mileage rows, voucher entry, receipt attachments, EMT Yes/No and Time/Pay choices.
-- On **Submit to MTO**, put the requester's employee signature on mileage and general fund voucher; use the requester submission date on the voucher.
+- On **Submit to MTO**, put the requester's employee signature on mileage and general fund voucher; use the requester submission date on the voucher. Leave the voucher Total and certified-amount boxes blank (Nov 24).
 - Use the current mileage rate entered by an appropriate administrator for compensation; preserve signed historical versions.
 - MTO reviews, returns corrections or signs before the packet advances to Office. MTO may be both requester and MTO and sign in both capacities.
-- Office selects compensation codes. Admin, MTO and DC retain backup completion access.
+- Office selects compensation codes. The Training Assignment Compensation Form's Compensation Approved By name and Date lines stay blank (Nov 24). Admin, MTO and DC retain backup completion access.
 - After MTO signs, **only Office** receives the Office action alert. Backups retain access without that alert.
 - Office can **Mark as Submitted** after processing; that clears its action alert.
 

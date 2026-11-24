@@ -6,19 +6,19 @@ import {COMPENSATION_STATUS, type CompensationStatus} from "./model";
 import {PERSONNEL_ROLES} from "@/types/personnel";
 const states:CompensationStatus[]=["draft","pending_mto","returned","pending_office","completed"];
 describe("Office compensation access and action badges",()=>{
- it("allows Office to see others' signed handoffs and completed packets only",()=>{
+ it("gives Office the same packet read access as Admin, including unfinished packets",()=>{
   for(const status of states) {
    const packet={...compensationFixture,status};
-   assert.equal(canReadCompensationPacket({id:"office-person",role:"office"},packet.requester_id,packet),status==="pending_office"||status==="completed");
+   assert.equal(canReadCompensationPacket({id:"office-person",role:"office"},packet.requester_id),true);
   }
-  assert.equal(canReadCompensationPacket({id:"office-person",role:"office"},"someone-else",null),false);
-  assert.equal(canReadCompensationPacket({id:"office-person",role:"office"},"someone-else",{status:"pending_office",mto_signature:null}),false);
+  assert.equal(canReadCompensationPacket({id:"office-person",role:"office"},"someone-else"),true);
+  assert.equal(canReadCompensationPacket({id:"firefighter",role:"firefighter"},"someone-else"),false);
  });
  it("retains ordinary owner access for Office and existing administrative read access",()=>{
   for(const role of PERSONNEL_ROLES) for(const status of states) {
    const packet={...compensationFixture,status};
-   assert.equal(canReadCompensationPacket({id:packet.requester_id,role},packet.requester_id,packet),true);
-   if(["mto","deputy_chief","admin"].includes(role))assert.equal(canReadCompensationPacket({id:"reviewer",role},packet.requester_id,packet),true);
+   assert.equal(canReadCompensationPacket({id:packet.requester_id,role},packet.requester_id),true);
+   if(["mto","deputy_chief","admin","office"].includes(role))assert.equal(canReadCompensationPacket({id:"reviewer",role},packet.requester_id),true);
   }
  });
  it("allows Office, Admin, MTO and Deputy Chief to complete coding",()=>{
@@ -36,7 +36,7 @@ describe("Office compensation access and action badges",()=>{
   for(const role of ["admin","mto","deputy_chief"] as const) {
    const actor={id:packet.requester_id,role};
    assert.equal(canCompleteCompensation(role),true);
-   assert.equal(canReadCompensationPacket(actor,packet.requester_id,packet),true);
+   assert.equal(canReadCompensationPacket(actor,packet.requester_id),true);
    assert.equal(compensationNeedsAction(packet,actor),false);
   }
  });
@@ -46,7 +46,7 @@ describe("Office compensation access and action badges",()=>{
    const actor={id,role:"office" as const};
    assert.equal(compensationNeedsAction({...compensationFixture,status:"pending_office"},actor),true);
    assert.equal(compensationNeedsAction({...compensationFixture,status:"completed"},actor),false);
-   assert.equal(canReadCompensationPacket(actor,compensationFixture.requester_id,compensationFixture),true);
+   assert.equal(canReadCompensationPacket(actor,compensationFixture.requester_id),true);
   }
  });
 });

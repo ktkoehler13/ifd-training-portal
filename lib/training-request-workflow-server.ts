@@ -1,4 +1,5 @@
 import { getAuthenticatedPersonnel } from "@/lib/auth/personnel";
+import { isAdministrativeRole } from "@/lib/auth/roles";
 import { generateApprovedPacketBytes } from "@/lib/pdf/generate-approved-packet";
 import { verifyPngSignatureBytes } from "@/lib/personnel-signature-png";
 import { mapTrainingRequestRow, getTrainingRequestErrorMessage } from "@/lib/training-requests";
@@ -558,12 +559,7 @@ export async function downloadApprovedTrainingRequestPacket(input: {
 
   const request = mapTrainingRequestRow(requestData as TrainingRequestRow);
   const isOwner = request.requesterPersonnelId === personnel.id;
-  const isAdmin =
-    personnel.role === "mto" ||
-    personnel.role === "deputy_chief" ||
-    personnel.role === "admin";
-
-  if (!isOwner && !isAdmin && personnel.role !== "office") {
+  if (!isOwner && !isAdministrativeRole(personnel.role)) {
     throw new TrainingRequestWorkflowAccessError();
   }
 
